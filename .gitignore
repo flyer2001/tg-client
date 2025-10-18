@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Xcode user data
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Tools / misc
+*.xccheckout
+*.xcuserstate
+
+# Secrets
+.env
+*.secrets
