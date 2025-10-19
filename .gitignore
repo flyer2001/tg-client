@@ -1,19 +1,50 @@
 # macOS
 .DS_Store
+*.swp
+*.swo
+*~
 
 # SwiftPM
 .build/
 .swiftpm/
+Package.resolved
 
 # Xcode user data
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+*.xcodeproj/
+*.xcworkspace/
 DerivedData/
-
-# Tools / misc
-*.xccheckout
 *.xcuserstate
+*.xccheckout
 
-# Secrets
+# TDLib state (НЕ коммитим локальные данные Telegram!)
+.tdlib/
+
+# Логи приложения
+*.log
+app.log
+debug.log
+
+# Секреты и конфиденциальные данные
 .env
+.env.*
 *.secrets
+credentials.json
+api_keys.txt
+
+# Скрипты с credentials (если создадите)
+run.sh
+
+# Временные файлы Linux
+*.tmp
+*.pid
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Бинарники и артефакты сборки
+*.o
+*.so
+*.dylib
+*.a
