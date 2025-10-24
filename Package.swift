@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -17,14 +17,33 @@ let package = Package(
             name: "App",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
-                "TelegramCore"
+                "TDLibAdapter"
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-parse-as-library"])
             ]
+        ),
+        .systemLibrary(
+            name: "CTDLib",
+            pkgConfig: "tdjson",
+            providers: [
+                .brew(["tdlib"]),
+                .apt(["libtdjson-dev"])
+            ]
+        ),
+        .target(
+            name: "TDLibAdapter",
+            dependencies: [
+                "CTDLib",
+                .product(name: "Logging", package: "swift-log")
+            ],
+            path: "Sources/TDLibAdapter"
         ),
         .target(name: "TelegramCore"),
         .testTarget(
             name: "TelegramCoreTests",
-            path: "Tests/TelegramCoreTests",
-            dependencies: ["TelegramCore"]
+            dependencies: ["TelegramCore"],
+            path: "Tests/TelegramCoreTests"
         )
     ]
 )
