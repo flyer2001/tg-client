@@ -1,3 +1,42 @@
+/**
+ * Module Map для импорта TDLib C-библиотеки в Swift
+ *
+ * Module map определяет, как C-код становится доступным в Swift.
+ * Этот файл создаёт Swift-модуль "CTDLib", который можно импортировать как обычный модуль.
+ *
+ * Структура module map:
+ *
+ * module CTDLib [system] {
+ *   - Имя модуля: CTDLib (конвенция: префикс 'C' для C-библиотек)
+ *   - Атрибут [system]: помечает модуль как системный, что отключает некоторые warnings
+ *     (аналог #pragma system_header в GCC)
+ *
+ *   header "shim.h"
+ *   - Указывает основной заголовочный файл модуля
+ *   - shim.h включает все необходимые C-заголовки TDLib
+ *   - Использование относительного пути (не абсолютного) для портативности
+ *
+ *   link "tdjson"
+ *   - Указывает линкеру связать с библиотекой libtdjson
+ *   - pkg-config находит путь к библиотеке (см. Package.swift: pkgConfig: "tdjson")
+ *   - На macOS: /opt/homebrew/lib/libtdjson.dylib
+ *   - На Linux: /usr/lib/libtdjson.so
+ *
+ *   export *
+ *   - Экспортирует все символы из импортированных заголовков
+ *   - Делает API TDLib доступным для Swift-кода, импортирующего CTDLib
+ * }
+ *
+ * Использование в Swift:
+ *   import CTDLib
+ *   let client = td_json_client_create()
+ *
+ * См. также:
+ * - shim.h: содержит фактические #include директивы
+ * - Package.swift: определяет .systemLibrary target с pkgConfig
+ * - https://clang.llvm.org/docs/Modules.html
+ */
+
 module CTDLib [system] {
   header "shim.h"
   link "tdjson"
