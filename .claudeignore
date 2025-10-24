@@ -1,0 +1,7 @@
+# NOTE: не используется самим Claude Code — только для людей/посторонних тулов
+.git/
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
