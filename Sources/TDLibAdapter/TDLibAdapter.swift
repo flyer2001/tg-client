@@ -25,14 +25,23 @@ public final class TDLibClient: @unchecked Sendable {
                       askPhone: @escaping @Sendable () async -> String,
                       askCode: @escaping @Sendable () async -> String,
                       askPassword: @escaping @Sendable () async -> String) async {
-        // Устанавливаем логирование ДО создания клиента
-        td_set_log_verbosity_level(0) // 0 = fatal only
-        _ = config.logPath.withCString { pathPtr in
-            td_set_log_file_path(pathPtr)
+        // Настройка логирования до создания клиента через синхронный API
+        // См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_log_verbosity_level.html
+        _ = td_execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}")
+
+        let logStreamRequest = """
+        {
+            "@type":"setLogStream",
+            "log_stream":{
+                "@type":"logStreamFile",
+                "path":"\(config.logPath)",
+                "max_file_size":\(100*1024*1024)
+            }
         }
+        """
+        _ = td_execute(logStreamRequest)
 
         client = td_json_client_create()
-        setLog(verbosity: 0, toFile: config.logPath) // 0 = fatal errors only
 
         // run receive loop in background Task
         await withCheckedContinuation { continuation in
@@ -60,18 +69,6 @@ public final class TDLibClient: @unchecked Sendable {
         guard let client, let cstr = td_json_client_receive(client, timeout) else { return nil }
         let json = String(cString: cstr)
         return (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
-    }
-
-    private func setLog(verbosity: Int, toFile path: String) {
-        send(["@type":"setLogVerbosityLevel","new_verbosity_level":verbosity])
-        send([
-            "@type":"setLogStream",
-            "log_stream":[
-                "@type":"logStreamFile",
-                "path": path,
-                "max_file_size": 100*1024*1024
-            ]
-        ])
     }
 
     private func receiveLoop(config: TDConfig,
