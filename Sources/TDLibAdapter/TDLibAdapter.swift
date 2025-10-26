@@ -17,27 +17,34 @@ public enum AuthenticationPrompt {
 /// Подробнее см. `Sources/TDLibAdapter/README.md`
 public final class TDLibClient: @unchecked Sendable {
     private var client: UnsafeMutableRawPointer?
-    private let logger: Logger
+    private let appLogger: Logger
     private var parametersSet = false
+    private let authorizationPollTimeout: Double
 
-    public init(logger: Logger) { self.logger = logger }
+    /// Инициализирует TDLib клиент.
+    ///
+    /// - Parameters:
+    ///   - appLogger: Логгер для событий приложения
+    ///   - authorizationPollTimeout: Таймаут для polling обновлений от TDLib во время авторизации (в секундах).
+    ///                               По умолчанию 1.0 секунда. Увеличение значения снижает CPU нагрузку,
+    ///                               но увеличивает время отклика на состояния авторизации.
+    public init(appLogger: Logger, authorizationPollTimeout: Double = 1.0) {
+        self.appLogger = appLogger
+        self.authorizationPollTimeout = authorizationPollTimeout
+    }
 
     deinit { if let c = client { td_json_client_destroy(c) } }
 
-    /// Запускает TDLib клиент и выполняет авторизацию.
+    /// Настраивает логирование TDLib библиотеки.
     ///
-    /// Метод блокируется до завершения авторизации. Автоматически проходит все состояния
-    /// авторизации TDLib, запрашивая необходимые данные через колбэк.
+    /// Применяет настройки уровня детализации и пути к лог-файлу из конфигурации.
     ///
-    /// - Parameters:
-    ///   - config: Конфигурация с API credentials и путями к директориям
-    ///   - promptFor: Колбэк для запроса данных авторизации (номер телефона, код, пароль 2FA)
-    public func start(config: TDConfig,
-                      promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String) async {
-        // Настройка логирования до создания клиента через синхронный API
-        // См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_log_verbosity_level.html
-        _ = td_execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}")
+    /// - Parameter config: Конфигурация с параметрами логирования
+    public static func configureTDLibLogging(config: TDConfig) {
+        // Устанавливаем уровень детализации логов
+        _ = td_execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":\(config.logVerbosity.rawValue)}")
 
+        // Настраиваем вывод в файл
         let logStreamRequest = """
         {
             "@type":"setLogStream",
@@ -49,7 +56,18 @@ public final class TDLibClient: @unchecked Sendable {
         }
         """
         _ = td_execute(logStreamRequest)
+    }
 
+    /// Запускает TDLib клиент и выполняет авторизацию.
+    ///
+    /// Метод блокируется до завершения авторизации. Автоматически проходит все состояния
+    /// авторизации TDLib, запрашивая необходимые данные через колбэк.
+    ///
+    /// - Parameters:
+    ///   - config: Конфигурация с API credentials и путями к директориям
+    ///   - promptFor: Колбэк для запроса данных авторизации (номер телефона, код, пароль 2FA)
+    public func start(config: TDConfig,
+                      promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String) async {
         client = td_json_client_create()
 
         // run receive loop in background Task
@@ -67,7 +85,7 @@ public final class TDLibClient: @unchecked Sendable {
     /// - Parameter json: JSON-объект с обязательным полем `@type`
     public func send(_ json: [String: Any]) {
         guard let client else {
-            logger.error("Cannot send: client is nil")
+            appLogger.error("Cannot send: client is nil")
             return
         }
         let data = try! JSONSerialization.data(withJSONObject: json)
@@ -96,12 +114,12 @@ public final class TDLibClient: @unchecked Sendable {
         send(["@type":"getAuthorizationState"])
 
         while true {
-            guard let obj = receive(timeout: 1.0) else {
+            guard let obj = receive(timeout: authorizationPollTimeout) else {
                 await Task.yield()
                 continue
             }
             guard let type = obj["@type"] as? String else {
-                logger.warning("Received object without @type")
+                appLogger.warning("Received object without @type")
                 await Task.yield()
                 continue
             }
@@ -112,7 +130,7 @@ public final class TDLibClient: @unchecked Sendable {
             if type == "error" {
                 let code = obj["code"] as? Int ?? 0
                 let message = obj["message"] as? String ?? "unknown"
-                logger.error("TDLib error [\(code)]: \(message)")
+                appLogger.error("TDLib error [\(code)]: \(message)")
                 continue
             }
 
@@ -133,11 +151,11 @@ public final class TDLibClient: @unchecked Sendable {
             }
 
             if let stType = stType {
-                logger.info("Authorization state: \(stType)")
+                appLogger.info("Authorization state: \(stType)")
 
                 if stType == "authorizationStateWaitTdlibParameters" {
                     if !parametersSet {
-                        logger.info("Setting TDLib parameters...")
+                        appLogger.info("Setting TDLib parameters...")
                         // TDLib >= 1.8.6 требует inline параметры (без вложенного объекта parameters)
                         let request: [String: Any] = [
                             "@type": "setTdlibParameters",
@@ -158,22 +176,22 @@ public final class TDLibClient: @unchecked Sendable {
                         ]
                         send(request)
                         parametersSet = true
-                        logger.info("TDLib parameters sent")
+                        appLogger.info("TDLib parameters sent")
                     } else {
-                        logger.info("TDLib parameters already set, skipping...")
+                        appLogger.info("TDLib parameters already set, skipping...")
                     }
 
                 } else if stType == "authorizationStateWaitEncryptionKey" {
-                    logger.info("Setting encryption key (empty for no encryption)...")
+                    appLogger.info("Setting encryption key (empty for no encryption)...")
                     send(["@type": "checkDatabaseEncryptionKey", "encryption_key": ""])
-                    logger.info("Encryption key sent")
+                    appLogger.info("Encryption key sent")
 
                 } else if stType == "authorizationStateWaitPhoneNumber" {
-                    logger.info("Requesting phone number...")
+                    appLogger.info("Requesting phone number...")
                     let phone = await promptFor(.phoneNumber)
-                    logger.info("Phone number received: \(phone)")
+                    appLogger.info("Phone number received: \(phone)")
                     send(["@type":"setAuthenticationPhoneNumber","phone_number":phone])
-                    logger.info("Phone number sent to TDLib")
+                    appLogger.info("Phone number sent to TDLib")
 
                 } else if stType == "authorizationStateWaitCode" {
                     let code = await promptFor(.verificationCode)
@@ -184,12 +202,12 @@ public final class TDLibClient: @unchecked Sendable {
                     send(["@type":"checkAuthenticationPassword","password":pwd])
 
                 } else if stType == "authorizationStateReady" {
-                    self.logger.info("TDLib authorization READY")
+                    self.appLogger.info("TDLib authorization READY")
                     onReady()
                     return
 
                 } else if stType == "authorizationStateClosed" {
-                    self.logger.info("TDLib closed"); return
+                    self.appLogger.info("TDLib closed"); return
                 }
             }
 

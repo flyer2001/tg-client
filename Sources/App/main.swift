@@ -26,10 +26,20 @@ struct TGClient {
             exit(2)
         }
 
-        let td = TDLibClient(logger: logger)
+        let config = TDConfig(
+            apiId: apiId,
+            apiHash: apiHash,
+            stateDir: stateDir,
+            logPath: stateDir + "/tdlib.log"
+        )
+
+        // ВАЖНО: Настройка TDLib логирования должна быть ДО создания клиента
+        TDLibClient.configureTDLibLogging(config: config)
+
+        let td = TDLibClient(appLogger: logger)
 
         // Запускаем авторизацию и ждём её завершения
-        await td.start(config: .init(apiId: apiId, apiHash: apiHash, stateDir: stateDir, logPath: stateDir + "/tdlib.log")) { promptType in
+        await td.start(config: config) { promptType in
             switch promptType {
             case .phoneNumber:
                 return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")

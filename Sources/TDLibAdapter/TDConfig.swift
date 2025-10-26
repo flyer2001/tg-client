@@ -1,5 +1,25 @@
 import Foundation
 
+/// Уровень детализации логов TDLib.
+///
+/// Определяет количество информации, записываемой в лог-файл TDLib.
+///
+/// См. документацию: https://core.telegram.org/tdlib/docs/classtd_1_1_log.html
+public enum TDLibLogVerbosity: Int32, Sendable {
+    /// Только критические ошибки (FATAL)
+    case fatal = 0
+    /// Ошибки (ERROR)
+    case error = 1
+    /// Предупреждения (WARNING)
+    case warning = 2
+    /// Информационные сообщения (INFO)
+    case info = 3
+    /// Отладочная информация (DEBUG)
+    case debug = 4
+    /// Максимальная детализация (VERBOSE)
+    case verbose = 5
+}
+
 /// Конфигурация для подключения к Telegram API через TDLib.
 ///
 /// Содержит все необходимые параметры для инициализации TDLib клиента.
@@ -43,10 +63,20 @@ public struct TDConfig: Sendable {
     /// Путь к файлу логов TDLib.
     ///
     /// TDLib будет записывать свои внутренние логи в этот файл.
-    /// По умолчанию verbosity level установлен в 0 (минимальные логи).
     ///
     /// **Рекомендуемое значение:** `~/.tdlib/tdlib.log`
     public let logPath: String
+
+    /// Уровень детализации логов TDLib.
+    ///
+    /// Определяет количество информации, которую TDLib будет записывать в лог-файл.
+    ///
+    /// **Рекомендуется:**
+    /// - `.fatal` для продакшена (минимальные логи)
+    /// - `.warning` или `.info` для отладки
+    ///
+    /// **По умолчанию:** `.fatal`
+    public let logVerbosity: TDLibLogVerbosity
 
     /// Создаёт новую конфигурацию TDLib.
     ///
@@ -55,10 +85,12 @@ public struct TDConfig: Sendable {
     ///   - apiHash: API Hash от https://my.telegram.org/apps
     ///   - stateDir: Директория для базы данных и файлов (рекомендуется `~/.tdlib`)
     ///   - logPath: Путь к файлу логов (рекомендуется `~/.tdlib/tdlib.log`)
-    public init(apiId: Int32, apiHash: String, stateDir: String, logPath: String) {
+    ///   - logVerbosity: Уровень детализации логов TDLib (по умолчанию `.fatal`)
+    public init(apiId: Int32, apiHash: String, stateDir: String, logPath: String, logVerbosity: TDLibLogVerbosity = .fatal) {
         self.apiId = apiId
         self.apiHash = apiHash
         self.stateDir = stateDir
         self.logPath = logPath
+        self.logVerbosity = logVerbosity
     }
 }
