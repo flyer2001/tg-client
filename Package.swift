@@ -37,7 +37,10 @@ let package = Package(
                 "CTDLib",
                 .product(name: "Logging", package: "swift-log")
             ],
-            path: "Sources/TDLibAdapter"
+            path: "Sources/TDLibAdapter",
+            resources: [
+                .copy("README.md")
+            ]
         ),
         .target(name: "TelegramCore"),
         .testTarget(

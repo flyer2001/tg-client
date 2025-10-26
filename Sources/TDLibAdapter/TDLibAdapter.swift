@@ -2,16 +2,9 @@ import Foundation
 import CTDLib
 import Logging
 
-public struct TDConfig: Sendable {
-    public let apiId: Int32
-    public let apiHash: String
-    public let stateDir: String
-    public let logPath: String
-    public init(apiId: Int32, apiHash: String, stateDir: String, logPath: String) {
-        self.apiId = apiId; self.apiHash = apiHash; self.stateDir = stateDir; self.logPath = logPath
-    }
-}
-
+/// Swift-обёртка над TDLib C API для взаимодействия с Telegram.
+///
+/// Подробнее см. `Sources/TDLibAdapter/README.md`
 public final class TDLibClient: @unchecked Sendable {
     private var client: UnsafeMutableRawPointer?
     private let logger: Logger
@@ -21,6 +14,16 @@ public final class TDLibClient: @unchecked Sendable {
 
     deinit { if let c = client { td_json_client_destroy(c) } }
 
+    /// Запускает TDLib клиент и выполняет авторизацию.
+    ///
+    /// Метод блокируется до завершения авторизации. Автоматически проходит все состояния
+    /// авторизации TDLib, запрашивая необходимые данные через колбэки.
+    ///
+    /// - Parameters:
+    ///   - config: Конфигурация с API credentials и путями к директориям
+    ///   - askPhone: Колбэк для запроса номера телефона
+    ///   - askCode: Колбэк для запроса кода подтверждения
+    ///   - askPassword: Колбэк для запроса 2FA пароля (если включен)
     public func start(config: TDConfig,
                       askPhone: @escaping @Sendable () async -> String,
                       askCode: @escaping @Sendable () async -> String,
@@ -53,6 +56,9 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
+    /// Отправляет запрос в TDLib.
+    ///
+    /// - Parameter json: JSON-объект с обязательным полем `@type`
     public func send(_ json: [String: Any]) {
         guard let client else {
             logger.error("Cannot send: client is nil")
@@ -65,6 +71,12 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
+    /// Получает ответ или обновление от TDLib.
+    ///
+    /// Блокирует текущий поток на время `timeout`.
+    ///
+    /// - Parameter timeout: Максимальное время ожидания в секундах
+    /// - Returns: JSON-объект с полем `@type` или `nil`
     public func receive(timeout: Double) -> [String: Any]? {
         guard let client, let cstr = td_json_client_receive(client, timeout) else { return nil }
         let json = String(cString: cstr)
