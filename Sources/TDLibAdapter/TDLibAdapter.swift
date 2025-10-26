@@ -2,6 +2,16 @@ import Foundation
 import CTDLib
 import Logging
 
+/// Тип запроса данных для авторизации в Telegram.
+public enum AuthenticationPrompt {
+    /// Запрос номера телефона
+    case phoneNumber
+    /// Запрос кода подтверждения из SMS/Telegram
+    case verificationCode
+    /// Запрос пароля двухфакторной аутентификации (2FA)
+    case twoFactorPassword
+}
+
 /// Swift-обёртка над TDLib C API для взаимодействия с Telegram.
 ///
 /// Подробнее см. `Sources/TDLibAdapter/README.md`
@@ -17,17 +27,13 @@ public final class TDLibClient: @unchecked Sendable {
     /// Запускает TDLib клиент и выполняет авторизацию.
     ///
     /// Метод блокируется до завершения авторизации. Автоматически проходит все состояния
-    /// авторизации TDLib, запрашивая необходимые данные через колбэки.
+    /// авторизации TDLib, запрашивая необходимые данные через колбэк.
     ///
     /// - Parameters:
     ///   - config: Конфигурация с API credentials и путями к директориям
-    ///   - askPhone: Колбэк для запроса номера телефона
-    ///   - askCode: Колбэк для запроса кода подтверждения
-    ///   - askPassword: Колбэк для запроса 2FA пароля (если включен)
+    ///   - promptFor: Колбэк для запроса данных авторизации (номер телефона, код, пароль 2FA)
     public func start(config: TDConfig,
-                      askPhone: @escaping @Sendable () async -> String,
-                      askCode: @escaping @Sendable () async -> String,
-                      askPassword: @escaping @Sendable () async -> String) async {
+                      promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String) async {
         // Настройка логирования до создания клиента через синхронный API
         // См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_log_verbosity_level.html
         _ = td_execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":0}")
@@ -49,7 +55,7 @@ public final class TDLibClient: @unchecked Sendable {
         // run receive loop in background Task
         await withCheckedContinuation { continuation in
             Task {
-                await self.receiveLoop(config: config, askPhone: askPhone, askCode: askCode, askPassword: askPassword, onReady: {
+                await self.receiveLoop(config: config, promptFor: promptFor, onReady: {
                     continuation.resume()
                 })
             }
@@ -84,9 +90,7 @@ public final class TDLibClient: @unchecked Sendable {
     }
 
     private func receiveLoop(config: TDConfig,
-                             askPhone: @escaping @Sendable () async -> String,
-                             askCode: @escaping @Sendable () async -> String,
-                             askPassword: @escaping @Sendable () async -> String,
+                             promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String,
                              onReady: @escaping @Sendable () -> Void) async {
         // Kickstart: request current auth state
         send(["@type":"getAuthorizationState"])
@@ -166,17 +170,17 @@ public final class TDLibClient: @unchecked Sendable {
 
                 } else if stType == "authorizationStateWaitPhoneNumber" {
                     logger.info("Requesting phone number...")
-                    let phone = await askPhone()
+                    let phone = await promptFor(.phoneNumber)
                     logger.info("Phone number received: \(phone)")
                     send(["@type":"setAuthenticationPhoneNumber","phone_number":phone])
                     logger.info("Phone number sent to TDLib")
 
                 } else if stType == "authorizationStateWaitCode" {
-                    let code = await askCode()
+                    let code = await promptFor(.verificationCode)
                     send(["@type":"checkAuthenticationCode","code":code])
 
                 } else if stType == "authorizationStateWaitPassword" {
-                    let pwd = await askPassword()
+                    let pwd = await promptFor(.twoFactorPassword)
                     send(["@type":"checkAuthenticationPassword","password":pwd])
 
                 } else if stType == "authorizationStateReady" {

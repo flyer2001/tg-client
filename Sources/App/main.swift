@@ -4,8 +4,8 @@ import TDLibAdapter
 
 @main
 struct TGClient {
-    static func readLineSecure(prompt: String) -> String {
-        FileHandle.standardOutput.write(Data((prompt).utf8))
+    static func readLineSecure(message: String) -> String {
+        FileHandle.standardOutput.write(Data((message).utf8))
         fflush(stdout)
         return readLine() ?? ""
     }
@@ -28,15 +28,17 @@ struct TGClient {
 
         let td = TDLibClient(logger: logger)
 
-        let phoneProvider: @Sendable () async -> String = { readLineSecure(prompt: "Phone (E.164, e.g. +31234567890): ") }
-        let codeProvider: @Sendable () async -> String = { readLineSecure(prompt: "Code: ") }
-        let passProvider: @Sendable () async -> String = { readLineSecure(prompt: "2FA Password: ") }
-
         // Запускаем авторизацию и ждём её завершения
-        await td.start(config: .init(apiId: apiId, apiHash: apiHash, stateDir: stateDir, logPath: stateDir + "/tdlib.log"),
-                       askPhone: phoneProvider,
-                       askCode: codeProvider,
-                       askPassword: passProvider)
+        await td.start(config: .init(apiId: apiId, apiHash: apiHash, stateDir: stateDir, logPath: stateDir + "/tdlib.log")) { promptType in
+            switch promptType {
+            case .phoneNumber:
+                return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
+            case .verificationCode:
+                return readLineSecure(message: "Code: ")
+            case .twoFactorPassword:
+                return readLineSecure(message: "2FA Password: ")
+            }
+        }
 
         // Верификация: запросим текущего пользователя
         td.send(["@type":"getMe"])
