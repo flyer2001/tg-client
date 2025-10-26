@@ -2,16 +2,6 @@ import Foundation
 import CTDLib
 import Logging
 
-/// Тип запроса данных для авторизации в Telegram.
-public enum AuthenticationPrompt {
-    /// Запрос номера телефона
-    case phoneNumber
-    /// Запрос кода подтверждения из SMS/Telegram
-    case verificationCode
-    /// Запрос пароля двухфакторной аутентификации (2FA)
-    case twoFactorPassword
-}
-
 /// Swift-обёртка над TDLib C API для взаимодействия с Telegram.
 ///
 /// Подробнее см. `Sources/TDLibAdapter/README.md`
@@ -20,6 +10,8 @@ public final class TDLibClient: @unchecked Sendable {
     private let appLogger: Logger
     private var parametersSet = false
     private let authorizationPollTimeout: Double
+    private let maxAuthorizationAttempts: Int
+    private let authorizationTimeout: TimeInterval
 
     /// Инициализирует TDLib клиент.
     ///
@@ -28,9 +20,20 @@ public final class TDLibClient: @unchecked Sendable {
     ///   - authorizationPollTimeout: Таймаут для polling обновлений от TDLib во время авторизации (в секундах).
     ///                               По умолчанию 1.0 секунда. Увеличение значения снижает CPU нагрузку,
     ///                               но увеличивает время отклика на состояния авторизации.
-    public init(appLogger: Logger, authorizationPollTimeout: Double = 1.0) {
+    ///   - maxAuthorizationAttempts: Максимальное количество итераций цикла авторизации перед выходом с ошибкой.
+    ///                               По умолчанию 500. Защита от бесконечного цикла при проблемах с TDLib.
+    ///   - authorizationTimeout: Общий таймаут на весь процесс авторизации (в секундах).
+    ///                           По умолчанию 300 секунд (5 минут). После превышения авторизация прерывается с ошибкой.
+    public init(
+        appLogger: Logger,
+        authorizationPollTimeout: Double = 1.0,
+        maxAuthorizationAttempts: Int = 500,
+        authorizationTimeout: TimeInterval = 300
+    ) {
         self.appLogger = appLogger
         self.authorizationPollTimeout = authorizationPollTimeout
+        self.maxAuthorizationAttempts = maxAuthorizationAttempts
+        self.authorizationTimeout = authorizationTimeout
     }
 
     deinit { if let c = client { td_json_client_destroy(c) } }
@@ -73,7 +76,7 @@ public final class TDLibClient: @unchecked Sendable {
         // run receive loop in background Task
         await withCheckedContinuation { continuation in
             Task {
-                await self.receiveLoop(config: config, promptFor: promptFor, onReady: {
+                await self.processAuthorizationStates(config: config, promptFor: promptFor, onReady: {
                     continuation.resume()
                 })
             }
@@ -107,18 +110,85 @@ public final class TDLibClient: @unchecked Sendable {
         return (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
     }
 
-    private func receiveLoop(config: TDConfig,
-                             promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String,
-                             onReady: @escaping @Sendable () -> Void) async {
+    /// Извлекает состояние авторизации из JSON-ответа TDLib.
+    ///
+    /// TDLib присылает состояния авторизации двумя способами:
+    ///
+    /// **1. updateAuthorizationState** (автоматическое уведомление при изменении):
+    /// ```json
+    /// {
+    ///   "@type": "updateAuthorizationState",
+    ///   "authorization_state": {
+    ///     "@type": "authorizationStateWaitPhoneNumber"
+    ///   }
+    /// }
+    /// ```
+    /// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_authorization_state.html
+    ///
+    /// **2. Прямой ответ на getAuthorizationState()** (когда мы явно запрашиваем):
+    /// ```json
+    /// {
+    ///   "@type": "authorizationStateWaitTdlibParameters"
+    /// }
+    /// ```
+    /// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_authorization_state.html
+    ///
+    /// - Parameter obj: JSON-объект от TDLib
+    /// - Returns: Кортеж (состояние, оригинальная строка типа) или `nil` если это не авторизационное событие
+    private func parseAuthorizationState(from obj: [String: Any]) -> (state: AuthorizationState, originalType: String)? {
+        guard let type = obj["@type"] as? String else { return nil }
+
+        let stateTypeString: String?
+
+        if type == "updateAuthorizationState" {
+            // Update: состояние вложено в поле authorization_state
+            let authState = obj["authorization_state"] as? [String: Any]
+            stateTypeString = authState?["@type"] as? String
+        } else if type.hasPrefix("authorizationState") {
+            // Прямой ответ: само состояние в поле @type
+            stateTypeString = type
+        } else {
+            // Не авторизационное событие
+            return nil
+        }
+
+        guard let stateTypeString = stateTypeString else { return nil }
+        let state = AuthorizationState(fromTDLibType: stateTypeString)
+        return (state, stateTypeString)
+    }
+
+    private func processAuthorizationStates(config: TDConfig,
+                                            promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String,
+                                            onReady: @escaping @Sendable () -> Void) async {
         // Kickstart: request current auth state
         send(["@type":"getAuthorizationState"])
 
+        var attemptCount = 0
+        var lastActivity: AuthorizationLoopActivity?
+        let startTime = Date()
+
         while true {
+            // Проверка превышения лимита попыток
+            attemptCount += 1
+            if attemptCount > maxAuthorizationAttempts {
+                appLogger.error("Authorization loop exceeded max attempts (\(maxAuthorizationAttempts)). Last activity: \(lastActivity?.description ?? "none")")
+                return
+            }
+
+            // Проверка таймаута
+            let elapsed = Date().timeIntervalSince(startTime)
+            if elapsed > authorizationTimeout {
+                appLogger.error("Authorization timeout (\(authorizationTimeout)s). Last activity: \(lastActivity?.description ?? "none")")
+                return
+            }
+
             guard let obj = receive(timeout: authorizationPollTimeout) else {
+                lastActivity = .emptyReceive
                 await Task.yield()
                 continue
             }
             guard let type = obj["@type"] as? String else {
+                lastActivity = .missingType
                 appLogger.warning("Received object without @type")
                 await Task.yield()
                 continue
@@ -130,85 +200,84 @@ public final class TDLibClient: @unchecked Sendable {
             if type == "error" {
                 let code = obj["code"] as? Int ?? 0
                 let message = obj["message"] as? String ?? "unknown"
+                lastActivity = .tdlibError(code: code, message: message)
                 appLogger.error("TDLib error [\(code)]: \(message)")
                 continue
             }
 
-            // Обрабатываем состояния авторизации
-            let authState: [String: Any]?
-            let stType: String?
-
-            if type == "updateAuthorizationState" {
-                authState = obj["authorization_state"] as? [String:Any]
-                stType = authState?["@type"] as? String
-            } else if type.hasPrefix("authorizationState") {
-                // Прямой ответ на getAuthorizationState
-                authState = obj
-                stType = type
-            } else {
-                authState = nil
-                stType = nil
+            // Парсим состояние авторизации
+            guard let (state, originalType) = parseAuthorizationState(from: obj) else {
+                // Не авторизационное событие - логируем и пропускаем
+                lastActivity = .nonAuthorizationEvent(type: type)
+                appLogger.debug("Received non-authorization event: \(type)")
+                await Task.yield()
+                continue
             }
 
-            if let stType = stType {
-                appLogger.info("Authorization state: \(stType)")
+            // Отслеживаем текущее состояние авторизации
+            lastActivity = .authorizationState(state, originalType: originalType)
+            appLogger.info("Authorization state: \(originalType)")
 
-                if stType == "authorizationStateWaitTdlibParameters" {
-                    if !parametersSet {
-                        appLogger.info("Setting TDLib parameters...")
-                        // TDLib >= 1.8.6 требует inline параметры (без вложенного объекта parameters)
-                        let request: [String: Any] = [
-                            "@type": "setTdlibParameters",
-                            "use_test_dc": false,
-                            "database_directory": config.stateDir + "/db",
-                            "files_directory": config.stateDir + "/files",
-                            "use_file_database": true,
-                            "use_chat_info_database": true,
-                            "use_message_database": true,
-                            "use_secret_chats": false,
-                            "api_id": config.apiId,
-                            "api_hash": config.apiHash,
-                            "system_language_code": "en",
-                            "device_model": "macOS",
-                            "application_version": "0.1.0",
-                            "enable_storage_optimizer": true,
-                            "ignore_file_names": false
-                        ]
-                        send(request)
-                        parametersSet = true
-                        appLogger.info("TDLib parameters sent")
-                    } else {
-                        appLogger.info("TDLib parameters already set, skipping...")
-                    }
-
-                } else if stType == "authorizationStateWaitEncryptionKey" {
-                    appLogger.info("Setting encryption key (empty for no encryption)...")
-                    send(["@type": "checkDatabaseEncryptionKey", "encryption_key": ""])
-                    appLogger.info("Encryption key sent")
-
-                } else if stType == "authorizationStateWaitPhoneNumber" {
-                    appLogger.info("Requesting phone number...")
-                    let phone = await promptFor(.phoneNumber)
-                    appLogger.info("Phone number received: \(phone)")
-                    send(["@type":"setAuthenticationPhoneNumber","phone_number":phone])
-                    appLogger.info("Phone number sent to TDLib")
-
-                } else if stType == "authorizationStateWaitCode" {
-                    let code = await promptFor(.verificationCode)
-                    send(["@type":"checkAuthenticationCode","code":code])
-
-                } else if stType == "authorizationStateWaitPassword" {
-                    let pwd = await promptFor(.twoFactorPassword)
-                    send(["@type":"checkAuthenticationPassword","password":pwd])
-
-                } else if stType == "authorizationStateReady" {
-                    self.appLogger.info("TDLib authorization READY")
-                    onReady()
-                    return
-
-                } else if stType == "authorizationStateClosed" {
-                    self.appLogger.info("TDLib closed"); return
+            switch state {
+            case .waitTdlibParameters:
+                if !parametersSet {
+                    appLogger.info("Setting TDLib parameters...")
+                    // TDLib >= 1.8.6 требует inline параметры (без вложенного объекта parameters)
+                    let request: [String: Any] = [
+                        "@type": "setTdlibParameters",
+                        "use_test_dc": false,
+                        "database_directory": config.stateDir + "/db",
+                        "files_directory": config.stateDir + "/files",
+                        "use_file_database": true,
+                        "use_chat_info_database": true,
+                        "use_message_database": true,
+                        "use_secret_chats": false,
+                        "api_id": config.apiId,
+                        "api_hash": config.apiHash,
+                        "system_language_code": "en",
+                        "device_model": "macOS",
+                        "application_version": "0.1.0",
+                        "enable_storage_optimizer": true,
+                        "ignore_file_names": false
+                    ]
+                    send(request)
+                    parametersSet = true
+                    appLogger.info("TDLib parameters sent")
+                } else {
+                    appLogger.info("TDLib parameters already set, skipping...")
                 }
+
+            case .waitEncryptionKey:
+                appLogger.info("Setting encryption key (empty for no encryption)...")
+                send(["@type": "checkDatabaseEncryptionKey", "encryption_key": ""])
+                appLogger.info("Encryption key sent")
+
+            case .waitPhoneNumber:
+                appLogger.info("Requesting phone number...")
+                let phone = await promptFor(.phoneNumber)
+                appLogger.info("Phone number received: \(phone)")
+                send(["@type":"setAuthenticationPhoneNumber","phone_number":phone])
+                appLogger.info("Phone number sent to TDLib")
+
+            case .waitVerificationCode:
+                let code = await promptFor(.verificationCode)
+                send(["@type":"checkAuthenticationCode","code":code])
+
+            case .waitTwoFactorPassword:
+                let pwd = await promptFor(.twoFactorPassword)
+                send(["@type":"checkAuthenticationPassword","password":pwd])
+
+            case .ready:
+                appLogger.info("TDLib authorization READY")
+                onReady()
+                return
+
+            case .closed:
+                appLogger.info("TDLib closed")
+                return
+
+            case .unknown:
+                appLogger.warning("Unknown authorization state: \(originalType)")
             }
 
             // Позволяем другим Task выполняться
