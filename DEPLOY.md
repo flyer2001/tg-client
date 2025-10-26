@@ -1,5 +1,7 @@
 # Инструкция по развертыванию на Linux-сервере
 
+> ⚠️ **ВНИМАНИЕ:** Документ обновляется для Ubuntu 24.04 и Swift 6.2. Инструкции ниже могут быть неактуальны и будут обновлены после тестирования на реальном сервере.
+
 ## Предварительные требования
 
 ### 1. Установка Swift на Linux
@@ -18,13 +20,111 @@ swift --version
 
 ### 2. Установка TDLib
 
+> 💡 **ВАЖНО:** Для Ubuntu 24.04 готовых пакетов TDLib нет, поэтому нужна сборка из исходников. Процесс занимает 20-40 минут на 1 CPU core.
+
+> ⚠️ **РЕКОМЕНДАЦИЯ:** Используйте `tmux` для запуска длительной сборки, чтобы процесс не прервался при обрыве SSH-соединения!
+
 ```bash
-# Ubuntu/Debian
+# Установка зависимостей для сборки TDLib
 sudo apt update
-sudo apt install -y libtdjson-dev pkg-config
+sudo apt install -y build-essential cmake gperf libssl-dev zlib1g-dev pkg-config tmux git
+
+# Клонирование репозитория TDLib
+cd ~
+git clone https://github.com/tdlib/td.git
+cd td
+
+# ВАЖНО: Запускаем сборку в tmux-сессии
+tmux new-session -d -s tdlib-build "cd ~/td && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. && cmake --build . -j\$(nproc) 2>&1 | tee build.log; echo 'Build finished with exit code:' \$?"
+
+# Подключиться к сессии и посмотреть прогресс:
+tmux attach -t tdlib-build
+
+# Отключиться от tmux (НЕ останавливая сборку): Ctrl+B, затем D
+
+# Проверить статус сборки (после отключения):
+tail -f ~/td/build/build.log
+
+# После завершения сборки: установка
+cd ~/td/build
+sudo cmake --install .
 
 # Проверка
 pkg-config --modversion tdjson
+```
+
+**Для Ubuntu 22.04 и ниже** (если доступен готовый пакет):
+```bash
+sudo apt update
+sudo apt install -y libtdjson-dev pkg-config
+pkg-config --modversion tdjson
+```
+
+#### Проблема: Out of Memory (OOM) при сборке
+
+TDLib требует много RAM при компиляции (~700-800MB на один процесс компилятора). На серверах с малым объёмом памяти (1GB) компиляция может прерваться с ошибкой OOM.
+
+**Решение: Увеличить swap**
+
+```bash
+# Проверить текущий swap
+swapon --show
+
+# Если OOM Killer убивает процессы компиляции:
+dmesg | grep -i "killed process"
+
+# Создать дополнительный swap (2GB)
+sudo dd if=/dev/zero of=/swapfile2 bs=1M count=2048
+sudo chmod 600 /swapfile2
+sudo mkswap /swapfile2
+sudo swapon /swapfile2
+
+# Проверка
+swapon --show
+# Должно показать 2 файла swap
+
+# Сделать постоянным (добавить в fstab)
+echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+**Снизить параллелизм сборки:**
+
+```bash
+# Вместо -j$(nproc) использовать -j1 (медленнее, но меньше памяти)
+cmake --build . -j1
+```
+
+#### План Б: Сборка в Docker (если на сервере не получается)
+
+Если даже со swap сборка не идёт, можно собрать TDLib локально и передать на сервер.
+
+**⚠️ Версия Ubuntu в Docker ДОЛЖНА совпадать с сервером (Ubuntu 24.04)!**
+
+```bash
+# На локальной машине (macOS/Linux):
+
+# 1. Собрать TDLib в Docker контейнере Ubuntu 24.04
+docker run --rm -v $(pwd)/tdlib-build:/output ubuntu:24.04 bash -c "
+  apt-get update &&
+  apt-get install -y build-essential cmake gperf libssl-dev zlib1g-dev git &&
+  git clone https://github.com/tdlib/td.git /tmp/td &&
+  cd /tmp/td && mkdir build && cd build &&
+  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/output .. &&
+  cmake --build . -j\$(nproc) &&
+  cmake --install .
+"
+
+# 2. Упаковать для передачи
+tar czf tdlib-ubuntu24.tar.gz -C tdlib-build .
+
+# 3. Передать на сервер
+scp tdlib-ubuntu24.tar.gz ufohosting:~/
+
+# 4. На сервере установить
+ssh ufohosting 'sudo tar xzf ~/tdlib-ubuntu24.tar.gz -C /usr/local && rm ~/tdlib-ubuntu24.tar.gz'
+
+# 5. Проверка
+ssh ufohosting 'pkg-config --modversion tdjson'
 ```
 
 ### 3. Установка зависимостей для сборки
