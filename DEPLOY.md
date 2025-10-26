@@ -49,7 +49,11 @@ tail -f ~/td/build/build.log
 cd ~/td/build
 sudo cmake --install .
 
-# Проверка
+# Обновить кэш динамических библиотек (чтобы система нашла libtdjson.so)
+sudo ldconfig
+
+# Проверка установки
+ldconfig -p | grep tdjson  # Должен показать путь к библиотеке
 pkg-config --modversion tdjson
 ```
 
