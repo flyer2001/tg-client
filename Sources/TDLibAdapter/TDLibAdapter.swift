@@ -83,15 +83,19 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
-    /// Отправляет запрос в TDLib.
+    /// Отправляет типизированный запрос в TDLib.
     ///
-    /// - Parameter json: JSON-объект с обязательным полем `@type`
-    public func send(_ json: [String: Any]) {
+    /// - Parameter request: Типизированный запрос TDLibRequest
+    public func send(_ request: TDLibRequest) {
         guard let client else {
             appLogger.error("Cannot send: client is nil")
             return
         }
-        let data = try! JSONSerialization.data(withJSONObject: json)
+        let encoder = TDLibRequestEncoder()
+        guard let data = try? encoder.encode(request) else {
+            appLogger.error("Failed to encode request: \(request.type)")
+            return
+        }
         data.withUnsafeBytes { raw in
             let s = String(decoding: raw.bindMemory(to: UInt8.self), as: UTF8.self)
             td_json_client_send(client, s)
@@ -161,7 +165,7 @@ public final class TDLibClient: @unchecked Sendable {
                                             promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String,
                                             onReady: @escaping @Sendable () -> Void) async {
         // Kickstart: request current auth state
-        send(["@type":"getAuthorizationState"])
+        send(GetAuthorizationStateRequest())
 
         var attemptCount = 0
         var lastActivity: AuthorizationLoopActivity?
@@ -222,24 +226,22 @@ public final class TDLibClient: @unchecked Sendable {
             case .waitTdlibParameters:
                 if !parametersSet {
                     appLogger.info("Setting TDLib parameters...")
-                    // TDLib >= 1.8.6 требует inline параметры (без вложенного объекта parameters)
-                    let request: [String: Any] = [
-                        "@type": "setTdlibParameters",
-                        "use_test_dc": false,
-                        "database_directory": config.stateDir + "/db",
-                        "files_directory": config.stateDir + "/files",
-                        "use_file_database": true,
-                        "use_chat_info_database": true,
-                        "use_message_database": true,
-                        "use_secret_chats": false,
-                        "api_id": config.apiId,
-                        "api_hash": config.apiHash,
-                        "system_language_code": "en",
-                        "device_model": "macOS",
-                        "application_version": "0.1.0",
-                        "enable_storage_optimizer": true,
-                        "ignore_file_names": false
-                    ]
+                    let request = SetTdlibParametersRequest(
+                        useTestDc: false,
+                        databaseDirectory: config.stateDir + "/db",
+                        filesDirectory: config.stateDir + "/files",
+                        databaseEncryptionKey: "",
+                        useFileDatabase: true,
+                        useChatInfoDatabase: true,
+                        useMessageDatabase: true,
+                        useSecretChats: false,
+                        apiId: config.apiId,
+                        apiHash: config.apiHash,
+                        systemLanguageCode: "en",
+                        deviceModel: "macOS",
+                        systemVersion: "",
+                        applicationVersion: "0.1.0"
+                    )
                     send(request)
                     parametersSet = true
                     appLogger.info("TDLib parameters sent")
@@ -249,23 +251,23 @@ public final class TDLibClient: @unchecked Sendable {
 
             case .waitEncryptionKey:
                 appLogger.info("Setting encryption key (empty for no encryption)...")
-                send(["@type": "checkDatabaseEncryptionKey", "encryption_key": ""])
+                send(CheckDatabaseEncryptionKeyRequest(encryptionKey: ""))
                 appLogger.info("Encryption key sent")
 
             case .waitPhoneNumber:
                 appLogger.info("Requesting phone number...")
                 let phone = await promptFor(.phoneNumber)
                 appLogger.info("Phone number received: \(phone)")
-                send(["@type":"setAuthenticationPhoneNumber","phone_number":phone])
+                send(SetAuthenticationPhoneNumberRequest(phoneNumber: phone))
                 appLogger.info("Phone number sent to TDLib")
 
             case .waitVerificationCode:
                 let code = await promptFor(.verificationCode)
-                send(["@type":"checkAuthenticationCode","code":code])
+                send(CheckAuthenticationCodeRequest(code: code))
 
             case .waitTwoFactorPassword:
-                let pwd = await promptFor(.twoFactorPassword)
-                send(["@type":"checkAuthenticationPassword","password":pwd])
+                let password = await promptFor(.twoFactorPassword)
+                send(CheckAuthenticationPasswordRequest(password: password))
 
             case .ready:
                 appLogger.info("TDLib authorization READY")

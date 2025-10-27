@@ -51,7 +51,7 @@ struct TGClient {
         }
 
         // Верификация: запросим текущего пользователя
-        td.send(["@type":"getMe"])
+        td.send(GetMeRequest())
 
         // Подождём и выведем ответ
         let started = Date()
