@@ -52,7 +52,10 @@ swift run tg-client  # Запуск приложения
 Вся документация находится в папке `docs/`:
 
 - **[TASKS.md](docs/TASKS.md)** - текущие задачи по приоритетам (читать в начале сессии)
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - история сессий (**только писать**, не читать для экономии токенов)
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - история сессий
+  - ⚠️ **НИКОГДА не использовать Read tool** - только prepend через bash
+  - Добавлять запись сверху без чтения содержимого файла
+  - Записывать только выполненные задачи текущей сессии
 - **[SETUP.md](docs/SETUP.md)** - установка зависимостей и настройка окружения для macOS
 - **[CREDENTIALS.md](docs/CREDENTIALS.md)** - получение и настройка Telegram API credentials
 - **[DEPLOY.md](docs/DEPLOY.md)** - развертывание на Linux-сервере (SSH, systemd, мониторинг)
