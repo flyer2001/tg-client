@@ -61,4 +61,5 @@ swift run tg-client  # Запуск приложения
 - **[DEPLOY.md](docs/DEPLOY.md)** - развертывание на Linux-сервере (SSH, systemd, мониторинг)
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - архитектура проекта, модули, паттерны, зависимости
 - **[CONTRIBUTING.md](docs/CONTRIBUTING.md)** - правила разработки (TDD, ветки, стиль кода, git)
+- **[TESTING.md](docs/TESTING.md)** - стратегия тестирования (unit/component/e2e), TDD workflow, coverage
 - **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - решение частых проблем
