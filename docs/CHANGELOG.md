@@ -1,3 +1,42 @@
+# 2025-10-28
+
+## Определение MVP и актуализация задач
+
+### Продуктовая работа
+- **Создан MVP.md** - полная спецификация первой версии продукта:
+  - Определен scope: только каналы (не в архиве), текст + ссылки
+  - Архитектура: 5 core модулей (MessageSource, SummaryGenerator, BotNotifier, StateManager, DigestOrchestrator)
+  - User flow: scheduled (2 раза/день) + on-demand через бота
+  - Критерии готовности MVP, roadmap (~6 недель)
+  - Технические решения: OpenAI API, Telegram Bot (Long Polling), systemd deployment
+
+- **Создан IDEAS.md** - бэклог для версий после MVP:
+  - v0.2.0: GroupChatMessageSource, PrivateChatMessageSource
+  - v0.3.0: Whitelist/Blacklist UI через бота
+  - v0.4.0+: обработка медиа, история, персонализация
+  - Технические улучшения: кодогенерация из TL, продвинутый мониторинг, Docker
+
+### Актуализация задач
+- **Обновлен TASKS.md** - полная перестройка под MVP:
+  - Добавлены инструкции для новых сессий (что читать, TDD обязателен)
+  - High Priority: MVP-1 to MVP-5 (Phase 1-2) - core модули
+  - Normal Priority: MVP-6 to MVP-8 (Phase 3-4) - deployment, monitoring, testing
+  - Low Priority: технический долг (не блокирует MVP)
+  - Топ-3 задачи: ChannelMessageSource (протокол, получение каналов, извлечение сообщений)
+
+### Улучшение документации
+- **Обновлен CLAUDE.md** - усилен фокус на MVP и TDD:
+  - Добавлены ссылки на MVP.md и IDEAS.md
+  - Четкая формулировка: "Все новые задачи направлены на достижение MVP"
+  - Сокращено правило TDD: "Пишем код по TDD" (детали в TESTING.md)
+  - Архитектура MVP: краткий список модулей + ссылки на детали
+  - Реорганизация списка документов (продуктовые / технические / инфраструктура)
+
+### Naming и архитектура
+- Переименование: `ChannelFetcher` → `MessageSource` (протокол для разных типов чатов)
+- MVP реализация: `ChannelMessageSource`
+- Будущее: `GroupChatMessageSource`, `PrivateChatMessageSource`
+
 # CHANGELOG
 
 ## 2025-10-27
