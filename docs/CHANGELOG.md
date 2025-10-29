@@ -1,3 +1,48 @@
+# 2025-10-28 (вечер)
+
+## Создана структура тестов и первые unit-тесты
+
+### Структура тестов
+- **Удален TelegramCore** - ненужный placeholder модуль
+- **Создана трёхуровневая структура тестов:**
+  - `TgClientUnitTests/` - быстрые unit-тесты (большинство)
+  - `TgClientComponentTests/` - component-тесты с моками
+  - `TgClientE2ETests/` - E2E тесты (disabled в CI, только manual)
+- Placeholder тесты для Component и E2E (будут заполнены при разработке MVP)
+
+### Первые unit-тесты (TEST-0.1)
+- **TDLibRequestEncoderTests** - 7 unit-тестов на Swift Testing:
+  - Encode GetMeRequest (простой запрос)
+  - Encode SetTdlibParametersRequest (сложный с snake_case маппингом)
+  - Encode SetAuthenticationPhoneNumberRequest
+  - Encode CheckAuthenticationCodeRequest
+  - Encode CheckAuthenticationPasswordRequest
+  - JSON валидность
+  - Проверка что data не пустая
+- ✅ Все тесты проходят: `Test run with 9 tests passed after 0.001 seconds`
+
+### Swift Testing фреймворк
+- **Переход с XCTest на Swift Testing:**
+  - Работает БЕЗ Xcode (только CommandLineTools)
+  - Современный синтаксис: `@Test`, `#expect`, `@Suite`
+  - Нативный async/await, parametrized тесты
+  - Кросс-платформенный (macOS + Linux)
+- **TESTING.md:** добавлено неснимаемое правило про Swift Testing + ссылка на документацию
+- **E2E тесты:** используется `.disabled()` trait - не запускаются в CI
+
+### Обновление задач
+- **TASKS.md:** добавлена секция TEST-0 (покрытие существующего кода)
+  - TEST-0.1: TDLibRequestEncoder ✅ (выполнено)
+  - TEST-0.2: Response модели (TODO)
+  - TEST-0.3: TDLibUpdate (TODO)
+  - TEST-0.4: Manual E2E script (TODO)
+
+**Файлы:**
+- `Package.swift` - 3 test targets вместо TelegramCoreTests
+- `Tests/TgClientUnitTests/TDLibAdapter/TDLibRequestEncoderTests.swift` - 168 строк
+- `Tests/TgClientComponentTests/ComponentTestsPlaceholder.swift`
+- `Tests/TgClientE2ETests/E2ETestsPlaceholder.swift`
+
 # 2025-10-28
 
 ## Определение MVP и актуализация задач

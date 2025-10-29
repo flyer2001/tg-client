@@ -24,13 +24,54 @@
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-1. **[MVP-1.1] ChannelMessageSource: базовая структура** - протокол + TDLib реализация
-2. **[MVP-1.2] Получение списка непрочитанных каналов** - фильтрация (не в архиве)
-3. **[MVP-1.3] Извлечение сообщений из каналов** - текст + ссылки на оригинал
+1. **[TEST-0] Покрытие существующего кода unit-тестами** - TDLibRequestEncoder, Response модели, TDLibUpdate
+2. **[MVP-1.1] ChannelMessageSource: базовая структура** - протокол + TDLib реализация
+3. **[MVP-1.2] Получение списка непрочитанных каналов** - фильтрация (не в архиве)
 
 ---
 
 ## 📊 High Priority (MVP Phase 1-2)
+
+### TEST-0. Покрытие существующего кода (до MVP-1)
+
+**Цель:** Покрыть тестами существующую функциональность перед началом MVP разработки.
+
+**Стратегия:** Вариант A (unit-тесты + manual E2E, без рефакторинга авторизации).
+
+#### Задачи:
+
+**0.1 Unit-тесты: TDLibRequestEncoder**
+- [ ] Тест `testEncodeGetMeRequest()` - простой запрос без параметров
+- [ ] Тест `testEncodeSetTdlibParametersRequest()` - сложный запрос с snake_case
+- [ ] Тест `testEncodeSetAuthenticationPhoneNumberRequest()`
+- [ ] Тест `testEncodeCheckAuthenticationCodeRequest()`
+- [ ] Тест `testEncodeCheckAuthenticationPasswordRequest()`
+- [ ] Проверка валидности JSON формата
+- [ ] Проверка отсутствия camelCase ключей в JSON
+
+**0.2 Unit-тесты: Response модели (декодирование)**
+- [ ] `testDecodeAuthorizationStateWaitTdlibParameters()`
+- [ ] `testDecodeAuthorizationStateWaitPhoneNumber()`
+- [ ] `testDecodeAuthorizationStateWaitCode()`
+- [ ] `testDecodeAuthorizationStateWaitPassword()`
+- [ ] `testDecodeAuthorizationStateReady()`
+- [ ] `testDecodeTDLibError()`
+- [ ] `testDecodeUnknownAuthorizationState()` - fallback behavior
+
+**0.3 Unit-тесты: TDLibUpdate (обёртка)**
+- [ ] `testParseUpdateAuthorizationState()`
+- [ ] `testParseError()`
+- [ ] `testParseOkResponse()`
+- [ ] `testParseInvalidJSON()` - error handling
+
+**0.4 Manual E2E тест (опционально)**
+- [ ] Создать скрипт `Tests/E2E/test_auth.sh`
+- [ ] Проверка полного цикла авторизации с реальным TDLib
+- [ ] Документация в скрипте (требует credentials, не для CI)
+
+**Примечание:** Component-тесты для авторизации откладываем (требуют рефакторинга 3.7 с DI/протоколами).
+
+---
 
 ### MVP-1. ChannelMessageSource (TDLib Integration)
 
