@@ -42,11 +42,21 @@ let package = Package(
                 .copy("README.md")
             ]
         ),
-        .target(name: "TelegramCore"),
+        // Test targets
         .testTarget(
-            name: "TelegramCoreTests",
-            dependencies: ["TelegramCore"],
-            path: "Tests/TelegramCoreTests"
+            name: "TgClientUnitTests",
+            dependencies: ["TDLibAdapter"],
+            path: "Tests/TgClientUnitTests"
+        ),
+        .testTarget(
+            name: "TgClientComponentTests",
+            dependencies: ["TDLibAdapter"],
+            path: "Tests/TgClientComponentTests"
+        ),
+        .testTarget(
+            name: "TgClientE2ETests",
+            dependencies: ["TDLibAdapter", "App"],
+            path: "Tests/TgClientE2ETests"
         )
     ]
 )
