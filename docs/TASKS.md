@@ -24,7 +24,7 @@
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-1. **[TEST-0] Покрытие существующего кода unit-тестами** - TDLibRequestEncoder, Response модели, TDLibUpdate
+1. **[TEST-0.5] Linux Build Verification** 🔥 - CI + manual проверка сборки на Linux (критично!)
 2. **[MVP-1.1] ChannelMessageSource: базовая структура** - протокол + TDLib реализация
 3. **[MVP-1.2] Получение списка непрочитанных каналов** - фильтрация (не в архиве)
 
@@ -40,34 +40,49 @@
 
 #### Задачи:
 
-**0.1 Unit-тесты: TDLibRequestEncoder**
-- [ ] Тест `testEncodeGetMeRequest()` - простой запрос без параметров
-- [ ] Тест `testEncodeSetTdlibParametersRequest()` - сложный запрос с snake_case
-- [ ] Тест `testEncodeSetAuthenticationPhoneNumberRequest()`
-- [ ] Тест `testEncodeCheckAuthenticationCodeRequest()`
-- [ ] Тест `testEncodeCheckAuthenticationPasswordRequest()`
-- [ ] Проверка валидности JSON формата
-- [ ] Проверка отсутствия camelCase ключей в JSON
+**0.1 Unit-тесты: TDLibRequestEncoder** ✅
+- [x] Тест `testEncodeGetMeRequest()` - простой запрос без параметров
+- [x] Тест `testEncodeSetTdlibParametersRequest()` - сложный запрос с snake_case
+- [x] Тест `testEncodeSetAuthenticationPhoneNumberRequest()`
+- [x] Тест `testEncodeCheckAuthenticationCodeRequest()`
+- [x] Тест `testEncodeCheckAuthenticationPasswordRequest()`
+- [x] Проверка валидности JSON формата
+- [x] Проверка отсутствия camelCase ключей в JSON
 
-**0.2 Unit-тесты: Response модели (декодирование)**
-- [ ] `testDecodeAuthorizationStateWaitTdlibParameters()`
-- [ ] `testDecodeAuthorizationStateWaitPhoneNumber()`
-- [ ] `testDecodeAuthorizationStateWaitCode()`
-- [ ] `testDecodeAuthorizationStateWaitPassword()`
-- [ ] `testDecodeAuthorizationStateReady()`
-- [ ] `testDecodeTDLibError()`
-- [ ] `testDecodeUnknownAuthorizationState()` - fallback behavior
+**0.2 Unit-тесты: Response модели (декодирование)** ✅
+- [x] `testDecodeAuthorizationStateWaitTdlibParameters()`
+- [x] `testDecodeAuthorizationStateWaitPhoneNumber()`
+- [x] `testDecodeAuthorizationStateWaitCode()`
+- [x] `testDecodeAuthorizationStateWaitPassword()`
+- [x] `testDecodeAuthorizationStateReady()`
+- [x] `testDecodeTDLibError()`
+- [x] Fallback behavior для invalid JSON
 
-**0.3 Unit-тесты: TDLibUpdate (обёртка)**
-- [ ] `testParseUpdateAuthorizationState()`
-- [ ] `testParseError()`
-- [ ] `testParseOkResponse()`
-- [ ] `testParseInvalidJSON()` - error handling
+**0.3 Unit-тесты: TDLibUpdate (обёртка)** ✅
+- [x] `testParseUpdateAuthorizationState()`
+- [x] `testParseError()`
+- [x] `testParseOkResponse()`
+- [x] `testParseInvalidJSON()` - error handling
 
-**0.4 Manual E2E тест (опционально)**
-- [ ] Создать скрипт `Tests/E2E/test_auth.sh`
-- [ ] Проверка полного цикла авторизации с реальным TDLib
-- [ ] Документация в скрипте (требует credentials, не для CI)
+**0.4 Manual E2E тест** ✅
+- [x] Создать скрипт `scripts/manual_e2e_auth.sh`
+- [x] Проверка полного цикла авторизации с реальным TDLib
+- [x] Поддержка Linux (приоритет) и macOS (опционально)
+- [x] Документация в скрипте (требует credentials, не для CI)
+
+**0.5 Linux Build Verification** (ВЫСОКИЙ ПРИОРИТЕТ)
+- [ ] **0.5a: GitHub Actions CI**
+  - [ ] Создать `.github/workflows/linux-build.yml`
+  - [ ] Настроить job на Linux (ubuntu-latest)
+  - [ ] Установка Swift toolchain + TDLib
+  - [ ] Запуск `swift build` и `swift test`
+  - [ ] Проверка что workflow работает (запуск/просмотр логов)
+- [ ] **0.5b: Manual VPS/Docker проверка**
+  - [ ] Создать Linux окружение (VPS или Docker)
+  - [ ] Установить Swift + TDLib на Linux
+  - [ ] Запустить `swift build && swift test`
+  - [ ] Запустить `scripts/manual_e2e_auth.sh`
+  - [ ] Документировать процесс в [DEPLOY.md](DEPLOY.md) (секция Linux Setup)
 
 **Примечание:** Component-тесты для авторизации откладываем (требуют рефакторинга 3.7 с DI/протоколами).
 
