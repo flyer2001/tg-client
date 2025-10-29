@@ -4,9 +4,9 @@ import TDLibAdapter
 
 @main
 struct TGClient {
+    /// Читает ввод пользователя с промптом (курсор остаётся на той же строке)
     static func readLineSecure(message: String) -> String {
-        FileHandle.standardOutput.write(Data((message).utf8))
-        fflush(stdout)
+        print(message, terminator: "")
         return readLine() ?? ""
     }
 
@@ -22,7 +22,9 @@ struct TGClient {
         try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
 
         guard apiId > 0, !apiHash.isEmpty else {
-            fputs("Set TELEGRAM_API_ID and TELEGRAM_API_HASH in environment.\n", stderr)
+            // Вывод ошибки в stderr (отдельный поток для ошибок, не буферизуется)
+            // exit(2) - завершение с кодом 2 (ошибка конфигурации)
+            FileHandle.standardError.write(Data("Set TELEGRAM_API_ID and TELEGRAM_API_HASH in environment.\n".utf8))
             exit(2)
         }
 
