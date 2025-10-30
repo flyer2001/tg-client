@@ -9,6 +9,6 @@
       "Read(./DerivedData/**)"
     ]
   },
-  "alwaysThinkingEnabled": true,
-  "spinnerTipsEnabled": true
+  "alwaysThinkingEnabled": false,
+  "spinnerTipsEnabled": false
 }
