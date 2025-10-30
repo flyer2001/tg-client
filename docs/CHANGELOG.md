@@ -1,3 +1,57 @@
+## 2025-10-30 - DEV-0.3: Завершение настройки удалённой разработки с iPhone
+
+### Completed Tasks
+
+**DEV-0.3: Тестирование workflow удалённой разработки** ✅
+- Авторизован Claude CLI на Linux VPS через `claude setup-token`
+- Проверена работа Claude CLI с iPhone через SSH (Blink Shell)
+- Выполнена тестовая задача разработки: проверка сборки проекта (`swift build`)
+- Решена проблема зависшего SwiftPM: `rm -rf .build && swift build`
+- Документирован процесс в SETUP.md и DEPLOY.md
+
+### Documentation Updates
+
+**DEPLOY.md**:
+- Дополнена секция "Known Issue: SwiftPM Build Hangs on Linux"
+- Добавлена диагностика зависших процессов: `ps aux | grep swift-build`
+- Описано решение через очистку `.build` директории
+- Объяснена причина: lock-файлы от некорректно завершённых процессов
+
+**SETUP.md**:
+- Добавлена новая секция "Удалённая разработка с iPhone/iPad (Claude CLI + SSH)"
+- Инструкции по установке Claude CLI на Linux VPS
+- Настройка SSH-доступа с iPhone (Blink Shell, Ed25519 ключи)
+- Workflow разработки через мобильное устройство
+- Troubleshooting для частых проблем (зависший SwiftPM)
+- Рекомендации по использованию tmux и ограничению вывода команд
+
+### Technical Notes
+
+**Проблема**: SwiftPM зависает на "Planning build" из-за старых lock-файлов в `.build/`, оставшихся после некорректного завершения процессов (Ctrl+C, kill, разрыв SSH).
+
+**Решение**: 
+```bash
+# Проверить зависшие процессы
+ps aux | grep swift-build
+
+# Убить процесс (если нужно)
+kill -9 <PID>
+
+# Очистить .build и пересобрать
+rm -rf .build && swift build 2>&1 | tail -20
+```
+
+**Время полной сборки**: ~20-25 секунд (после очистки `.build`)
+
+### Next Steps
+
+Приоритетные задачи для следующей сессии:
+1. **[TEST-0.5a]** GitHub Actions CI для автоматической сборки и тестов на Linux
+2. **[MVP-1.1]** ChannelMessageSource: базовая структура (протокол + TDLib реализация)
+3. **[MVP-2.1]** OpenAI HTTP Client для генерации саммари
+
+---
+
 ## 2025-10-30 | Оптимизация CLAUDE.md для эффективного управления токенами
 
 **Коммит:** f626262b60df35850f027774fdfa7655b73b9e6f
