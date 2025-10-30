@@ -24,30 +24,23 @@
 #   export TELEGRAM_API_ID=your_api_id
 #   export TELEGRAM_API_HASH=your_api_hash
 #   export TELEGRAM_PHONE=+1234567890
-#   ./scripts/manual_e2e_auth.sh [--clean] [--skip-build] [--verbose]
+#   ./scripts/manual_e2e_auth.sh [--clean]
 #
 # Options:
 #   --clean        Remove old TDLib state before running
-#   --skip-build   Skip swift build, use existing binary
-#   --verbose      Enable verbose output (swift build -v)
+#
+# Note: This script expects a pre-built binary at .build/debug/tg-client
+#       To build manually, see docs/DEPLOY.md
 
 set -e
 
 # Parse options
 CLEAN_STATE=false
-SKIP_BUILD=false
-VERBOSE=false
 
 for arg in "$@"; do
     case $arg in
         --clean)
             CLEAN_STATE=true
-            ;;
-        --skip-build)
-            SKIP_BUILD=true
-            ;;
-        --verbose)
-            VERBOSE=true
             ;;
     esac
 done
@@ -109,6 +102,19 @@ elif [[ "$PLATFORM" == "Darwin" ]]; then
 fi
 echo -e "${GREEN}✓ TDLib is installed${NC}"
 
+# Check for binary existence
+echo -e "\n${YELLOW}Проверка наличия бинарника...${NC}"
+BINARY_PATH=".build/debug/tg-client"
+if [[ ! -f "$BINARY_PATH" ]]; then
+    echo -e "${RED}❌ Бинарник не найден: $BINARY_PATH${NC}"
+    echo -e "${YELLOW}Соберите проект вручную:${NC}"
+    echo -e "  ${YELLOW}tmux new-session -s build${NC}"
+    echo -e "  ${YELLOW}swift build -v${NC}"
+    echo -e "${YELLOW}См. docs/DEPLOY.md для деталей${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Бинарник найден: $BINARY_PATH${NC}"
+
 # Clean old state if requested
 TDLIB_DIR="$HOME/.tdlib"
 if [[ "$CLEAN_STATE" == true ]]; then
@@ -121,33 +127,13 @@ if [[ "$CLEAN_STATE" == true ]]; then
     fi
 fi
 
-# Build the project
-if [[ "$SKIP_BUILD" == true ]]; then
-    echo -e "\n${YELLOW}⏭  Пропуск сборки (используется существующий бинарник)${NC}"
-    if [[ ! -f .build/debug/tg-client ]]; then
-        echo -e "${RED}❌ Бинарник не найден: .build/debug/tg-client${NC}"
-        echo -e "${RED}   Запустите без --skip-build для сборки${NC}"
-        exit 1
-    fi
-else
-    echo -e "\n${YELLOW}Сборка проекта...${NC}"
-    echo -e "${YELLOW}⏱  Первая сборка может занять 15-30 секунд (последующие быстрее)${NC}"
-    if [[ "$VERBOSE" == true ]]; then
-        echo -e "${YELLOW}📋 Подробный вывод включен${NC}"
-        swift build -v
-    else
-        swift build
-    fi
-    echo -e "${GREEN}✓ Сборка успешна${NC}"
-fi
-
 # Run authorization
 echo -e "\n${YELLOW}Запуск процесса авторизации...${NC}"
 echo -e "${YELLOW}Следуйте подсказкам для ввода SMS-кода и 2FA пароля (если требуется)${NC}"
 echo -e "${YELLOW}================================================${NC}\n"
 
 LOG_FILE="/tmp/tg-client-e2e-$(date +%s).log"
-swift run tg-client 2>&1 | tee "$LOG_FILE"
+"$BINARY_PATH" 2>&1 | tee "$LOG_FILE"
 
 # Verify results
 echo -e "\n${YELLOW}Проверка результатов авторизации...${NC}"
