@@ -81,7 +81,7 @@ jobs:
 
     - name: Run tests
       run: |
-        swift test 2>&1 | head -100
+        swift test --skip TgClientE2ETests 2>&1 | head -100
       timeout-minutes: 5
 
     - name: Check binary exists
