@@ -97,12 +97,12 @@
 - [x] Документация в скрипте (требует credentials, не для CI)
 
 **0.5 Linux Build Verification** (ВЫСОКИЙ ПРИОРИТЕТ)
-- [ ] **0.5a: GitHub Actions CI**
-  - [ ] Создать `.github/workflows/linux-build.yml`
-  - [ ] Настроить job на Linux (ubuntu-latest)
-  - [ ] Установка Swift toolchain + TDLib
-  - [ ] Запуск `swift build` и `swift test`
-  - [ ] Проверка что workflow работает (запуск/просмотр логов)
+- [x] **0.5a: GitHub Actions CI** ✅
+  - [x] Создать `.github/workflows/linux-build.yml`
+  - [x] Настроить job на Linux (ubuntu-24.04)
+  - [x] Установка Swift toolchain + TDLib (с кэшированием)
+  - [x] Запуск `swift build` и `swift test` (с workaround для SwiftPM hangs)
+  - [ ] Проверка что workflow работает (запуск/просмотр логов) - требует проверки в браузере
 - [x] **0.5b: Manual VPS/Docker проверка** ✅ (сборка работает, авторизация успешна; см. заметку о SwiftPM в [DEPLOY.md](DEPLOY.md))
   - [x] Создать Linux окружение (VPS или Docker)
   - [x] Установить Swift + TDLib на Linux
