@@ -77,12 +77,12 @@
   - [ ] Установка Swift toolchain + TDLib
   - [ ] Запуск `swift build` и `swift test`
   - [ ] Проверка что workflow работает (запуск/просмотр логов)
-- [ ] **0.5b: Manual VPS/Docker проверка**
-  - [ ] Создать Linux окружение (VPS или Docker)
-  - [ ] Установить Swift + TDLib на Linux
-  - [ ] Запустить `swift build && swift test`
-  - [ ] Запустить `scripts/manual_e2e_auth.sh`
-  - [ ] Документировать процесс в [DEPLOY.md](DEPLOY.md) (секция Linux Setup)
+- [x] **0.5b: Manual VPS/Docker проверка** ✅ (сборка работает, авторизация успешна; см. заметку о SwiftPM в [DEPLOY.md](DEPLOY.md))
+  - [x] Создать Linux окружение (VPS или Docker)
+  - [x] Установить Swift + TDLib на Linux
+  - [x] Запустить `swift build && swift test`
+  - [x] Запустить `scripts/manual_e2e_auth.sh`
+  - [x] Документировать процесс в [DEPLOY.md](DEPLOY.md) (секция Linux Setup)
 
 **Примечание:** Component-тесты для авторизации откладываем (требуют рефакторинга 3.7 с DI/протоколами).
 
