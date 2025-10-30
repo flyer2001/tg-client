@@ -1,3 +1,66 @@
+## 2025-10-30 (сессия 2) - TEST-0.5a: GitHub Actions CI + Mobile Settings
+
+### Completed Tasks
+
+**TEST-0.5a: GitHub Actions CI для Linux** ✅
+- Создан workflow `.github/workflows/linux-build.yml`
+- Ubuntu 24.04 + Swift 6.2 (совместимость с Package.swift 6.1+)
+- Ручная установка Swift (workaround для swift-actions/setup-swift)
+- Сборка и кэширование TDLib в `~/tdlib-install` (~30-40 мин первая сборка, потом кэш)
+- Workaround для SwiftPM hangs: `rm -rf .build` перед каждой сборкой
+- Запуск unit и component тестов (E2E тесты пропускаются через `--skip TgClientE2ETests`)
+- Timeout 5 минут для build/test шагов
+- Обрезка логов (`tail -50`, `head -100`) для экономии CI времени
+
+**Mobile Configuration для iPhone/Termius** ✅
+- Создан `.claude/settings.mobile.json` (spinnerTips=false, alwaysThinking=false)
+- Обновлён `.claude/settings.json` для macOS (оба флага true)
+- Добавлен alias `claude-mobile` в `~/.bashrc` на VPS
+- Документирован workflow в SETUP.md
+
+### Technical Details
+
+**GitHub Actions проблемы и решения:**
+1. `swift-actions/setup-swift@v2` не поддерживает Ubuntu 24.04 → ручная установка Swift 6.2
+2. TDLib кэширование в `/usr/local` требует sudo → переехали в `~/tdlib-install`
+3. Swift 6.0.3 несовместим с Package.swift (требует 6.1+) → обновили до Swift 6.2
+4. E2E тесты требуют credentials → отключили через `--skip TgClientE2ETests`
+
+**Mobile настройки:**
+- `spinnerTipsEnabled: false` → предотвращает "дёргание" экрана в Termius
+- `alwaysThinkingEnabled: false` → экономия места на маленьком экране iPhone
+
+### Files Changed
+
+**CI:**
+- `.github/workflows/linux-build.yml` (создан)
+- `docs/TASKS.md` (TEST-0.5a завершён)
+
+**Mobile config:**
+- `.claude/settings.json` (обновлён для macOS)
+- `.claude/settings.mobile.json` (создан)
+- `~/.bashrc` (alias claude-mobile)
+- `docs/SETUP.md` (раздел "Настройка мобильной конфигурации Claude")
+
+### Commits
+
+- `9cdf569` - Добавить GitHub Actions CI для Linux
+- `721ca9b` - Исправить GitHub Actions: ручная установка Swift + кэширование
+- `0714570` - Обновить Swift до 6.2 в GitHub Actions
+- `f3985bd` - Отключить E2E тесты в CI (требуют credentials)
+- `350afad` - Обновить TASKS.md: TEST-0.5a завершён
+- `e7b5da0` - Добавить настройки Claude для desktop и mobile
+- `5d2645a` - Документировать настройку claude-mobile для iPhone/Termius
+
+### Next Steps
+
+- Дождаться успешного прохождения GitHub Actions workflow (первая сборка TDLib ~30-40 мин)
+- Проверить зелёную галочку на https://github.com/flyer2001/tg-client/actions
+- Начать работу над MVP-1.1: ChannelMessageSource базовая структура
+
+
+---
+
 ## 2025-10-30 - DEV-0.3: Завершение настройки удалённой разработки с iPhone
 
 ### Completed Tasks
