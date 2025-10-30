@@ -37,9 +37,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Load .env file if it exists
+if [[ -f .env ]]; then
+    echo -e "${YELLOW}Загрузка credentials из .env...${NC}"
+    source .env
+    echo -e "${GREEN}✓ .env загружен${NC}"
+fi
+
 # Detect platform
 PLATFORM=$(uname -s)
-echo -e "${YELLOW}Platform detected: $PLATFORM${NC}"
+echo -e "${YELLOW}Платформа: $PLATFORM${NC}"
 
 if [[ "$PLATFORM" != "Linux" && "$PLATFORM" != "Darwin" ]]; then
     echo -e "${RED}❌ Unsupported platform: $PLATFORM${NC}"
@@ -48,7 +55,7 @@ if [[ "$PLATFORM" != "Linux" && "$PLATFORM" != "Darwin" ]]; then
 fi
 
 # Check required environment variables
-echo -e "\n${YELLOW}Checking environment variables...${NC}"
+echo -e "\n${YELLOW}Проверка переменных окружения...${NC}"
 REQUIRED_VARS=("TELEGRAM_API_ID" "TELEGRAM_API_HASH" "TELEGRAM_PHONE")
 for var in "${REQUIRED_VARS[@]}"; do
     if [[ -z "${!var}" ]]; then
@@ -63,7 +70,7 @@ for var in "${REQUIRED_VARS[@]}"; do
 done
 
 # Check TDLib installation
-echo -e "\n${YELLOW}Checking TDLib installation...${NC}"
+echo -e "\n${YELLOW}Проверка установки TDLib...${NC}"
 if [[ "$PLATFORM" == "Linux" ]]; then
     if ! ldconfig -p | grep -q libtdjson; then
         echo -e "${RED}❌ TDLib not found${NC}"
@@ -84,7 +91,7 @@ echo -e "${GREEN}✓ TDLib is installed${NC}"
 # Clean old state if requested
 TDLIB_DIR="$HOME/.tdlib"
 if [[ "$1" == "--clean" ]]; then
-    echo -e "\n${YELLOW}Cleaning old TDLib state...${NC}"
+    echo -e "\n${YELLOW}Очистка старого состояния TDLib...${NC}"
     if [[ -d "$TDLIB_DIR" ]]; then
         rm -rf "$TDLIB_DIR"
         echo -e "${GREEN}✓ Removed $TDLIB_DIR${NC}"
@@ -94,20 +101,21 @@ if [[ "$1" == "--clean" ]]; then
 fi
 
 # Build the project
-echo -e "\n${YELLOW}Building project...${NC}"
+echo -e "\n${YELLOW}Сборка проекта...${NC}"
+echo -e "${YELLOW}⏱  Первая сборка может занять 15-30 секунд (последующие быстрее)${NC}"
 swift build
-echo -e "${GREEN}✓ Build successful${NC}"
+echo -e "${GREEN}✓ Сборка успешна${NC}"
 
 # Run authorization
-echo -e "\n${YELLOW}Starting authorization process...${NC}"
-echo -e "${YELLOW}Follow the prompts to enter SMS code and 2FA password (if required)${NC}"
+echo -e "\n${YELLOW}Запуск процесса авторизации...${NC}"
+echo -e "${YELLOW}Следуйте подсказкам для ввода SMS-кода и 2FA пароля (если требуется)${NC}"
 echo -e "${YELLOW}================================================${NC}\n"
 
 LOG_FILE="/tmp/tg-client-e2e-$(date +%s).log"
 swift run tg-client 2>&1 | tee "$LOG_FILE"
 
 # Verify results
-echo -e "\n${YELLOW}Verifying authorization results...${NC}"
+echo -e "\n${YELLOW}Проверка результатов авторизации...${NC}"
 
 # Check 1: authorizationStateReady reached
 if grep -q "authorizationStateReady" "$LOG_FILE"; then
