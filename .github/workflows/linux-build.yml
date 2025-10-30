@@ -47,7 +47,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/tdlib-install
-        key: tdlib-ubuntu24.04-${{ hashFiles('.github/workflows/linux-build.yml') }}
+        key: tdlib-1.8.29-ubuntu24.04-release
 
     - name: Build and install TDLib
       if: steps.cache-tdlib.outputs.cache-hit != 'true'
