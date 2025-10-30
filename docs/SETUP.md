@@ -92,14 +92,19 @@ claude setup-token
 Для удобной работы в мобильном терминале (Termius/Blink Shell) используйте оптимизированные настройки:
 
 ```bash
-# На VPS создать alias для мобильной конфигурации
-echo "alias claude-mobile='claude --config ~/tg-client/.claude/settings.mobile.json'" >> ~/.bashrc
-source ~/.bashrc
+# На VPS создать скрипт для мобильной конфигурации
+sudo tee /usr/local/bin/claude-mobile > /dev/null << 'EOF'
+#!/bin/bash
+cd ~/tg-client && exec claude --settings .claude/settings.mobile.json "$@"
+EOF
+
+sudo chmod +x /usr/local/bin/claude-mobile
 ```
 
 **Мобильная конфигурация** (`.claude/settings.mobile.json`):
 - `spinnerTipsEnabled: false` — отключает spinner tips (предотвращает "дёргание" экрана)
 - `alwaysThinkingEnabled: false` — скрывает процесс размышлений (экономия места)
+- `permissions.deny` — блокирует чтение `.env`, `.git`, `.build` для безопасности
 
 ### Workflow разработки
 
@@ -107,21 +112,22 @@ source ~/.bashrc
 # 1. Подключиться к VPS
 ssh user@vps
 
-# 2. Перейти в проект
-cd ~/tg-client
-
-# 3. Запустить Claude CLI (мобильная версия)
+# 2. Запустить Claude CLI (мобильная версия)
 claude-mobile
 
-# 4. Дать задачу Claude (примеры):
+# Можно сразу продолжить последнюю сессию:
+claude-mobile -c
+
+# 3. Дать задачу Claude (примеры):
 # - "проверь что swift build работает"
 # - "добавь unit-тест для TDLibRequestEncoder"
 # - "запусти тесты и покажи результат"
 ```
 
-**Альтернативно** (без alias):
+**Альтернативно** (без скрипта):
 ```bash
-claude --config ~/tg-client/.claude/settings.mobile.json
+cd ~/tg-client
+claude --settings .claude/settings.mobile.json
 ```
 
 ### Troubleshooting: Зависший SwiftPM
