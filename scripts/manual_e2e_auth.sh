@@ -24,12 +24,33 @@
 #   export TELEGRAM_API_ID=your_api_id
 #   export TELEGRAM_API_HASH=your_api_hash
 #   export TELEGRAM_PHONE=+1234567890
-#   ./scripts/manual_e2e_auth.sh [--clean]
+#   ./scripts/manual_e2e_auth.sh [--clean] [--skip-build] [--verbose]
 #
 # Options:
-#   --clean    Remove old TDLib state before running
+#   --clean        Remove old TDLib state before running
+#   --skip-build   Skip swift build, use existing binary
+#   --verbose      Enable verbose output (swift build -v)
 
 set -e
+
+# Parse options
+CLEAN_STATE=false
+SKIP_BUILD=false
+VERBOSE=false
+
+for arg in "$@"; do
+    case $arg in
+        --clean)
+            CLEAN_STATE=true
+            ;;
+        --skip-build)
+            SKIP_BUILD=true
+            ;;
+        --verbose)
+            VERBOSE=true
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -90,21 +111,35 @@ echo -e "${GREEN}✓ TDLib is installed${NC}"
 
 # Clean old state if requested
 TDLIB_DIR="$HOME/.tdlib"
-if [[ "$1" == "--clean" ]]; then
+if [[ "$CLEAN_STATE" == true ]]; then
     echo -e "\n${YELLOW}Очистка старого состояния TDLib...${NC}"
     if [[ -d "$TDLIB_DIR" ]]; then
         rm -rf "$TDLIB_DIR"
         echo -e "${GREEN}✓ Removed $TDLIB_DIR${NC}"
     else
-        echo -e "${YELLOW}  (no existing state found)${NC}"
+        echo -e "${YELLOW}  (нет существующего состояния)${NC}"
     fi
 fi
 
 # Build the project
-echo -e "\n${YELLOW}Сборка проекта...${NC}"
-echo -e "${YELLOW}⏱  Первая сборка может занять 15-30 секунд (последующие быстрее)${NC}"
-swift build
-echo -e "${GREEN}✓ Сборка успешна${NC}"
+if [[ "$SKIP_BUILD" == true ]]; then
+    echo -e "\n${YELLOW}⏭  Пропуск сборки (используется существующий бинарник)${NC}"
+    if [[ ! -f .build/debug/tg-client ]]; then
+        echo -e "${RED}❌ Бинарник не найден: .build/debug/tg-client${NC}"
+        echo -e "${RED}   Запустите без --skip-build для сборки${NC}"
+        exit 1
+    fi
+else
+    echo -e "\n${YELLOW}Сборка проекта...${NC}"
+    echo -e "${YELLOW}⏱  Первая сборка может занять 15-30 секунд (последующие быстрее)${NC}"
+    if [[ "$VERBOSE" == true ]]; then
+        echo -e "${YELLOW}📋 Подробный вывод включен${NC}"
+        swift build -v
+    else
+        swift build
+    fi
+    echo -e "${GREEN}✓ Сборка успешна${NC}"
+fi
 
 # Run authorization
 echo -e "\n${YELLOW}Запуск процесса авторизации...${NC}"
