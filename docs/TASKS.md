@@ -24,9 +24,11 @@
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-1. **[TEST-0.5a] GitHub Actions CI для Linux** 🔥 - автоматическая сборка и тесты на Linux
-2. **[MVP-1.1] ChannelMessageSource: базовая структура** - протокол + TDLib реализация
-3. **[MVP-2.1] OpenAI HTTP Client** - интеграция для генерации саммари
+1. **[MVP-1.5] Типизация TDLib методов** 🔥 - Chat, Message, GetChats, GetChatHistory, ViewMessages (делать первым!)
+2. **[MVP-1.1] Протокол MessageSource** - MessageSourceProtocol + SourceMessage модель
+3. **[MVP-1.2-1.4] Реализация ChannelMessageSource** - получение каналов, сообщений, отметка прочитанным
+
+> **См. детали:** [MVP.md — TDLib API](MVP.md#tdlib-api-работа-с-непрочитанными-сообщениями)
 
 ---
 
@@ -118,6 +120,8 @@
 
 **Цель:** Получение непрочитанных сообщений из Telegram каналов.
 
+> **📖 Детали работы с TDLib API:** [MVP.md — TDLib API: Работа с непрочитанными сообщениями](MVP.md#tdlib-api-работа-с-непрочитанными-сообщениями)
+
 **Архитектура:**
 ```swift
 protocol MessageSourceProtocol {
@@ -130,38 +134,61 @@ class ChannelMessageSource: MessageSourceProtocol {
 }
 ```
 
-#### Задачи:
+#### Задачи (по TDD: RED → GREEN → REFACTOR):
 
-**1.1 Создать протокол и базовую структуру**
-- [ ] Определить протокол `MessageSourceProtocol`
-- [ ] Создать модель `SourceMessage` (id, chatId, chatTitle, text, date, link)
-- [ ] Создать `ChannelMessageSource` stub
-- [ ] Unit-тесты для моделей
+**1.5 Типизация TDLib методов** (делать первым!)
+- [ ] **RED:** Тест декодирования `Chat` из JSON (с примером TDLib ответа + ссылка на docs)
+- [ ] **GREEN:** Создать модель `Chat` с минимумом полей
+- [ ] **REFACTOR:** Добавить Sendable, Equatable, документацию, edge cases
+- [ ] **RED:** Тест декодирования `Message` из JSON
+- [ ] **GREEN:** Создать модель `Message`
+- [ ] **REFACTOR:** Добавить `MessageContent` (для MVP только text)
+- [ ] **RED:** Тест кодирования `GetChatsRequest`
+- [ ] **GREEN:** Создать `GetChatsRequest` (Sources/TDLibAdapter/TDLibCodableModels/Requests/)
+- [ ] **RED:** Тест кодирования `GetChatHistoryRequest`
+- [ ] **GREEN:** Создать `GetChatHistoryRequest`
+- [ ] **RED:** Тест кодирования `ViewMessagesRequest`
+- [ ] **GREEN:** Создать `ViewMessagesRequest`
+- [ ] **RED:** Тест декодирования `Chats` и `Messages` ответов
+- [ ] **GREEN:** Создать модели ответов
+- [ ] Enum `ChatType` (channel, private, supergroup, etc.)
+- [ ] Проверить сборку: `swift build && swift test`
 
-**1.2 Получение списка каналов**
-- [ ] TDLib метод `getChats(chatList: .main)` - получить все чаты
-- [ ] Фильтрация: только каналы (тип `channel`)
-- [ ] Фильтрация: не в архиве (`chatList != .archive`)
-- [ ] Фильтрация: есть непрочитанные (`unreadCount > 0`)
-- [ ] Unit-тесты с моками TDLib
+**1.1 Протокол и модели DigestCore**
+- [ ] **RED:** Тест инициализации `SourceMessage`
+- [ ] **GREEN:** Создать `SourceMessage` (Sources/DigestCore/Models/)
+- [ ] **REFACTOR:** Codable, Equatable, edge cases
+- [ ] **RED:** Тест для `MessageSourceProtocol` (mock implementation)
+- [ ] **GREEN:** Создать протокол `MessageSourceProtocol` (Sources/DigestCore/Protocols/)
+- [ ] Создать stub `ChannelMessageSource` (Sources/DigestCore/Sources/)
+- [ ] Проверить сборку: `swift build && swift test`
 
-**1.3 Извлечение сообщений из канала**
-- [ ] TDLib метод `getChatHistory(chatId:, limit:)`
-- [ ] Получение только непрочитанных (после `lastReadOutboxMessageId`)
-- [ ] Формирование ссылок: `t.me/<username>/<messageId>`
-- [ ] Обработка каналов без username (приватные invite links)
-- [ ] Unit-тесты
+**1.2 Получение списка каналов** (component-тест)
+- [ ] **RED:** Тест `fetchUnreadChannels()` с MockTDLibClient
+- [ ] **GREEN:** Реализовать получение чатов через `getChats(chatList: .main)`
+- [ ] **GREEN:** Фильтрация: только каналы (тип `channel`)
+- [ ] **GREEN:** Фильтрация: не в архиве (`chatList != .archive`)
+- [ ] **GREEN:** Фильтрация: есть непрочитанные (`unreadCount > 0`)
+- [ ] **REFACTOR:** Error handling, логирование
+- [ ] Тесты на edge cases (пустой список, ошибки API)
+
+**1.3 Извлечение сообщений из канала** (component-тест)
+- [ ] **RED:** Тест оптимизированного запроса (fromMessageId=0, limit=unreadCount)
+- [ ] **GREEN:** `getChatHistory(chatId:, fromMessageId: 0, offset: 0, limit: unreadCount)`
+- [ ] **GREEN:** Фильтр по `lastReadInboxMessageId` (защита от race condition)
+- [ ] ⚠️ Использовать `lastReadInboxMessageId` (НЕ `lastReadOutboxMessageId`!)
+- [ ] **GREEN:** Формирование ссылок: `https://t.me/<username>/<messageId>`
+- [ ] **GREEN:** Обработка каналов без username (показывать "Private channel")
+- [ ] **REFACTOR:** Конвертация `Message` → `SourceMessage`
+- [ ] Тесты на edge cases (приватные каналы, пустая история)
 
 **1.4 Отметка прочитанным**
-- [ ] TDLib метод `viewMessages(chatId:, messageIds:)`
-- [ ] Вызов ТОЛЬКО после успешной отправки дайджеста
-- [ ] Обработка ошибок (rollback если фейл)
-- [ ] Unit-тесты
-
-**1.5 Типизация TDLib методов**
-- [ ] Request: `GetChats`, `GetChatHistory`, `ViewMessages`
-- [ ] Response: `Chats`, `Messages`, `Ok`
-- [ ] Update: `UpdateChatReadInbox` (опционально для отслеживания)
+- [ ] **RED:** Тест `markAsRead()` с MockTDLibClient
+- [ ] **GREEN:** `viewMessages(chatId:, messageIds:, forceRead: true)`
+- [ ] **GREEN:** Группировка по chatId (один запрос на чат)
+- [ ] Вызов ТОЛЬКО после успешной отправки дайджеста (в DigestOrchestrator)
+- [ ] **REFACTOR:** Обработка ошибок (rollback если фейл)
+- [ ] Тесты на edge cases (пустой список, partial success)
 
 **Зависимости:** Базовая типизация TDLib (3.6 ✅)
 
