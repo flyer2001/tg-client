@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-14  # macOS для Swift-DocC
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -32,10 +32,51 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
+      - name: Cache Swift toolchain
+        id: cache-swift
+        uses: actions/cache@v4
         with:
-          swift-version: "6.1"
+          path: ~/swift-6.2-RELEASE-ubuntu24.04
+          key: swift-6.2-ubuntu24.04
+
+      - name: Install Swift
+        if: steps.cache-swift.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          wget -q https://download.swift.org/swift-6.2-release/ubuntu2404/swift-6.2-RELEASE/swift-6.2-RELEASE-ubuntu24.04.tar.gz
+          tar xzf swift-6.2-RELEASE-ubuntu24.04.tar.gz
+          rm swift-6.2-RELEASE-ubuntu24.04.tar.gz
+
+      - name: Add Swift to PATH
+        run: |
+          echo "$HOME/swift-6.2-RELEASE-ubuntu24.04/usr/bin" >> $GITHUB_PATH
+
+      - name: Install TDLib dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake gperf libssl-dev zlib1g-dev pkg-config git
+
+      - name: Cache TDLib build
+        id: cache-tdlib
+        uses: actions/cache@v4
+        with:
+          path: ~/tdlib-install
+          key: tdlib-1.8.29-ubuntu24.04-release
+
+      - name: Build and install TDLib
+        if: steps.cache-tdlib.outputs.cache-hit != 'true'
+        run: |
+          git clone https://github.com/tdlib/td.git /tmp/td
+          cd /tmp/td
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$HOME/tdlib-install ..
+          cmake --build . -j$(nproc)
+          cmake --install .
+
+      - name: Setup TDLib environment
+        run: |
+          echo "PKG_CONFIG_PATH=$HOME/tdlib-install/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/tdlib-install/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
       - name: Generate Documentation
         run: |
