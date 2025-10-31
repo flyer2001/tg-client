@@ -10,7 +10,8 @@ let package = Package(
         .executable(name: "tg-client", targets: ["App"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.4")
+        .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
     ],
     targets: [
         .executableTarget(
