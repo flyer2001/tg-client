@@ -154,6 +154,92 @@
   - `fetchUnreadMessages(since: Date?) async throws -> [SourceMessage]`
   - `markAsRead(messages: [SourceMessage]) async throws`
 
+##### TDLib API: Работа с непрочитанными сообщениями
+
+> **Документация TDLib:** https://core.telegram.org/tdlib/docs/
+
+**Механизм отслеживания непрочитанных:**
+
+TDLib отслеживает состояние прочитанности на стороне сервера Telegram. Каждый чат содержит:
+
+- `unreadCount: Int` — количество непрочитанных сообщений (поддерживается сервером)
+- `lastReadInboxMessageId: Int64` — ID последнего прочитанного входящего сообщения
+- `lastReadOutboxMessageId: Int64` — ID последнего отправленного сообщения (для личных чатов)
+
+**Методы TDLib API:**
+
+1. **`getChats(chatList:, limit:)`** → возвращает `Chats`
+   - Получает список чатов с актуальным `unreadCount` и `lastReadInboxMessageId`
+   - Параметр `chatList` может быть `.main` (основной список) или `.archive`
+   - Документация: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
+
+2. **`getChatHistory(chatId:, fromMessageId:, offset:, limit:)`** → возвращает `Messages`
+   - `fromMessageId: Int64` — ID сообщения, от которого начать (включительно)
+   - `offset: Int` — смещение относительно fromMessageId (обычно 0)
+   - `limit: Int` — количество сообщений для получения
+   - Сообщения возвращаются в **обратном хронологическом порядке** (новые → старые)
+   - Документация: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat_history.html
+
+3. **`viewMessages(chatId:, messageIds:, forceRead:)`** → возвращает `Ok`
+   - Отмечает сообщения как прочитанные (обновляет `lastReadInboxMessageId`)
+   - `forceRead: true` — отметить как прочитанные (не только просмотренные)
+   - Документация: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
+
+**Оптимизация: получение только непрочитанных без клиентской фильтрации**
+
+TDLib не имеет метода "дай только непрочитанные", но можно оптимизировать запрос:
+
+```swift
+// Шаг 1: Получить информацию о чате
+let chats = try await tdlib.send(GetChatsRequest(chatList: .main, limit: 100))
+let unreadChannels = chats.filter { $0.type == .channel && $0.unreadCount > 0 }
+
+// Шаг 2: Для каждого канала получить непрочитанные
+for channel in unreadChannels {
+    // Запросить ровно unreadCount сообщений, начиная с последнего
+    let history = try await tdlib.send(
+        GetChatHistoryRequest(
+            chatId: channel.id,
+            fromMessageId: 0,  // 0 = начать с последнего сообщения
+            offset: 0,
+            limit: channel.unreadCount
+        )
+    )
+
+    // Фильтр для гарантии (защита от race condition)
+    let unreadMessages = history.messages.filter {
+        $0.id > channel.lastReadInboxMessageId
+    }
+
+    // Все полученные сообщения будут непрочитанными (если unreadCount точный)
+}
+
+// Шаг 3: После успешной отправки дайджеста
+try await tdlib.send(
+    ViewMessagesRequest(
+        chatId: channel.id,
+        messageIds: unreadMessages.map { $0.id },
+        forceRead: true
+    )
+)
+```
+
+**Важные замечания:**
+
+- ⚠️ **Race condition:** между `getChats` и `getChatHistory` кто-то может прочитать сообщения → всегда фильтровать по `lastReadInboxMessageId`
+- ✅ **Эффективность:** используя `limit: unreadCount` минимизируем трафик
+- ✅ **Надёжность:** фильтр по `messageId > lastReadInboxMessageId` гарантирует корректность
+
+**Формирование ссылок на сообщения:**
+
+```swift
+// Для публичных каналов (с username)
+let link = "https://t.me/\(channel.username)/\(message.id)"
+
+// Для приватных каналов (без username)
+// Требует invite link, в MVP — пропускаем или показываем "Private channel"
+```
+
 #### 2. SummaryGenerator
 - Протокол: `SummaryGeneratorProtocol`
 - Реализации:
