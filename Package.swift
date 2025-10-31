@@ -42,6 +42,14 @@ let package = Package(
                 .copy("README.md")
             ]
         ),
+        .target(
+            name: "TgClient",
+            dependencies: ["TDLibAdapter"],
+            path: "Sources/TgClient",
+            resources: [
+                .copy("TgClient.docc")
+            ]
+        ),
         // Test targets
         .testTarget(
             name: "TgClientUnitTests",

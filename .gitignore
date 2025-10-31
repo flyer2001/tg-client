@@ -48,3 +48,8 @@ run.sh
 *.so
 *.dylib
 *.a
+
+# Swift-DocC сгенерированная документация (НЕ коммитим!)
+*.doccarchive
+docs/generated/
+.docc-build/
