@@ -1,3 +1,111 @@
+# 2025-11-01: Планирование рефакторинга TDLibAdapter
+
+## Контекст
+
+Начали работу над задачей DEV-1.4 (component-тесты для авторизации), но столкнулись с проблемой:
+- Текущий TDLibAdapter использует низкоуровневый `send/receive` API
+- Для component-тестов нужен MockTDLibClient, но мокать JSON строки неудобно
+- Обсуждение привело к выводу что нужен high-level API
+
+## Ключевое обсуждение
+
+**Проблема с первым подходом:**
+- Изначально предложил мокать JSON ответы: `mockClient.enqueueResponse(json: "...")`
+- Пользователь справедливо указал что это добавляет сложность:
+  - В будущем планируется кодогенерация моделей Response/Request
+  - Парсинг моделей проверяется на уровне unit-тестов
+  - Нужно минимизировать raw JSON в тестах
+
+**Эволюция дизайна:**
+1. Первая версия: MockClient с очередью JSON ответов → отвергнута
+2. Вторая версия: Mock с парами `Request → Result<Response, Error>` → ближе, но всё ещё низкоуровнево
+3. Итоговое решение: **High-level API с методами типа `setAuthenticationPhoneNumber() async throws -> AuthorizationStateUpdate`**
+
+**Ключевое решение:**
+Вместо мокирования низкоуровневого send/receive, сделать рефакторинг на высокоуровневый API:
+```swift
+// Было:
+send(SetAuthenticationPhoneNumberRequest(phoneNumber: phone))
+while let obj = receive(timeout: 1.0) { /* парсинг JSON */ }
+
+// Стало:
+let update = try await setAuthenticationPhoneNumber(phone)
+```
+
+**Обоснование:**
+- ✅ Проще тестировать (mock конкретных методов)
+- ✅ Типобезопасность (компилятор проверяет типы)
+- ✅ Читаемее код
+- ✅ Упрощает будущую разработку (getChats, getChatHistory и т.д.)
+
+## Результат сессии
+
+**Создано:**
+1. **docs/REFACTORING_TDLIB_HIGH_LEVEL_API.md** - подробный план рефакторинга (~5 страниц)
+   - Анализ текущей архитектуры и проблем
+   - Целевая архитектура с примерами кода
+   - План по TDD (3 фазы: протокол/mock, реализация, документация)
+   - Обоснование архитектурных решений
+
+2. **Обновлён docs/TASKS.md:**
+   - Добавлена новая задача DEV-3 (критический приоритет)
+   - Перемещена на первое место в "Следующая сессия"
+   - Добавлены ссылки на детальный план
+
+**Следующая сессия:**
+Начать рефакторинг с Фазы 1.1a - написать RED тест для AuthenticationFlowTests
+
+**Оценка времени:** 3-5 часов полного рефакторинга
+
+**Блокирует:**
+- DEV-1.4 (component-тесты авторизации)
+- MVP-1.5 (типизация TDLib методов для получения сообщений)
+- Все будущие component-тесты
+
+## Технические детали
+
+**Протокол TDLibClientProtocol:**
+```swift
+protocol TDLibClientProtocol: Sendable {
+    func setAuthenticationPhoneNumber(_ phone: String) async throws -> AuthorizationStateUpdate
+    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdate
+    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate
+}
+```
+
+**MockTDLibClient:**
+```swift
+class MockTDLibClient: TDLibClientProtocol {
+    private var responses: [String: Result<AuthorizationStateUpdate, TDLibError>] = [:]
+    
+    func stub(method: String, result: Result<AuthorizationStateUpdate, TDLibError>) {
+        responses[method] = result
+    }
+}
+```
+
+**Реализация в TDLibClient:**
+- Высокоуровневые методы инкапсулируют send + receive loop
+- Используют существующий `TDLibUpdate` enum для type-safe парсинга
+- Внутренний helper `waitForAuthorizationUpdate()` ожидает нужное событие
+
+**Почему не `send() async throws -> Response`?**
+TDLib работает event-driven (отправили запрос → ответ приходит отдельно через receive). Между запросом и ответом могут прийти другие события. Поэтому нужны высокоуровневые методы которые сами управляют polling.
+
+## Заметки
+
+- Этот рефакторинг неизбежен для дальнейшего развития проекта
+- Упростит написание всех будущих фич работы с TDLib
+- Позволит писать качественные component-тесты
+- Подготовит почву для кодогенерации из td_api.tl схемы
+
+**Файлы изменены:**
+- `docs/REFACTORING_TDLIB_HIGH_LEVEL_API.md` (создан)
+- `docs/TASKS.md` (добавлена задача DEV-3)
+
+---
+
+
 ## 2025-11-01 - Swift-DocC документация + публичный репозиторий
 
 ### ✅ Выполнено
