@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Соответствует состояниям из TDLib API.
 /// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1authorization_state.html
-enum AuthorizationState: String {
+public enum AuthorizationState: String, Sendable, Equatable {
     /// Ожидание параметров TDLib (API ID, API Hash, директории)
     case waitTdlibParameters = "authorizationStateWaitTdlibParameters"
     /// Ожидание ключа шифрования базы данных
@@ -23,7 +23,15 @@ enum AuthorizationState: String {
     case unknown = "unknown"
 
     /// Создаёт состояние из строки типа TDLib.
-    init(fromTDLibType type: String) {
+    public init(fromTDLibType type: String) {
         self = AuthorizationState(rawValue: type) ?? .unknown
     }
+
+    // MARK: - Convenience Aliases
+
+    /// Алиас для `.waitVerificationCode` (для удобства в тестах и API)
+    public static var waitCode: AuthorizationState { .waitVerificationCode }
+
+    /// Алиас для `.waitTwoFactorPassword` (для удобства в тестах и API)
+    public static var waitPassword: AuthorizationState { .waitTwoFactorPassword }
 }
