@@ -1,3 +1,33 @@
+## 2025-11-02
+
+### DEV-3: TDLibClientProtocol и RED тест (Фаза 1 частично)
+
+**Выполнено:**
+- ✅ Создан протокол `TDLibClientProtocol` с high-level API для авторизации
+- ✅ Методы: `setAuthenticationPhoneNumber()`, `checkAuthenticationCode()`, `checkAuthenticationPassword()`
+- ✅ `AuthorizationState` сделан публичным с `Sendable`, `Equatable`
+- ✅ Добавлены алиасы `.waitCode`, `.waitPassword` для удобства
+- ✅ Создан RED тест `AuthenticationFlowTests` с `MockTDLibClient`
+- ✅ Тест демонстрирует желаемый API (phone → code → ready)
+
+**Проблемы:**
+- ⚠️ `swift test` зависает на Linux (SwiftPM hang)
+- ⚠️ Component-тесты не удалось запустить для проверки
+- Добавлена задача TEST-1 для решения проблемы
+
+**Коммиты:**
+- c210aad: Добавить TDLibClientProtocol для high-level API авторизации
+- 3e7727d: Добавить RED тест для high-level API авторизации
+- afa42d8: Обновить TASKS.md: отметить прогресс DEV-3 и добавить TEST-1
+
+**Следующие шаги:**
+- Решить проблему SwiftPM hang (TEST-1)
+- Продолжить DEV-3 Фаза 1: MockLogger + conformance TDLibClient
+
+**Время:** ~30 минут (небольшая задача)
+
+---
+
 # 2025-11-01: Планирование рефакторинга TDLibAdapter
 
 ## Контекст
