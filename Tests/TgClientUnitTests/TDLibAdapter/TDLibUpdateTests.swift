@@ -121,8 +121,8 @@ struct TDLibUpdateTests {
         #expect(type == "updateNewMessage")
     }
 
-    @Test("Parse unknown type - ok response")
-    func parseUnknownTypeOk() throws {
+    @Test("Parse ok response")
+    func parseOkResponse() throws {
         // Given
         let json: [String: Any] = [
             "@type": "ok"
@@ -132,11 +132,10 @@ struct TDLibUpdateTests {
         let update = try TDLibUpdate(from: json)
 
         // Then
-        guard case .unknown(let type) = update else {
-            Issue.record("Expected unknown case")
+        guard case .ok = update else {
+            Issue.record("Expected .ok case")
             return
         }
-        #expect(type == "ok")
     }
 
     // MARK: - Error handling
