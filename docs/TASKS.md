@@ -176,6 +176,7 @@ protocol TDLibClientProtocol {
 - [x] **3.1b GREEN:** Создать `TDLibClientProtocol.swift` с high-level методами
 - [x] **3.1c GREEN:** Создать `MockTDLibClient.swift` для тестов (stub responses)
 - [ ] **3.1d GREEN:** Создать `MockLogger.swift` для проверки логов
+- [ ] **3.1d.1 GREEN:** Добавить component-тесты проверки логгирования (TDLib error → appLogger.error)
 - [ ] **3.1e REFACTOR:** Добавить conformance `TDLibClient: TDLibClientProtocol` (stub methods)
 - [ ] **3.1f:** Проверить компиляцию теста (блокировано SwiftPM hang, см. TEST-1)
 

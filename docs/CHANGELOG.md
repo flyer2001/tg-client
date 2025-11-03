@@ -1,3 +1,38 @@
+## 2025-11-03
+
+### DEV-3: Исправлен протокол TDLibClientProtocol (Фаза 1)
+
+**Проблема:**
+- Проект не собирался из-за несоответствия типов в протоколе
+- `TDLibClientProtocol` требовал возвращаемый тип `AuthorizationState` (enum)
+- Реализация в `TDLibClient+HighLevelAPI` возвращала `AuthorizationStateUpdate` (struct)
+- Component-тест `AuthenticationFlowTests` содержал дубликат `MockTDLibClient`
+
+**Выполнено:**
+- ✅ Исправлен протокол: все методы теперь возвращают `AuthorizationStateUpdate`
+- ✅ Обновлён тест `AuthenticationFlowTests` - использует оригинальный `MockTDLibClient` из `Mocks/`
+- ✅ Удалён дубликат `MockTDLibClient` из теста
+- ✅ Добавлена задача **3.1d.1** про тестирование логгирования ошибок
+- ✅ Проект собирается и все тесты проходят (28/28 tests)
+
+**Причина использования AuthorizationStateUpdate:**
+- Type-Safe API для ответов от TDLib (см. commit 2d1298d)
+- Инкапсуляция структуры `updateAuthorizationState` от TDLib
+- Упрощение моков в тестах (можно создавать через конструктор)
+
+**Файлы:**
+- `Sources/TDLibAdapter/TDLibClientProtocol.swift` - исправлены сигнатуры методов
+- `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift` - обновлён тест
+- `docs/TASKS.md` - добавлена задача 3.1d.1 (тесты логгирования)
+
+**Следующие шаги:**
+- DEV-3 Фаза 1: MockLogger (3.1d) + тесты логгирования (3.1d.1)
+- DEV-3 Фаза 1: Conformance TDLibClient (3.1e)
+
+**Время:** ~20 минут (быстрый фикс)
+
+---
+
 ## 2025-11-02
 
 ### DEV-3: TDLibClientProtocol и RED тест (Фаза 1 частично)
