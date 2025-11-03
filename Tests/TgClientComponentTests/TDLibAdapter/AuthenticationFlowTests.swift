@@ -32,64 +32,27 @@ struct AuthenticationFlowTests {
     func authenticateWithPhoneAndCode() async throws {
         // Given: Mock client который эмулирует успешную авторизацию
         let mockClient = MockTDLibClient()
-        mockClient.stubAuthorizationFlow([
-            .waitPhoneNumber,
-            .waitCode,
-            .ready
-        ])
+
+        // Настраиваем mock ответы для каждого шага авторизации
+        await mockClient.setMockResponse(
+            for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
+            response: .success(.waitCode)
+        )
+        await mockClient.setMockResponse(
+            for: CheckAuthenticationCodeRequest.testWith12345Code,
+            response: .success(.ready)
+        )
 
         // When: Отправляем номер телефона
-        let phoneState = try await mockClient.setAuthenticationPhoneNumber("+1234567890")
+        let phoneUpdate = try await mockClient.setAuthenticationPhoneNumber("+1234567890")
 
         // Then: Получаем состояние "ждём код"
-        #expect(phoneState == .waitCode)
+        #expect(phoneUpdate.authorizationState.type == "authorizationStateWaitCode")
 
         // When: Отправляем код подтверждения
-        let codeState = try await mockClient.checkAuthenticationCode("12345")
+        let codeUpdate = try await mockClient.checkAuthenticationCode("12345")
 
         // Then: Авторизация успешна
-        #expect(codeState == .ready)
-    }
-}
-
-// MARK: - Mock TDLib Client
-
-/// Mock-реализация TDLibClientProtocol для component-тестов.
-///
-/// Позволяет эмулировать различные сценарии авторизации без реального TDLib.
-final class MockTDLibClient: TDLibClientProtocol {
-
-    private var stubbedFlow: [AuthorizationState] = []
-    private var currentFlowIndex = 0
-
-    /// Настроить mock для возврата последовательности состояний авторизации.
-    func stubAuthorizationFlow(_ states: [AuthorizationState]) {
-        self.stubbedFlow = states
-        self.currentFlowIndex = 0
-    }
-
-    // MARK: - TDLibClientProtocol Implementation
-
-    func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationState {
-        return try nextState()
-    }
-
-    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationState {
-        return try nextState()
-    }
-
-    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationState {
-        return try nextState()
-    }
-
-    // MARK: - Helpers
-
-    private func nextState() throws -> AuthorizationState {
-        guard currentFlowIndex < stubbedFlow.count else {
-            throw TDLibError(code: -1, message: "Mock flow exhausted")
-        }
-        let state = stubbedFlow[currentFlowIndex]
-        currentFlowIndex += 1
-        return state
+        #expect(codeUpdate.authorizationState.type == "authorizationStateReady")
     }
 }
