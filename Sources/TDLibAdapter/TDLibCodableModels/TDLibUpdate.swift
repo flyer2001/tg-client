@@ -17,6 +17,9 @@ public enum TDLibUpdate: Sendable {
     /// Ошибка от TDLib
     case error(TDLibError)
 
+    /// Успешный ответ без данных (ok)
+    case ok
+
     /// Неизвестный тип обновления (для обратной совместимости)
     case unknown(type: String)
 
@@ -43,7 +46,29 @@ public enum TDLibUpdate: Sendable {
             let update = try JSONDecoder().decode(AuthorizationStateUpdate.self, from: data)
             self = .authorizationState(update)
 
+        case "ok":
+            self = .ok
+
         default:
+            self = .unknown(type: type)
+        }
+    }
+
+    /// Удобный инициализатор для работы с необязательным JSON.
+    ///
+    /// Если JSON отсутствует или не содержит поле `@type`, возвращает `.unknown`.
+    ///
+    /// - Parameter json: Необязательный JSON объект от TDLib
+    public init(_ json: [String: Any]?) {
+        guard let json = json else {
+            self = .unknown(type: "nil")
+            return
+        }
+
+        do {
+            self = try TDLibUpdate(from: json)
+        } catch {
+            let type = json["@type"] as? String ?? "parsing_error"
             self = .unknown(type: type)
         }
     }

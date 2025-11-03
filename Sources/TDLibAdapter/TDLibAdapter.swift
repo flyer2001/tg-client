@@ -7,9 +7,9 @@ import Logging
 /// Подробнее см. `Sources/TDLibAdapter/README.md`
 public final class TDLibClient: @unchecked Sendable {
     private var client: UnsafeMutableRawPointer?
-    private let appLogger: Logger
+    internal let appLogger: Logger
     private var parametersSet = false
-    private let authorizationPollTimeout: Double
+    internal let authorizationPollTimeout: Double
     private let maxAuthorizationAttempts: Int
     private let authorizationTimeout: TimeInterval
 

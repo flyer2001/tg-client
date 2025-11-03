@@ -16,4 +16,14 @@ public struct TDLibError: TDLibResponse, Error, Sendable {
         case code
         case message
     }
+
+    /// Инициализатор для создания ошибки программно (например, в тестах).
+    ///
+    /// - Parameters:
+    ///   - code: Код ошибки
+    ///   - message: Описание ошибки
+    public init(code: Int, message: String) {
+        self.code = code
+        self.message = message
+    }
 }

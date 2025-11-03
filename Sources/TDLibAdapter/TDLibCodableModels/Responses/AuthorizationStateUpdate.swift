@@ -14,6 +14,13 @@ public struct AuthorizationStateUpdate: TDLibResponse, Sendable {
     enum CodingKeys: String, CodingKey {
         case authorizationState = "authorization_state"
     }
+
+    /// Инициализатор для создания обновления программно (например, в тестах).
+    ///
+    /// - Parameter authorizationState: Информация о состоянии авторизации
+    public init(authorizationState: AuthorizationStateInfo) {
+        self.authorizationState = authorizationState
+    }
 }
 
 /// Информация о состоянии авторизации.
@@ -25,5 +32,12 @@ public struct AuthorizationStateInfo: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
+    }
+
+    /// Инициализатор для создания состояния программно (например, в тестах).
+    ///
+    /// - Parameter type: Тип состояния (например, "authorizationStateReady")
+    public init(type: String) {
+        self.type = type
     }
 }
