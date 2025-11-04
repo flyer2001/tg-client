@@ -1,6 +1,29 @@
-## 2025-11-04: Решение проблемы зависания сборки на Linux
+## 2025-11-04 (Сессия: DEV-3 Фаза 1-2 завершена + решение проблемы сборки на Linux)
 
-**Задача:** TEST-1 (SwiftPM hang на Linux)
+### Выполнено
+
+**DEV-3: Рефакторинг TDLibAdapter → High-Level API (Фаза 1-2 завершены)**
+
+- Переименован `TDLibAdapter.swift` → `TDLibClient.swift` (соответствие имени класса)
+- Методы `send()/receive()` сделаны internal (не для публичного API)
+- Реализован высокоуровневый API в `TDLibClient+HighLevelAPI.swift`:
+  - `setAuthenticationPhoneNumber()` → AuthorizationStateUpdate
+  - `checkAuthenticationCode()` → AuthorizationStateUpdate
+  - `checkAuthenticationPassword()` → AuthorizationStateUpdate
+  - `getMe()` → User
+- Добавлены модели:
+  - `User` (для ответа TDLib getMe)
+  - Unit-тесты для User с примерами JSON
+- Создан `MockLogger` для проверки логирования в component-тестах
+- Расширен `MockTDLibClient`:
+  - Поддержка `any TDLibResponse` (не только AuthorizationState)
+  - Опциональный logger для проверки логирования
+  - Test helpers: `AuthorizationStateUpdate.waitCode`, `.ready`, `.waitPassword`
+- Добавлен component-тест проверки логирования ошибок TDLib
+- Обновлен `main.swift` для использования высокоуровневого API
+- Все тесты проходят: 35 tests passed
+
+**TEST-1: Решение проблемы зависания сборки на Linux**
 
 **Проблема:**
 - `swift build` периодически зависает на Linux из-за блокировки `.build` зависшими процессами
@@ -24,6 +47,13 @@
 ```
 
 **Статус:** TEST-1 частично решена (скрипт для `swift build`), проблема с `swift test` остаётся
+
+**Следующие шаги:** DEV-3 Фаза 3 (документация)
+
+### Коммиты
+
+- `2f527aa` refactor: переименовать TDLibAdapter → TDLibClient и перейти на high-level API
+- `2f96e0f` test: добавить MockLogger и component-тест для логирования ошибок TDLib
 
 ---
 
