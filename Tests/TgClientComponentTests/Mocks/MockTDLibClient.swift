@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 @testable import TDLibAdapter
 
 /// Mock реализация TDLibClientProtocol для component-тестов.
@@ -29,9 +30,17 @@ actor MockTDLibClient: TDLibClientProtocol {
     /// Значение - Result с TDLibResponse (любого типа) или ошибкой
     private var mockResponses: [String: Result<any TDLibResponse, TDLibError>] = [:]
 
+    /// Logger для записи событий (опционально, для тестов логирования)
+    private let logger: Logger?
+
     // MARK: - Initialization
 
-    init() {}
+    /// Инициализирует MockTDLibClient.
+    ///
+    /// - Parameter logger: Опциональный logger для проверки логирования в тестах
+    init(logger: Logger? = nil) {
+        self.logger = logger
+    }
 
     // MARK: - Public Methods for Test Setup
 
@@ -108,6 +117,8 @@ actor MockTDLibClient: TDLibClientProtocol {
             }
             return typedResponse
         case .failure(let error):
+            // Логируем ошибку (аналогично реальному TDLibClient)
+            logger?.error("TDLib error [\(error.code)]: \(error.message)")
             throw error
         }
     }

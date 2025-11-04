@@ -55,4 +55,51 @@ struct AuthenticationFlowTests {
         // Then: Авторизация успешна
         #expect(codeUpdate.authorizationState.type == "authorizationStateReady")
     }
+
+    // MARK: - Error Handling
+
+    /// Тест обработки ошибки TDLib: неверный код авторизации.
+    ///
+    /// **TDLib error:**
+    /// ```json
+    /// {
+    ///   "@type": "error",
+    ///   "code": 400,
+    ///   "message": "PHONE_CODE_INVALID"
+    /// }
+    /// ```
+    ///
+    /// **Проверяем:**
+    /// - Ошибка пробрасывается как TDLibError
+    /// - Ошибка логируется в формате "TDLib error [code]: message"
+    @Test("Error handling: invalid authentication code + logging")
+    func errorHandlingInvalidCode() async throws {
+        // Given: Mock logger для перехвата логов
+        let mockLogger = MockLogger()
+        let logger = mockLogger.makeLogger(label: "test")
+
+        // Mock client с логгером
+        let mockClient = MockTDLibClient(logger: logger)
+
+        // Настраиваем mock: код неверный → ошибка
+        let tdlibError = TDLibError(code: 400, message: "PHONE_CODE_INVALID")
+        await mockClient.setMockResponse(
+            for: CheckAuthenticationCodeRequest.testWith12345Code,
+            response: .failure(tdlibError) as Result<AuthorizationStateUpdate, TDLibError>
+        )
+
+        // When: Отправляем неверный код → ожидаем TDLibError
+        await #expect(throws: TDLibError.self) {
+            try await mockClient.checkAuthenticationCode("12345")
+        }
+
+        // Then: Проверяем что ошибка была залогирована
+        #expect(mockLogger.messages.count == 1)
+
+        let errorLog = mockLogger.messages[0]
+        #expect(errorLog.level == .error)
+        #expect(errorLog.message.contains("TDLib error [400]"))
+        #expect(errorLog.message.contains("PHONE_CODE_INVALID"))
+
+    }
 }
