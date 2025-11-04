@@ -52,20 +52,14 @@ struct TGClient {
             }
         }
 
-        // Верификация: запросим текущего пользователя
-        td.send(GetMeRequest())
-
-        // Подождём и выведем ответ
-        let started = Date()
-        while Date().timeIntervalSince(started) < 5 {
-            if let obj = td.receive(timeout: 0.5), let type = obj["@type"] as? String {
-                if type == "user" {
-                    let name = (obj["first_name"] as? String ?? "") + " " + (obj["last_name"] as? String ?? "")
-                    print("✅ Authorized as: \(name.trimmingCharacters(in: .whitespaces)) (id: \(obj["id"] ?? "?"))")
-                    exit(0)
-                }
-            }
+        // Верификация: запросим текущего пользователя через высокоуровневый API
+        do {
+            let user = try await td.getMe()
+            let name = (user.firstName + " " + user.lastName).trimmingCharacters(in: .whitespaces)
+            print("✅ Authorized as: \(name) (id: \(user.id))")
+        } catch {
+            print("⚠️ Failed to get user info: \(error)")
+            exit(1)
         }
-        print("⚠️ Authorized, but 'getMe' didn't return within timeout.")
     }
 }

@@ -86,7 +86,7 @@ public final class TDLibClient: @unchecked Sendable {
     /// Отправляет типизированный запрос в TDLib.
     ///
     /// - Parameter request: Типизированный запрос TDLibRequest
-    public func send(_ request: TDLibRequest) {
+    func send(_ request: TDLibRequest) {
         guard let client else {
             appLogger.error("Cannot send: client is nil")
             return
@@ -108,7 +108,7 @@ public final class TDLibClient: @unchecked Sendable {
     ///
     /// - Parameter timeout: Максимальное время ожидания в секундах
     /// - Returns: JSON-объект с полем `@type` или `nil`
-    public func receive(timeout: Double) -> [String: Any]? {
+    func receive(timeout: Double) -> [String: Any]? {
         guard let client, let cstr = td_json_client_receive(client, timeout) else { return nil }
         let json = String(cString: cstr)
         return (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]

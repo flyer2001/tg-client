@@ -31,6 +31,16 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForAuthorizationUpdate()
     }
 
+    // MARK: - User Methods
+
+    public func getMe() async throws -> User {
+        // Отправляем запрос на получение информации о текущем пользователе
+        send(GetMeRequest())
+
+        // Ожидаем ответа от TDLib
+        return try await waitForResponse(ofType: User.self)
+    }
+
     // MARK: - Helper Methods
 
     /// Ожидает следующего обновления состояния авторизации от TDLib.
@@ -78,6 +88,45 @@ extension TDLibClient: TDLibClientProtocol {
                 appLogger.debug("Received non-authorization update: \(type)")
                 await Task.yield()
                 continue
+            }
+        }
+    }
+
+    /// Ожидает ответа определенного типа от TDLib.
+    ///
+    /// Метод получает обновления от TDLib через `receive()` и возвращает первый ответ
+    /// указанного типа. Если получена ошибка, бросает исключение.
+    ///
+    /// **Таймаут:** использует `authorizationPollTimeout` из конфигурации клиента.
+    ///
+    /// - Parameter ofType: Тип ожидаемого ответа
+    /// - Returns: Ответ указанного типа
+    /// - Throws: `TDLibError` если TDLib вернул ошибку
+    private func waitForResponse<T: TDLibResponse>(ofType: T.Type) async throws -> T {
+        let timeout = authorizationPollTimeout
+
+        while true {
+            guard let rawResponse = receive(timeout: timeout) else {
+                await Task.yield()
+                continue
+            }
+
+            // Проверяем на ошибку
+            let update = TDLibUpdate(rawResponse)
+            if case .error(let error) = update {
+                appLogger.error("TDLib error [\(error.code)]: \(error.message)")
+                throw error
+            }
+
+            // Пытаемся декодировать в нужный тип
+            do {
+                let data = try JSONSerialization.data(withJSONObject: rawResponse)
+                let decoder = JSONDecoder()
+                let response = try decoder.decode(T.self, from: data)
+                return response
+            } catch {
+                // Не удалось декодировать - это не наш тип, ждём дальше
+                await Task.yield()
             }
         }
     }

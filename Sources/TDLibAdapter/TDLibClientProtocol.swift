@@ -52,4 +52,16 @@ public protocol TDLibClientProtocol: Sendable {
     ///
     /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1check_authentication_password.html
     func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate
+
+    // MARK: - User Methods
+
+    /// Получает информацию о текущем авторизованном пользователе.
+    ///
+    /// **TDLib method:** `getMe`
+    ///
+    /// - Returns: Информация о пользователе
+    /// - Throws: `TDLibError` если пользователь не авторизован или произошла ошибка
+    ///
+    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_me.html
+    func getMe() async throws -> User
 }

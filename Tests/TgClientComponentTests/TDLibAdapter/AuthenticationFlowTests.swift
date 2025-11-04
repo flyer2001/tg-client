@@ -36,11 +36,11 @@ struct AuthenticationFlowTests {
         // Настраиваем mock ответы для каждого шага авторизации
         await mockClient.setMockResponse(
             for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
-            response: .success(.waitCode)
+            response: .success(AuthorizationStateUpdate.waitCode)
         )
         await mockClient.setMockResponse(
             for: CheckAuthenticationCodeRequest.testWith12345Code,
-            response: .success(.ready)
+            response: .success(AuthorizationStateUpdate.ready)
         )
 
         // When: Отправляем номер телефона
