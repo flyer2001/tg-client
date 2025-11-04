@@ -1,7 +1,3 @@
-# NOTE: не используется самим Claude Code — только для людей/посторонних тулов
-.git/
-.build/
-.swiftpm/
-DerivedData/
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+# Файлы которые Claude не должен читать
+# (большие файлы с историей изменений, расходующие токены)
+docs/CHANGELOG.md

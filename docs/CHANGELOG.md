@@ -1,3 +1,23 @@
+## 2025-11-04
+
+### DEV-0.4-0.5: Git hooks и оптимизация документации
+
+**Выполнено:**
+- ✅ Настроены git hooks (pre-commit, pre-push)
+- ✅ Установлены hooks на macOS и Linux VPS (ufohosting)
+- ✅ Создан `.claudeignore` для исключения CHANGELOG.md из чтения Claude
+- ✅ Снижен расход токенов на больших файлах с историей
+
+**Файлы:**
+- `.git/hooks/check-work-hours.sh` - проверка условий для коммитов
+- `.git/hooks/pre-commit`, `.git/hooks/pre-push` - локальные хуки
+- `.claudeignore` - исключение больших файлов из индексации
+
+**Следующие шаги:**
+- DEV-3: Рефакторинг TDLibAdapter (high-level API)
+
+---
+
 ## 2025-11-03
 
 ### DEV-3: Исправлен протокол TDLibClientProtocol (Фаза 1)
