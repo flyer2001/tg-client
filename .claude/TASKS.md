@@ -47,40 +47,13 @@
 #### Команды для запуска:
 
 ```bash
-# 1. Коммит всех изменений
-git commit -m "$(cat <<'EOF'
-feat: High-level TDLib API + реорганизация документации (v0.1.0-alpha)
-
-**DEV-3: High-Level TDLib API**
-- Добавлен TDLibClientProtocol с типобезопасными методами
-- Реализованы методы авторизации: setAuthenticationPhoneNumber, checkAuthenticationCode, checkAuthenticationPassword
-- Добавлен MockTDLibClient и MockLogger для тестирования
-- Component-тесты для полного flow авторизации
-- Переименован TDLibAdapter → TDLibClient
-
-**Реорганизация документации:**
-- docs/ → .claude/ (скрытая папка для Claude CLI)
-- CONTRIBUTING.md → DEVELOPMENT.md
-- Обновлены все ссылки в проекте
-- Удалены модульные README.md
-- Главный README.md: только для пользователей (установка, статус, roadmap)
-
-**Подготовка к релизу v0.1.0-alpha:**
-- Добавлен LICENSE (MIT)
-- Обновлён README с badges и статусом проекта
-- Добавлена задача DEV-4 (автогенерация DoCC из тестов)
-
-Связанные задачи: DEV-3 (Фаза 1-2 завершена), DEV-2 (реорганизация docs)
-EOF
-)"
-
-# 2. Создать git tag
+# 1. Создать git tag (коммит 8e44188 уже выполнен)
 git tag -a v0.1.0-alpha -m "Alpha release: TDLib authentication"
 
-# 3. Запушить с тегами
+# 2. Запушить с тегами
 git push origin main --tags
 
-# 4. Создать GitHub Release
+# 3. Создать GitHub Release
 gh release create v0.1.0-alpha \
   --title "v0.1.0-alpha - TDLib Authentication" \
   --notes "$(cat <<'EOF'
@@ -117,11 +90,12 @@ EOF
 
 #### Критерии готовности:
 
-- [x] Коммит message подготовлен
+- [x] Коммит выполнен (8e44188)
 - [x] Release notes составлены
 - [x] LICENSE добавлен
 - [x] README.md обновлён
-- [ ] Команды выполнены
+- [ ] Git tag создан
+- [ ] Код запушен на GitHub
 - [ ] Release опубликован на GitHub
 
 #### Оценка времени:
@@ -296,12 +270,12 @@ protocol TDLibClientProtocol {
 - [ ] **3.3c:** Обновить `ARCHITECTURE.md` с диаграммой нового API (отложено)
 - [ ] **3.3d:** Актуализировать `TESTING.md` про component-тесты (отложено)
 
-**Фаза 4: Очистка (30 мин)** ⏳ В процессе
+**Фаза 4: Очистка (30 мин)** ✅
 - [x] **3.4a:** Проверить сборку на Linux (работает на VPS)
-- [ ] **3.4b:** Закоммитить изменения (команды подготовлены, см. RELEASE-1)
-- [x] **3.4c:** Обновить TASKS.md (в процессе)
+- [x] **3.4b:** Закоммитить изменения (коммит 8e44188)
+- [x] **3.4c:** Обновить TASKS.md
 
-**Статус:** Фаза 1-2 завершены ✅, Фаза 3-4 частично выполнены
+**Статус:** Фаза 1-2 завершены ✅, Фаза 3-4 завершены ✅
 
 **Зависимости:** Нет (можно начинать сразу)
 
