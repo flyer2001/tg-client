@@ -9,7 +9,7 @@ import Foundation
 /// - Декодирование в соответствующий case
 /// - Обработку unknown типов
 /// - Error handling (missing @type, invalid JSON)
-@Suite("TDLibUpdate Parser")
+@Suite("Парсинг TDLib обновлений")
 struct TDLibUpdateTests {
 
     // MARK: - AuthorizationState updates

@@ -8,7 +8,7 @@ import Foundation
 /// - Наличие поля `@type`
 /// - Правильный snake_case маппинг (camelCase → snake_case)
 /// - Корректные типы данных
-@Suite("TDLibRequestEncoder")
+@Suite("Кодирование TDLib запросов")
 struct TDLibRequestEncoderTests {
 
     let encoder = TDLibRequestEncoder()

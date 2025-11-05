@@ -16,7 +16,7 @@ import Foundation
 /// - Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdate)
 /// - E2E тест: `scripts/manual_e2e_auth.sh` (реальный TDLib)
 /// - TDLib docs: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
-@Suite("TDLibAdapter: Authentication Flow (High-Level API)")
+@Suite("TDLibAdapter: Процесс авторизации (High-Level API)")
 struct AuthenticationFlowTests {
 
     // MARK: - Phone + Code (Success)
@@ -28,7 +28,7 @@ struct AuthenticationFlowTests {
     /// 2. `checkAuthenticationCode("12345")` → `authorizationStateReady`
     ///
     /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1authorization_state.html
-    @Test("Successful authentication: phone + code")
+    @Test("Успешная авторизация: телефон + код")
     func authenticateWithPhoneAndCode() async throws {
         // Given: Mock client который эмулирует успешную авторизацию
         let mockClient = MockTDLibClient()
@@ -72,7 +72,7 @@ struct AuthenticationFlowTests {
     /// **Проверяем:**
     /// - Ошибка пробрасывается как TDLibError
     /// - Ошибка логируется в формате "TDLib error [code]: message"
-    @Test("Error handling: invalid authentication code + logging")
+    @Test("Обработка ошибок: неверный код авторизации + логирование")
     func errorHandlingInvalidCode() async throws {
         // Given: Mock logger для перехвата логов
         let mockLogger = MockLogger()

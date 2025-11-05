@@ -8,14 +8,14 @@ import Foundation
 /// - Правильный snake_case маппинг (snake_case → camelCase)
 /// - Корректная обработка вложенных структур
 /// - Обработка ошибок
-@Suite("Response Models Decoding")
+@Suite("Декодирование Response моделей")
 struct ResponseDecodingTests {
 
     let decoder = JSONDecoder()
 
     // MARK: - AuthorizationStateUpdate
 
-    @Test("Decode AuthorizationStateUpdate - waitTdlibParameters")
+    @Test("Декодирование AuthorizationStateUpdate - waitTdlibParameters")
     func decodeAuthorizationStateWaitTdlibParameters() throws {
         // Given
         let json = """
@@ -34,7 +34,7 @@ struct ResponseDecodingTests {
         #expect(response.authorizationState.type == "authorizationStateWaitTdlibParameters")
     }
 
-    @Test("Decode AuthorizationStateUpdate - waitPhoneNumber")
+    @Test("Декодирование AuthorizationStateUpdate - waitPhoneNumber")
     func decodeAuthorizationStateWaitPhoneNumber() throws {
         // Given
         let json = """
@@ -53,7 +53,7 @@ struct ResponseDecodingTests {
         #expect(response.authorizationState.type == "authorizationStateWaitPhoneNumber")
     }
 
-    @Test("Decode AuthorizationStateUpdate - waitCode")
+    @Test("Декодирование AuthorizationStateUpdate - waitCode")
     func decodeAuthorizationStateWaitCode() throws {
         // Given
         let json = """
@@ -72,7 +72,7 @@ struct ResponseDecodingTests {
         #expect(response.authorizationState.type == "authorizationStateWaitCode")
     }
 
-    @Test("Decode AuthorizationStateUpdate - waitPassword")
+    @Test("Декодирование AuthorizationStateUpdate - waitPassword")
     func decodeAuthorizationStateWaitPassword() throws {
         // Given
         let json = """
@@ -91,7 +91,7 @@ struct ResponseDecodingTests {
         #expect(response.authorizationState.type == "authorizationStateWaitPassword")
     }
 
-    @Test("Decode AuthorizationStateUpdate - ready")
+    @Test("Декодирование AuthorizationStateUpdate - ready")
     func decodeAuthorizationStateReady() throws {
         // Given
         let json = """
@@ -112,7 +112,7 @@ struct ResponseDecodingTests {
 
     // MARK: - TDLibError
 
-    @Test("Decode TDLibError")
+    @Test("Декодирование TDLibError")
     func decodeTDLibError() throws {
         // Given
         let json = """
@@ -132,7 +132,7 @@ struct ResponseDecodingTests {
         #expect(error.type == "error")
     }
 
-    @Test("Decode TDLibError - network timeout")
+    @Test("Декодирование TDLibError - network timeout")
     func decodeTDLibErrorNetworkTimeout() throws {
         // Given
         let json = """
@@ -151,7 +151,7 @@ struct ResponseDecodingTests {
         #expect(error.message == "Network timeout")
     }
 
-    @Test("Decode TDLibError - auth failed")
+    @Test("Декодирование TDLibError - auth failed")
     func decodeTDLibErrorAuthFailed() throws {
         // Given
         let json = """
@@ -172,7 +172,7 @@ struct ResponseDecodingTests {
 
     // MARK: - Invalid JSON handling
 
-    @Test("Decode fails on invalid JSON")
+    @Test("Декодирование падает на невалидном JSON")
     func decodeFailsOnInvalidJSON() {
         // Given
         let json = "not a json"
@@ -184,7 +184,7 @@ struct ResponseDecodingTests {
         }
     }
 
-    @Test("Decode fails on missing required field")
+    @Test("Декодирование падает на отсутствующем обязательном поле")
     func decodeFailsOnMissingRequiredField() {
         // Given - missing authorization_state
         let json = "{}"

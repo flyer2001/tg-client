@@ -8,7 +8,7 @@ import Testing
 ///
 /// TDLib возвращает информацию о пользователе при вызове метода `getMe`.
 /// Используется для верификации успешной авторизации.
-@Suite("User model decoding")
+@Suite("Декодирование модели User")
 struct UserTests {
 
     /// Тест декодирования пользователя с полными данными.
@@ -26,7 +26,7 @@ struct UserTests {
     /// ```
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
-    @Test("Decode user with full data")
+    @Test("Декодирование пользователя с полными данными")
     func decodeUserWithFullData() throws {
         let json = """
         {
@@ -51,7 +51,7 @@ struct UserTests {
     /// Тест декодирования пользователя без username.
     ///
     /// Некоторые пользователи могут не иметь username.
-    @Test("Decode user without username")
+    @Test("Декодирование пользователя без username")
     func decodeUserWithoutUsername() throws {
         let json = """
         {
@@ -73,7 +73,7 @@ struct UserTests {
     }
 
     /// Тест создания User программно (для тестов).
-    @Test("Create user programmatically")
+    @Test("Создание пользователя программно")
     func createUserProgrammatically() {
         let user = User(
             id: 111222333,

@@ -493,29 +493,30 @@ Sources/TgClient/TgClient.docc/
 
 #### Задачи:
 
-**4.1 Прототип скрипта (2-3 часа)**
-- [ ] Создать `scripts/generate-docc-from-tests.sh`
-- [ ] Парсинг Swift файлов (regex или SwiftSyntax)
-- [ ] Извлечение `@Suite` doc comments и names
-- [ ] Извлечение `@Test` doc comments и names
-- [ ] Генерация markdown структуры
-- [ ] Тестирование на `AuthenticationFlowTests.swift`
+**4.1 Прототип скрипта (2-3 часа)** ✅
+- [x] Создать `scripts/generate-docc-from-tests.sh`
+- [x] Парсинг Swift файлов (regex)
+- [x] Извлечение `@Suite` doc comments и names
+- [x] Извлечение `@Test` doc comments и names
+- [x] Генерация markdown структуры
+- [x] Тестирование на `AuthenticationFlowTests.swift`
 
-**4.2 Автоматические ссылки (1-2 часа)**
-- [ ] Парсинг inline symbols (`` `MockTDLibClient` `` → `` ``MockTDLibClient`` ``)
-- [ ] Ссылки на связанные тесты (ResponseDecodingTests → `<doc:ResponseDecoding>`)
-- [ ] Ссылки на E2E скрипты (scripts/manual_e2e_auth.sh → `<doc:Authentication-E2E>`)
+**4.1.1 Улучшения скрипта - Этап 1** ✅
+- [x] Перевод на русский язык (Test Scenarios → Тестовые сценарии, Test Type → Тип теста)
+- [x] GitHub ссылки на исходники (clickable links)
+- [x] Парсинг всех комментариев из тела функции теста (Given/When/Then/обычные комментарии)
+- [x] Перевод @Suite и @Test названий в исходных Swift файлах на русский
+
+**4.2 Автоматические ссылки - Этап 2 (запланировано)**
+- [ ] Парсинг типов из кода теста (SetAuthenticationPhoneNumberRequest, AuthorizationStateUpdate)
+- [ ] Генерация ссылок на Request/Response unit-тесты (`<doc:SetAuthenticationPhoneNumberRequestTests>`)
+- [ ] Backlinks (Unit → Component): автоматическое "**Used in:**" в unit-тестах
 - [ ] Сохранение внешних URL (https://core.telegram.org/...)
 
-**4.3 Интеграция в workflow (30 мин)**
-- [ ] Добавить вызов в `.github/workflows/docs.yml`
-- [ ] Запуск перед `swift package generate-documentation`
-- [ ] Проверка что сгенерированные файлы корректны
-
-**4.4 Backlinks (опционально, 1 час)**
-- [ ] Скрипт для генерации обратных ссылок (ребенок → родитель)
-- [ ] Автоматическое добавление "**Used in:** `<doc:...>`" в doc comments
-- [ ] Проверка циклических ссылок
+**4.3 Интеграция в workflow (30 мин)** ✅
+- [x] Добавить вызов в `.github/workflows/docs.yml`
+- [x] Запуск перед `swift package generate-documentation`
+- [x] Проверка что сгенерированные файлы корректны
 
 #### Критерии готовности:
 

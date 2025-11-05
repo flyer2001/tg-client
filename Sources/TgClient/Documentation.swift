@@ -1,5 +1,10 @@
-// This file exists to make the TgClient target valid for Swift Package Manager.
-// The actual documentation is in TgClient.docc/ directory.
+// Этот файл существует для валидности TgClient target в Swift Package Manager.
+// Реальная документация находится в директории TgClient.docc/
 //
-// This target is used solely for generating Swift-DocC documentation.
-// All implementation code lives in other targets (TDLibAdapter, etc).
+// Данный target используется исключительно для генерации Swift-DocC документации.
+// Весь код реализации находится в других targets (TDLibAdapter, App и т.д.)
+//
+// 📖 Опубликованная документация доступна по адресу:
+// https://flyer2001.github.io/tg-client/documentation/tgclient/
+//
+// Для локального просмотра используйте: ./scripts/preview-docs.sh

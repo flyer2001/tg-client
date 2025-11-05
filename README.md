@@ -37,15 +37,57 @@ swift run tg-client
 - TDLib 1.8.6+
 - macOS 14+ или Linux (Ubuntu 24.04+)
 
+## 📦 Установка TDLib
+
+**TDLib** — обязательная зависимость для работы проекта. Без неё сборка провалится.
+
+<details>
+<summary><b>macOS (Homebrew)</b></summary>
+
+```bash
+# Установка через Homebrew
+brew install tdlib pkg-config
+
+# Настройка PKG_CONFIG_PATH (добавь в ~/.zshrc для постоянной настройки)
+export PKG_CONFIG_PATH="/opt/homebrew/opt/tdlib/lib/pkgconfig:$PKG_CONFIG_PATH"
+```
+
+</details>
+
+<details>
+<summary><b>Linux (Ubuntu 24.04+) — сборка из исходников</b></summary>
+
+⚠️ **Внимание:** Готовых пакетов TDLib для Ubuntu 24.04 нет. Требуется сборка из исходников (~20-40 минут).
+
+```bash
+# Установка зависимостей
+sudo apt update
+sudo apt install -y build-essential cmake gperf libssl-dev zlib1g-dev pkg-config git
+
+# Клонирование и сборка TDLib
+git clone https://github.com/tdlib/td.git ~/td
+cd ~/td
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
+cmake --build . -j$(nproc)
+sudo cmake --install .
+
+# Обновление кэша динамических библиотек
+sudo ldconfig
+```
+
+💡 **Рекомендация:** Используйте `tmux` для запуска сборки, чтобы процесс не прервался при обрыве SSH-соединения.
+
+</details>
+
+**Официальная документация:**
+- [TDLib GitHub](https://github.com/tdlib/td)
+- [TDLib Build Instructions](https://tdlib.github.io/td/build.html)
+
 ## 📖 Документация
 
 **Полная документация доступна онлайн:**
 👉 [https://flyer2001.github.io/tg-client/documentation/tgclient](https://flyer2001.github.io/tg-client/documentation/tgclient)
-
-**Локальный preview (только macOS):**
-```bash
-./scripts/preview-docs.sh
-```
 
 ## ⚠️ Статус проекта
 
@@ -55,8 +97,6 @@ swift run tg-client
 
 ### Что работает сейчас:
 - ✅ Авторизация в Telegram (phone + code + 2FA)
-- ✅ Типобезопасный TDLib API (high-level)
-- ✅ Unit и component тесты
 
 ### Планируется в v0.1.0 (MVP):
 - 📋 Получение непрочитанных сообщений из каналов

@@ -78,6 +78,11 @@ jobs:
           echo "PKG_CONFIG_PATH=$HOME/tdlib-install/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$HOME/tdlib-install/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
+      - name: Generate DoCC from tests
+        run: |
+          chmod +x ./scripts/generate-docc-from-tests.sh
+          ./scripts/generate-docc-from-tests.sh
+
       - name: Generate Documentation
         run: |
           swift package --allow-writing-to-directory ./docs \
