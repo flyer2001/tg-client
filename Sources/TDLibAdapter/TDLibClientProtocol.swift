@@ -15,7 +15,7 @@ import Foundation
 /// let state = try await client.setAuthenticationPhoneNumber("+1234567890")
 /// ```
 ///
-/// **Docs:** https://core.telegram.org/tdlib/docs/
+/// **Docs:** https://core.telegram.org/tdlib/.claude/
 public protocol TDLibClientProtocol: Sendable {
 
     // MARK: - Authentication Methods
@@ -28,7 +28,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Returns: Обновление состояния авторизации (обычно `authorizationStateWaitCode`)
     /// - Throws: `TDLibError` если номер невалидный или произошла ошибка
     ///
-    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_authentication_phone_number.html
+    /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
     func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdate
 
     /// Отправляет код подтверждения из SMS/Telegram.
@@ -39,7 +39,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Returns: Обновление состояния авторизации (`authorizationStateReady` или `authorizationStateWaitPassword` если включена 2FA)
     /// - Throws: `TDLibError` если код неверный или истёк
     ///
-    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1check_authentication_code.html
+    /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_authentication_code.html
     func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdate
 
     /// Отправляет пароль двухфакторной аутентификации (2FA).
@@ -50,7 +50,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Returns: Обновление состояния авторизации (обычно `authorizationStateReady`)
     /// - Throws: `TDLibError` если пароль неверный
     ///
-    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1check_authentication_password.html
+    /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_authentication_password.html
     func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate
 
     // MARK: - User Methods
@@ -62,6 +62,6 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Returns: Информация о пользователе
     /// - Throws: `TDLibError` если пользователь не авторизован или произошла ошибка
     ///
-    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_me.html
+    /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
     func getMe() async throws -> User
 }

@@ -58,7 +58,7 @@ RED → GREEN → REFACTOR
 
 /// Тесты для модели Chat
 ///
-/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chat.html
+/// **TDLib API:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1chat.html
 ///
 /// TDLib отслеживает прочитанность на стороне сервера:
 /// - `unread_count` обновляется автоматически при новых сообщениях
@@ -134,4 +134,4 @@ struct Chat: Codable, Sendable, Equatable {
 
 **См. также:**
 - [TASKS.md](TASKS.md) - задача 5.1
-- [CONTRIBUTING.md](CONTRIBUTING.md) - правила разработки
+- [DEVELOPMENT.md](DEVELOPMENT.md) - правила разработки

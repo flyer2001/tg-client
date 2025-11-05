@@ -125,8 +125,8 @@ Action: Повторный запрос пароля
 
 ## Внешние зависимости
 
-- [TDLib Authorization States](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1authorization_state.html)
-- [TDLib Authentication Methods](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_authentication_phone_number.html)
+- [TDLib Authorization States](https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1authorization_state.html)
+- [TDLib Authentication Methods](https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html)
 - [Telegram Two-Step Verification](https://core.telegram.org/api/srp)
 
 ## Диаграмма состояний

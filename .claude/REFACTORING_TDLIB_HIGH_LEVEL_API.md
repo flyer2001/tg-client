@@ -619,7 +619,7 @@ switch update {
 ## 📚 Ресурсы
 
 - [TDLib Getting Started](https://core.telegram.org/tdlib/getting-started)
-- [TDLib API Methods](https://core.telegram.org/tdlib/docs/annotated.html)
+- [TDLib API Methods](https://core.telegram.org/tdlib/.claude/annotated.html)
 - [Swift Concurrency](https://docs.swift.org/swift-book/LanguageGuide/Concurrency.html)
 - Наш `TDLibAdapter/README.md` - текущая документация
 

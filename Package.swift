@@ -38,10 +38,7 @@ let package = Package(
                 "CTDLib",
                 .product(name: "Logging", package: "swift-log")
             ],
-            path: "Sources/TDLibAdapter",
-            resources: [
-                .copy("README.md")
-            ]
+            path: "Sources/TDLibAdapter"
         ),
         .target(
             name: "TgClient",

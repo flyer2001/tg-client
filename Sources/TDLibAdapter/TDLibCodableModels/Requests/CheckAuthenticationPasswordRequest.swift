@@ -2,7 +2,7 @@ import Foundation
 
 /// Запрос для проверки пароля двухфакторной аутентификации.
 ///
-/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1check_authentication_password.html
+/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_authentication_password.html
 public struct CheckAuthenticationPasswordRequest: TDLibRequest {
     public let type = "checkAuthenticationPassword"
 

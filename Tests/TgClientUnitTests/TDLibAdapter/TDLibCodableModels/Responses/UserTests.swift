@@ -4,7 +4,7 @@ import Testing
 
 /// Тесты для модели User.
 ///
-/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1user.html
+/// **TDLib API:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1user.html
 ///
 /// TDLib возвращает информацию о пользователе при вызове метода `getMe`.
 /// Используется для верификации успешной авторизации.
@@ -25,7 +25,7 @@ struct UserTests {
     /// }
     /// ```
     ///
-    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_me.html
+    /// **TDLib docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
     @Test("Decode user with full data")
     func decodeUserWithFullData() throws {
         let json = """

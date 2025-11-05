@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Определяет количество информации, записываемой в лог-файл TDLib.
 ///
-/// См. документацию: https://core.telegram.org/tdlib/docs/classtd_1_1_log.html
+/// См. документацию: https://core.telegram.org/tdlib/.claude/classtd_1_1_log.html
 public enum TDLibLogVerbosity: Int32, Sendable {
     /// Только критические ошибки (FATAL)
     case fatal = 0

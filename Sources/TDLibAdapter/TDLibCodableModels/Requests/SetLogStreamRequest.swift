@@ -2,7 +2,7 @@ import Foundation
 
 /// Настройки записи логов в файл.
 ///
-/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1log_stream_file.html
+/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1log_stream_file.html
 public struct LogStreamFile: Encodable, Sendable {
     public let type = "logStreamFile"
 
@@ -66,7 +66,7 @@ public enum LogStream: Encodable, Sendable {
 ///
 /// Настраивает способ записи логов TDLib (файл, консоль, отключение).
 ///
-/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_log_stream.html
+/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_log_stream.html
 public struct SetLogStreamRequest: TDLibRequest {
     public let type = "setLogStream"
 

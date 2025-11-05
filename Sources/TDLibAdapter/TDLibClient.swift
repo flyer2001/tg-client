@@ -127,7 +127,7 @@ public final class TDLibClient: @unchecked Sendable {
     ///   }
     /// }
     /// ```
-    /// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_authorization_state.html
+    /// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1update_authorization_state.html
     ///
     /// **2. Прямой ответ на getAuthorizationState()** (когда мы явно запрашиваем):
     /// ```json
@@ -135,7 +135,7 @@ public final class TDLibClient: @unchecked Sendable {
     ///   "@type": "authorizationStateWaitTdlibParameters"
     /// }
     /// ```
-    /// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_authorization_state.html
+    /// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_authorization_state.html
     ///
     /// - Parameter obj: JSON-объект от TDLib
     /// - Returns: Кортеж (состояние, оригинальная строка типа) или `nil` если это не авторизационное событие

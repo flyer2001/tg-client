@@ -108,7 +108,7 @@ swift run tg-client
 ## Ссылки
 
 - [GitHub репозиторий](https://github.com/flyer2001/tg-client)
-- [TDLib API Documentation](https://core.telegram.org/tdlib/docs/)
+- [TDLib API Documentation](https://core.telegram.org/tdlib/.claude/)
 - [Swift Testing Documentation](https://developer.apple.com/documentation/testing)
 
 ## Topics

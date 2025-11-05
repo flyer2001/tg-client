@@ -25,7 +25,27 @@ source ~/.zshrc
 
 ### API Credentials
 
-См. [CREDENTIALS.md](CREDENTIALS.md) для получения и настройки Telegram API credentials.
+1. **Получить Telegram API credentials:**
+   - Перейти на https://my.telegram.org/apps
+   - Создать приложение
+   - Скопировать API ID и API Hash
+
+2. **Создать .env файл:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Заполнить .env файл** (без ключевого слова `export`):
+   ```bash
+   TELEGRAM_API_ID=your_api_id_here
+   TELEGRAM_API_HASH=your_api_hash_here
+   TELEGRAM_PHONE=+1234567890
+   TDLIB_STATE_DIR=$HOME/.tdlib
+   ```
+
+   ⚠️ **Важно:** НЕ используйте `export` в .env файле - только формат `KEY=value`
+
+См. также [CREDENTIALS.md](CREDENTIALS.md) для деталей.
 
 ---
 

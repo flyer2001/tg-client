@@ -21,6 +21,12 @@
 # Примечание: SMS код и 2FA пароль вводятся вручную в интерактивном режиме
 #
 # Usage:
+#   # Option 1: Use .env file (recommended)
+#   cp .env.example .env
+#   # Edit .env with your credentials (without 'export' keyword)
+#   ./scripts/manual_e2e_auth.sh [--clean]
+#
+#   # Option 2: Set environment variables manually
 #   export TELEGRAM_API_ID=your_api_id
 #   export TELEGRAM_API_HASH=your_api_hash
 #   export TELEGRAM_PHONE=+1234567890
@@ -29,8 +35,9 @@
 # Options:
 #   --clean        Remove old TDLib state before running
 #
-# Note: This script expects a pre-built binary at .build/debug/tg-client
-#       To build manually, see docs/DEPLOY.md
+# Note: This script auto-detects the binary path using 'swift build --show-bin-path'
+#       Works on both macOS and Linux with different build directories
+#       To build manually: swift build (see docs/DEPLOY.md)
 
 set -e
 
@@ -54,7 +61,9 @@ NC='\033[0m' # No Color
 # Load .env file if it exists
 if [[ -f .env ]]; then
     echo -e "${YELLOW}Загрузка credentials из .env...${NC}"
+    set -a  # автоматически export всех переменных
     source .env
+    set +a
     echo -e "${GREEN}✓ .env загружен${NC}"
 fi
 
@@ -102,14 +111,22 @@ elif [[ "$PLATFORM" == "Darwin" ]]; then
 fi
 echo -e "${GREEN}✓ TDLib is installed${NC}"
 
-# Check for binary existence
+# Check for binary existence (auto-detect path for macOS/Linux)
 echo -e "\n${YELLOW}Проверка наличия бинарника...${NC}"
-BINARY_PATH=".build/debug/tg-client"
+BIN_DIR=$(swift build --show-bin-path 2>/dev/null)
+if [[ $? -ne 0 || -z "$BIN_DIR" ]]; then
+    echo -e "${RED}❌ Не удалось определить путь к бинарнику${NC}"
+    echo -e "${YELLOW}Соберите проект вручную:${NC}"
+    echo -e "  ${YELLOW}swift build${NC}"
+    echo -e "${YELLOW}См. docs/DEPLOY.md для деталей${NC}"
+    exit 1
+fi
+
+BINARY_PATH="$BIN_DIR/tg-client"
 if [[ ! -f "$BINARY_PATH" ]]; then
     echo -e "${RED}❌ Бинарник не найден: $BINARY_PATH${NC}"
     echo -e "${YELLOW}Соберите проект вручную:${NC}"
-    echo -e "  ${YELLOW}tmux new-session -s build${NC}"
-    echo -e "  ${YELLOW}swift build -v${NC}"
+    echo -e "  ${YELLOW}swift build${NC}"
     echo -e "${YELLOW}См. docs/DEPLOY.md для деталей${NC}"
     exit 1
 fi
@@ -138,20 +155,22 @@ LOG_FILE="/tmp/tg-client-e2e-$(date +%s).log"
 # Verify results
 echo -e "\n${YELLOW}Проверка результатов авторизации...${NC}"
 
-# Check 1: authorizationStateReady reached
-if grep -q "authorizationStateReady" "$LOG_FILE"; then
+# Check 1: Authorization successful (check for final success message)
+if grep -q "✅ Authorized as:" "$LOG_FILE"; then
+    echo -e "${GREEN}✓ Authorization successful${NC}"
+elif grep -q "authorizationStateReady" "$LOG_FILE"; then
     echo -e "${GREEN}✓ Authorization state reached: Ready${NC}"
 else
-    echo -e "${RED}❌ Failed to reach authorizationStateReady${NC}"
+    echo -e "${RED}❌ Failed to authorize${NC}"
     echo -e "${RED}   Check logs: $LOG_FILE${NC}"
     exit 1
 fi
 
-# Check 2: getMe returned user data
-if grep -q "getMe" "$LOG_FILE"; then
-    echo -e "${GREEN}✓ getMe request executed${NC}"
+# Check 2: User data retrieved (check for user ID in success message)
+if grep -q "id: [0-9]" "$LOG_FILE"; then
+    echo -e "${GREEN}✓ User data retrieved${NC}"
 else
-    echo -e "${YELLOW}⚠ getMe not found in logs (check manually)${NC}"
+    echo -e "${YELLOW}⚠ User data not found in logs (check manually)${NC}"
 fi
 
 # Check 3: TDLib state files created

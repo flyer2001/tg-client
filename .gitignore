@@ -27,6 +27,7 @@ debug.log
 # Секреты и конфиденциальные данные
 .env
 .env.*
+!.env.example
 *.secrets
 credentials.json
 api_keys.txt
