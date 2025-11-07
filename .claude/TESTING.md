@@ -154,7 +154,23 @@ swift run tg-client [команда]
 
 **Принцип:** начинаем с пользовательского сценария (E2E), спускаемся к деталям реализации.
 
-#### Порядок разработки новой фичи
+#### Краткий чек-лист (для быстрого reference)
+
+```
+☐ E2E сценарий (.docc)
+☐ Component Test (RED - не компилируется)
+☐ Protocol extension (сигнатура метода)
+☐ Unit Tests для моделей (RED - не компилируется)
+☐ Models (Request/Response Codable) → Unit Tests GREEN
+☐ Real implementation (TDLibClient) → Component Test компилируется но RED
+☐ Mock implementation (MockTDLibClient) → Component Test GREEN
+☐ E2E validation (manual на живом TDLib)
+☐ Refactor (документация, edge cases)
+```
+
+**На каждом этапе:** делай паузу и спрашивай "Продолжаем дальше?"
+
+#### Порядок разработки новой фичи (детально)
 
 ```
 1. E2E сценарий (DoCC)
@@ -227,12 +243,24 @@ swift run tg-client [команда]
    - Потом имитируем это поведение в MockTDLibClient (шаг 7)
    - Mock должен возвращать те же структуры и обрабатывать те же ошибки
 
-3. **Комментарии в Component Tests** — явно указываем зависимости:
+3. **Комментарии для DoCC генерации** — явно указывай Request/Response модели:
    ```swift
-   // Требуется: GetChatsRequest, ChatsResponse
-   // TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
-   // Mock JSON: см. Tests/Fixtures/TDLib/chats_response.json
+   // Шаг 1: SetAuthenticationPhoneNumberRequest → AuthorizationStateUpdateResponse (waitCode)
+   await mockClient.setMockResponse(
+       for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
+       response: .success(AuthorizationStateUpdateResponse.waitCode)
+   )
    ```
+
+   И в docstring теста:
+   ```swift
+   /// **Related:**
+   /// - Unit-тесты моделей: `SetAuthenticationPhoneNumberRequestTests`, `AuthorizationStateUpdateResponseTests`
+   /// - TDLib docs: https://core.telegram.org/tdlib/classtd_1_1td__api_1_1set_authentication_phone_number.html
+   ```
+
+   **Зачем:** для генерации DoCC документации с перекрёстными ссылками на unit-тесты.
+   **Пример:** см. `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift`
 
 4. **Реальные JSON примеры** — берём из TDLib docs, храним в `Tests/Fixtures/TDLib/`
 
