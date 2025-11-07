@@ -226,11 +226,19 @@ public final class TDLibClient: @unchecked Sendable {
             case .waitTdlibParameters:
                 if !parametersSet {
                     appLogger.info("Setting TDLib parameters...")
+
+                    // Проверка наличия ключа шифрования БД
+                    if config.databaseEncryptionKey.isEmpty {
+                        appLogger.warning("⚠️  TDLIB_DATABASE_ENCRYPTION_KEY не задан! База данных НЕ будет зашифрована. Это НЕБЕЗОПАСНО для production. Рекомендуется установить ключ через переменную окружения.")
+                    } else {
+                        appLogger.info("✓ Database encryption enabled (key length: \(config.databaseEncryptionKey.count) chars)")
+                    }
+
                     let request = SetTdlibParametersRequest(
                         useTestDc: false,
                         databaseDirectory: config.stateDir + "/db",
                         filesDirectory: config.stateDir + "/files",
-                        databaseEncryptionKey: "",
+                        databaseEncryptionKey: config.databaseEncryptionKey,
                         useFileDatabase: true,
                         useChatInfoDatabase: true,
                         useMessageDatabase: true,

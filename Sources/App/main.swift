@@ -61,5 +61,14 @@ struct TGClient {
             print("⚠️ Failed to get user info: \(error)")
             exit(1)
         }
+
+        // Проверяем getChats()
+        do {
+            let chats = try await td.getChats(chatList: .main, limit: 100)
+            print("✅ Chats retrieved: \(chats.chatIds.count)")
+        } catch {
+            print("⚠️ Failed to get chats: \(error)")
+            exit(1)
+        }
     }
 }

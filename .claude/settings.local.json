@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(swift build)",
-      "Bash(./scripts/generate-docc-from-tests.sh:*)"
+      "Bash(./scripts/generate-docc-from-tests.sh:*)",
+      "Bash(git mv:*)",
+      "Bash(swift test:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

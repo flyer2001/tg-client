@@ -22,6 +22,13 @@ TgClient автоматизирует просмотр большого коли
 git clone https://github.com/flyer2001/tg-client.git
 cd tg-client
 
+# Установить TDLib (см. раздел "Установка TDLib" ниже)
+
+# Настроить переменные окружения
+# См. инструкции: https://github.com/flyer2001/tg-client/blob/main/.env.example
+cp .env.example .env
+# Отредактировать .env файл с вашими Telegram API credentials
+
 # Собрать проект (на Linux используй скрипт для избежания проблем с зависанием SwiftPM)
 ./scripts/build-clean.sh
 

@@ -13,7 +13,7 @@ Component-тесты для авторизации через TDLib с испо�
 - Обработка ошибок (неверный код, неверный пароль)
 
 **Related:**
-- Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdate)
+- Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdateResponse)
 - E2E тест: `scripts/manual_e2e_auth.sh` (реальный TDLib)
 - TDLib docs: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
 
@@ -36,6 +36,10 @@ Component-тесты для авторизации через TDLib с испо�
 Given: Mock client который эмулирует успешную авторизацию
 
 Настраиваем mock ответы для каждого шага авторизации
+
+Шаг 1: <doc:SetAuthenticationPhoneNumberRequestTests> → <doc:AuthorizationStateUpdateResponseTests> (waitCode)
+
+Шаг 2: <doc:CheckAuthenticationCodeRequestTests> → <doc:AuthorizationStateUpdateResponseTests> (ready)
 
 When: Отправляем номер телефона
 
@@ -61,7 +65,7 @@ Then: Авторизация успешна
 ```
 
 **Проверяем:**
-- Ошибка пробрасывается как TDLibError
+- Ошибка пробрасывается как TDLibErrorResponse
 - Ошибка логируется в формате "TDLib error [code]: message"
 
 Given: Mock logger для перехвата логов
@@ -70,7 +74,9 @@ Mock client с логгером
 
 Настраиваем mock: код неверный → ошибка
 
-When: Отправляем неверный код → ожидаем TDLibError
+<doc:CheckAuthenticationCodeRequestTests> → <doc:TDLibErrorResponseTests> (PHONE_CODE_INVALID)
+
+When: Отправляем неверный код → ожидаем <doc:TDLibErrorResponseTests>
 
 Then: Проверяем что ошибка была залогирована
 
@@ -83,3 +89,10 @@ Then: Проверяем что ошибка была залогирована
 
 - <doc:TgClient>
 - <doc:Authentication>
+
+### Unit-тесты используемых моделей
+
+- <doc:AuthorizationStateUpdateResponseTests>
+- <doc:CheckAuthenticationCodeRequestTests>
+- <doc:SetAuthenticationPhoneNumberRequestTests>
+- <doc:TDLibErrorResponseTests>

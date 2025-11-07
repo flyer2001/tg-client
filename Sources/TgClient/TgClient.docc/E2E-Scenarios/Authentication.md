@@ -1,168 +1,72 @@
 # Authentication
 
-Полный цикл авторизации пользователя в Telegram через TDLib.
+Авторизация пользователя в Telegram через TDLib.
 
-## Обзор
+## User Story
 
-Авторизация в Telegram проходит через несколько состояний TDLib.
-Приложение обрабатывает каждое состояние и запрашивает необходимые данные у пользователя.
+Как пользователь, я хочу авторизоваться в Telegram клиенте под своей учётной записью, введя свой номер телефона и код подтверждения (и пароль 2FA при необходимости), чтобы получить доступ к своим чатам и сообщениям.
 
-TDLib отслеживает состояние авторизации на стороне клиента и уведомляет о каждом изменении через updates.
+**Ожидаемое поведение:**
+- Успешный сценарий: Сообщение "Authorization successful" и переход в состояние `authorizationStateReady`
+- Ошибки: Явное сообщение об ошибке на каждом этапе (неверный номер, код, пароль, или внутренняя ошибка TDLib)
 
-## E2E Сценарии
+## Официальная документация
 
-### Сценарий 1: Успешная авторизация (phone + code)
+- [TDLib Authorization](https://core.telegram.org/tdlib/getting-started#initialization) — флоу инициализации и авторизации
+- [Telegram Two-Step Verification](https://core.telegram.org/api/srp) — документация по 2FA
 
-**Шаги:**
+## Предусловия
 
-1. **Старт TDLib** → `authorizationStateWaitTdlibParameters`
-   - Приложение устанавливает параметры (API ID, API Hash, database directory)
+- `.env` файл с настройками (см. `.env.example`)
+- Конфигурация: `api_id`, `api_hash`, `encryption_key`, `tdlib_path` должны быть установлены до начала авторизации
 
-2. **Установка ключа БД** → `authorizationStateWaitEncryptionKey`
-   - Приложение устанавливает encryption key (пустой для нового пользователя)
+## Шаги
 
-3. **Запрос номера** → `authorizationStateWaitPhoneNumber`
-   - Пользователь вводит номер телефона (формат: `+1234567890`)
+1. **Инициализация TDLib** — Установка параметров и ключа шифрования БД
+   - **Ввод:** Параметры из конфигурации (`api_id`, `api_hash`, `database_directory`)
+   - **Результат:** TDLib переходит в состояние `authorizationStateWaitPhoneNumber`
+   - **Ошибки:** Ошибка инициализации TDLib (неверные параметры, проблемы с БД)
 
-4. **Запрос кода** → `authorizationStateWaitCode`
-   - Telegram отправляет SMS/код в приложение
-   - Пользователь вводит код подтверждения
+2. **Ввод номера телефона** — Пользователь вводит номер в формате `+1234567890`
+   - **Ввод:** Номер телефона (например, `+79991234567`)
+   - **Результат:** Telegram отправляет код подтверждения, переход в `authorizationStateWaitCode`
+   - **Ошибки:** `PHONE_NUMBER_INVALID` (неверный формат), `FLOOD_WAIT` (слишком много попыток)
 
-5. **Успешная авторизация** → `authorizationStateReady` ✅
-   - Пользователь авторизован
-   - Можно начинать работу с API
+3. **Ввод кода подтверждения** — Пользователь вводит код из SMS/Telegram
+   - **Ввод:** Код (например, `12345`)
+   - **Результат:** Успешная авторизация → `authorizationStateReady` (если нет 2FA)
+   - **Ошибки:** `PHONE_CODE_INVALID` (неверный код), переход к шагу 4 если включена 2FA
 
-**Пример кода:**
+4. **Ввод пароля 2FA** _(опциональный, только если у пользователя включена двухфакторная аутентификация)_
+   - **Ввод:** Пароль 2FA
+   - **Результат:** Успешная авторизация → `authorizationStateReady`
+   - **Ошибки:** `PASSWORD_HASH_INVALID` (неверный пароль)
 
-```swift
-// См. Sources/TDLibAdapter/TDLibAdapter.swift
-let client = TDLibAdapter()
-try await client.start()
+## Как проверить сценарий
 
-// TDLib автоматически переходит через состояния
-// Приложение реагирует на каждое через AuthorizationLoopActivity
+**Запуск:**
+```bash
+# Очистить БД для чистого теста (опционально)
+rm -rf ~/.tdlib/*
+
+# Запустить клиент
+swift run tg-client
+
+# Следовать инструкциям в консоли:
+# 1. Ввести номер телефона
+# 2. Ввести код из Telegram
+# 3. (Если требуется) Ввести пароль 2FA
 ```
 
-### Сценарий 2: Авторизация с 2FA (phone + code + password)
+**Что проверяем:**
+1. Клиент запрашивает номер телефона
+2. После ввода номера — запрашивает код подтверждения
+3. (Опционально) Если включена 2FA — запрашивает пароль
+4. После успешной авторизации — выводит "Authorization successful"
+5. При ошибках — выводит явное сообщение (например, "Invalid phone number" или "Invalid code")
 
-**Шаги:**
+**Ожидаемый результат:** Сообщение "Authorization successful" и клиент готов к работе
 
-1-4. (Как в сценарии 1)
+## Компонентный тест
 
-5. **Запрос пароля 2FA** → `authorizationStateWaitPassword`
-   - У пользователя включена двухфакторная аутентификация
-   - Пользователь вводит пароль
-
-6. **Успешная авторизация** → `authorizationStateReady` ✅
-
-**Документация TDLib:** [Two-Step Verification](https://core.telegram.org/api/srp)
-
-### Сценарий 3: Обработка ошибок
-
-**Неверный номер телефона:**
-
-```
-Input: +123invalid
-TDLib response: {"@type": "error", "code": 400, "message": "PHONE_NUMBER_INVALID"}
-Action: Повторный запрос номера
-```
-
-**Неверный код подтверждения:**
-
-```
-Input: 00000
-TDLib response: {"@type": "error", "code": 401, "message": "PHONE_CODE_INVALID"}
-Action: Повторный запрос кода
-```
-
-**Неверный пароль 2FA:**
-
-```
-Input: wrong_password
-TDLib response: {"@type": "error", "code": 401, "message": "PASSWORD_HASH_INVALID"}
-Action: Повторный запрос пароля
-```
-
-## Используемые компоненты
-
-### Component Level
-
-- **TDLibAdapter** - низкоуровневая работа с TDLib C API
-  - Управление состояниями авторизации
-  - Отправка запросов (setAuthenticationPhoneNumber, checkAuthenticationCode, etc.)
-  - Обработка updates от TDLib
-  - См. `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift` (TODO)
-
-### Unit Level
-
-**Модели состояний:**
-- ``AuthorizationState`` - enum всех состояний авторизации
-  - См. `Sources/TDLibAdapter/Models/AuthorizationState.swift`
-
-**Request модели:**
-- ``SetAuthenticationPhoneNumberRequest`` - установка номера телефона
-  - См. `Sources/TDLibAdapter/TDLibCodableModels/Requests/SetAuthenticationPhoneNumberRequest.swift`
-- ``CheckAuthenticationCodeRequest`` - проверка кода подтверждения
-  - См. `Sources/TDLibAdapter/TDLibCodableModels/Requests/CheckAuthenticationCodeRequest.swift`
-- ``CheckAuthenticationPasswordRequest`` - проверка пароля 2FA
-  - См. `Sources/TDLibAdapter/TDLibCodableModels/Requests/CheckAuthenticationPasswordRequest.swift`
-
-**Response модели:**
-- ``AuthorizationStateUpdate`` - обёртка для updates авторизации
-  - См. `Tests/TgClientUnitTests/TDLibAdapter/ResponseDecodingTests.swift`
-- ``TDLibError`` - модель ошибок от TDLib
-  - См. `Tests/TgClientUnitTests/TDLibAdapter/ResponseDecodingTests.swift`
-
-## Таблица ошибок
-
-| Код | Сообщение | Причина | Обработка |
-|-----|-----------|---------|-----------|
-| 400 | PHONE_NUMBER_INVALID | Неверный формат номера | Повторный запрос |
-| 401 | PHONE_CODE_INVALID | Неверный код подтверждения | Повторный запрос |
-| 401 | PASSWORD_HASH_INVALID | Неверный пароль 2FA | Повторный запрос |
-| 429 | FLOOD_WAIT | Rate limit (слишком много попыток) | Ожидание N секунд |
-| 500 | INTERNAL | Внутренняя ошибка TDLib/сервера | Повтор с exponential backoff |
-
-## Внешние зависимости
-
-- [TDLib Authorization States](https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1authorization_state.html)
-- [TDLib Authentication Methods](https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html)
-- [Telegram Two-Step Verification](https://core.telegram.org/api/srp)
-
-## Диаграмма состояний
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Authorization Flow                        │
-└─────────────────────────────────────────────────────────────┘
-
-    Start TDLib
-         │
-         ▼
-  WaitTdlibParameters ──► SetTdlibParameters
-         │
-         ▼
-  WaitEncryptionKey ──► SetDatabaseEncryptionKey
-         │
-         ▼
-  WaitPhoneNumber ──► SetAuthenticationPhoneNumber
-         │
-         ▼
-  WaitCode ──► CheckAuthenticationCode
-         │
-         ├─► Ready ✅ (если нет 2FA)
-         │
-         ├─► WaitPassword ──► CheckAuthenticationPassword
-         │        │
-         │        └─► Ready ✅
-         │
-         └─► Error ❌
-              │
-              └─► Повтор ввода (phone/code/password)
-```
-
-## См. также
-
-- ``TDLibAdapter`` - основной адаптер для работы с TDLib
-- ``AuthorizationLoopActivity`` - state machine авторизации
-- `Tests/TgClientE2ETests/AuthenticationE2ETests.swift` - E2E тесты (TODO)
+<doc:AuthenticationFlowTests>

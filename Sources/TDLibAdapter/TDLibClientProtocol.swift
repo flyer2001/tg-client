@@ -29,7 +29,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Throws: `TDLibError` если номер невалидный или произошла ошибка
     ///
     /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
-    func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdate
+    func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdateResponse
 
     /// Отправляет код подтверждения из SMS/Telegram.
     ///
@@ -40,7 +40,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Throws: `TDLibError` если код неверный или истёк
     ///
     /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_authentication_code.html
-    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdate
+    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdateResponse
 
     /// Отправляет пароль двухфакторной аутентификации (2FA).
     ///
@@ -51,7 +51,7 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Throws: `TDLibError` если пароль неверный
     ///
     /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_authentication_password.html
-    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate
+    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdateResponse
 
     // MARK: - User Methods
 
@@ -63,5 +63,37 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Throws: `TDLibError` если пользователь не авторизован или произошла ошибка
     ///
     /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
-    func getMe() async throws -> User
+    func getMe() async throws -> UserResponse
+
+    // MARK: - Chat Methods
+
+    /// Получает список чатов из указанного списка (main или archive).
+    ///
+    /// **TDLib method:** `getChats`
+    ///
+    /// Возвращает список ID чатов в порядке, определённом TDLib (обычно по времени последнего сообщения).
+    /// Для получения полной информации о чате (название, тип, счётчик непрочитанных) используйте `getChat(chatId:)`.
+    ///
+    /// **Параметры:**
+    /// - `chatList`: Тип списка чатов (`.main` для основного списка, `.archive` для архива)
+    /// - `limit`: Максимальное количество чатов для получения (обычно 100)
+    ///
+    /// **Возвращает:** Список ID чатов
+    ///
+    /// **Выбрасывает:** Ошибку если TDLib недоступен или произошла внутренняя ошибка
+    ///
+    /// **Пример использования:**
+    /// ```swift
+    /// let response = try await client.getChats(chatList: .main, limit: 100)
+    /// for chatId in response.chatIds {
+    ///     let chat = try await client.getChat(chatId: chatId)
+    ///     print("Chat: \(chat.title), unread: \(chat.unreadCount)")
+    /// }
+    /// ```
+    ///
+    /// **TDLib docs:**
+    /// - Method: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
+    /// - Response: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chats.html
+    /// - ChatList: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chat_list.html
+    func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse
 }

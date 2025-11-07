@@ -1,11 +1,5 @@
 import Foundation
 
-/// Запрос для установки параметров TDLib.
-///
-/// Документация: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_tdlib_parameters.html
-///
-/// Используемая версия TDLib HEAD-36b05e9:
-/// https://github.com/tdlib/td/blob/36b05e9e0310c9a32ae6cb807fe22c96600f6061/td/generate/scheme/td_api.tl#L7958
 public struct SetTdlibParametersRequest: TDLibRequest {
     public let type = "setTdlibParameters"
 

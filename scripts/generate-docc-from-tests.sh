@@ -95,6 +95,41 @@ extract_test_body_comments() {
     echo "$comments"
 }
 
+# Функция для извлечения используемых Request/Response моделей из кода теста
+extract_model_references() {
+    local file="$1"
+    local models=""
+
+    # Ищем типы *Request (например, SetAuthenticationPhoneNumberRequest)
+    local requests=$(grep -o '\b[A-Z][a-zA-Z]*Request\b' "$file" | sort | uniq)
+
+    # Ищем типы *Response (например, AuthorizationStateUpdateResponse, TDLibErrorResponse)
+    local responses=$(grep -o '\b[A-Z][a-zA-Z]*Response\b' "$file" | sort | uniq)
+
+    # Объединяем все типы и добавляем суффикс Tests
+    for model in $requests $responses; do
+        # Добавляем Tests к имени модели
+        models="${models}${model}Tests"$'\n'
+    done
+
+    echo "$models" | grep -v '^$' | sort | uniq
+}
+
+# Функция для замены упоминаний моделей в комментариях на DoCC ссылки
+# Пример: "SetAuthenticationPhoneNumberRequest" -> "<doc:SetAuthenticationPhoneNumberRequestTests>"
+add_doc_links_to_models() {
+    local text="$1"
+
+    # Заменяем *Request на ссылки (например, SetAuthenticationPhoneNumberRequest)
+    # Используем [[:<:]] и [[:>:]] для word boundaries (BSD sed в macOS)
+    text=$(printf '%s\n' "$text" | sed -E 's/[[:<:]]([A-Z][a-zA-Z]*Request)[[:>:]]/<doc:\1Tests>/g')
+
+    # Заменяем *Response на ссылки (например, AuthorizationStateUpdateResponse)
+    text=$(printf '%s\n' "$text" | sed -E 's/[[:<:]]([A-Z][a-zA-Z]*Response)[[:>:]]/<doc:\1Tests>/g')
+
+    printf '%s' "$text"
+}
+
 # Функция для генерации DoCC markdown из тестового файла
 generate_docc_from_test() {
     local test_file="$1"
@@ -166,6 +201,9 @@ EOF
         # Извлечение комментариев из тела функции (//)
         local test_body_comments=$(extract_test_body_comments "$test_file" "$test_line")
 
+        # Добавляем DoCC ссылки на модели в комментариях
+        test_body_comments=$(add_doc_links_to_models "$test_body_comments")
+
         # Добавление в markdown
         cat >> "$output_file" <<EOF
 ### ${test_name}
@@ -194,6 +232,27 @@ EOF
         cat >> "$output_file" <<EOF
 - <doc:Authentication>
 EOF
+    fi
+
+    # Для component-тестов: добавляем ссылки на unit-тесты Request/Response моделей
+    if [[ "$test_type" == "Component" ]]; then
+        local model_refs=$(extract_model_references "$test_file")
+
+        if [ -n "$model_refs" ]; then
+            cat >> "$output_file" <<EOF
+
+### Unit-тесты используемых моделей
+
+EOF
+            # Добавляем ссылку на каждую модель
+            while IFS= read -r model_test; do
+                if [ -n "$model_test" ]; then
+                    cat >> "$output_file" <<EOF
+- <doc:${model_test}>
+EOF
+                fi
+            done <<< "$model_refs"
+        fi
     fi
 }
 

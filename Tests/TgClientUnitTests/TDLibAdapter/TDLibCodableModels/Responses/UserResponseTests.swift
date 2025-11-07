@@ -2,14 +2,14 @@ import Foundation
 import Testing
 @testable import TDLibAdapter
 
-/// Тесты для модели User.
+/// Тесты для модели UserResponse.
 ///
 /// **TDLib API:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1user.html
 ///
 /// TDLib возвращает информацию о пользователе при вызове метода `getMe`.
 /// Используется для верификации успешной авторизации.
-@Suite("Декодирование модели User")
-struct UserTests {
+@Suite("Декодирование модели UserResponse")
+struct UserResponseTests {
 
     /// Тест декодирования пользователя с полными данными.
     ///
@@ -40,7 +40,7 @@ struct UserTests {
 
         let data = Data(json.utf8)
         let decoder = JSONDecoder()
-        let user = try decoder.decode(User.self, from: data)
+        let user = try decoder.decode(UserResponse.self, from: data)
 
         #expect(user.id == 123456789)
         #expect(user.firstName == "John")  // snake_case → camelCase
@@ -64,7 +64,7 @@ struct UserTests {
 
         let data = Data(json.utf8)
         let decoder = JSONDecoder()
-        let user = try decoder.decode(User.self, from: data)
+        let user = try decoder.decode(UserResponse.self, from: data)
 
         #expect(user.id == 987654321)
         #expect(user.firstName == "Jane")
@@ -72,10 +72,10 @@ struct UserTests {
         #expect(user.username == nil)
     }
 
-    /// Тест создания User программно (для тестов).
+    /// Тест создания UserResponse программно (для тестов).
     @Test("Создание пользователя программно")
     func createUserProgrammatically() {
-        let user = User(
+        let user = UserResponse(
             id: 111222333,
             firstName: "Test",
             lastName: "User",

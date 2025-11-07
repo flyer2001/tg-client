@@ -13,7 +13,7 @@ import Foundation
 /// - Обработка ошибок (неверный код, неверный пароль)
 ///
 /// **Related:**
-/// - Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdate)
+/// - Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdateResponse)
 /// - E2E тест: `scripts/manual_e2e_auth.sh` (реальный TDLib)
 /// - TDLib docs: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
 @Suite("TDLibAdapter: Процесс авторизации (High-Level API)")
@@ -34,13 +34,15 @@ struct AuthenticationFlowTests {
         let mockClient = MockTDLibClient()
 
         // Настраиваем mock ответы для каждого шага авторизации
+        // Шаг 1: SetAuthenticationPhoneNumberRequest → AuthorizationStateUpdateResponse (waitCode)
         await mockClient.setMockResponse(
             for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
-            response: .success(AuthorizationStateUpdate.waitCode)
+            response: .success(AuthorizationStateUpdateResponse.waitCode)
         )
+        // Шаг 2: CheckAuthenticationCodeRequest → AuthorizationStateUpdateResponse (ready)
         await mockClient.setMockResponse(
             for: CheckAuthenticationCodeRequest.testWith12345Code,
-            response: .success(AuthorizationStateUpdate.ready)
+            response: .success(AuthorizationStateUpdateResponse.ready)
         )
 
         // When: Отправляем номер телефона
@@ -70,7 +72,7 @@ struct AuthenticationFlowTests {
     /// ```
     ///
     /// **Проверяем:**
-    /// - Ошибка пробрасывается как TDLibError
+    /// - Ошибка пробрасывается как TDLibErrorResponse
     /// - Ошибка логируется в формате "TDLib error [code]: message"
     @Test("Обработка ошибок: неверный код авторизации + логирование")
     func errorHandlingInvalidCode() async throws {
@@ -82,14 +84,15 @@ struct AuthenticationFlowTests {
         let mockClient = MockTDLibClient(logger: logger)
 
         // Настраиваем mock: код неверный → ошибка
-        let tdlibError = TDLibError(code: 400, message: "PHONE_CODE_INVALID")
+        // CheckAuthenticationCodeRequest → TDLibErrorResponse (PHONE_CODE_INVALID)
+        let tdlibError = TDLibErrorResponse(code: 400, message: "PHONE_CODE_INVALID")
         await mockClient.setMockResponse(
             for: CheckAuthenticationCodeRequest.testWith12345Code,
-            response: .failure(tdlibError) as Result<AuthorizationStateUpdate, TDLibError>
+            response: .failure(tdlibError) as Result<AuthorizationStateUpdateResponse, TDLibErrorResponse>
         )
 
-        // When: Отправляем неверный код → ожидаем TDLibError
-        await #expect(throws: TDLibError.self) {
+        // When: Отправляем неверный код → ожидаем TDLibErrorResponse
+        await #expect(throws: TDLibErrorResponse.self) {
             try await mockClient.checkAuthenticationCode("12345")
         }
 

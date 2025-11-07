@@ -77,7 +77,7 @@ swift run tg-client
 
 **Читать только по требованию:**
 - **[TASKS.md](.claude/TASKS.md)** - текущие задачи (часто меняется)
-- **[CHANGELOG.md](.claude/CHANGELOG.md)** - история сессий (⚠️ только prepend через bash, НЕ читать без запроса)
+- **[CHANGELOG.md](.claude/CHANGELOG.md)** - история сессий (⚠️ только prepend через bash)
 - **[MVP.md](.claude/MVP.md)** - цели и scope MVP (по требованию)
 - **[IDEAS.md](.claude/IDEAS.md)** - бэклог для версий после MVP (по требованию)
 - **[SETUP.md](.claude/SETUP.md)** / **[CREDENTIALS.md](.claude/CREDENTIALS.md)** / **[DEPLOY.md](.claude/DEPLOY.md)** - инфраструктура (по требованию)

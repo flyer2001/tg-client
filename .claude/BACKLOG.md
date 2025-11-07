@@ -1,7 +1,7 @@
-# Идеи и будущие фичи
+# Бэклог будущих фич
 
 > **Дата создания:** 2025-10-28
-> **Назначение:** Бэклог идей для версий после MVP (v0.2.0+)
+> **Назначение:** Бэклог идей и фич для версий после MVP (v0.2.0+)
 
 ---
 
@@ -146,6 +146,104 @@
 - [ ] Интеграция с билд-процессом (SPM plugin)
 
 **Приоритет:** Low (делать когда типизируем много методов)
+
+---
+
+### Resilience & Error Handling
+
+#### RESIL-1: Circuit Breaker для внешних сервисов
+**Проблема:** При критичных ошибках (SESSION_REVOKED, AUTH_KEY_UNREGISTERED) DigestOrchestrator может попасть в retry loop, спамя запросами TDLib/OpenAI/Bot API.
+
+**Решение:** Circuit Breaker pattern для предотвращения повторных запросов при unrecoverable ошибках.
+
+**Задачи:**
+- [ ] Создать `CircuitBreaker` actor для отслеживания последовательных ошибок
+- [ ] Классификация ошибок: recoverable (network timeout) vs unrecoverable (SESSION_REVOKED)
+- [ ] Настраиваемый порог: N последовательных ошибок одного типа → open circuit
+- [ ] Интеграция с TDLibClient, OpenAIClient, BotClient
+- [ ] Логирование: "Circuit opened for TDLib after 3 SESSION_REVOKED errors"
+
+**Критерии:**
+- TDLib: 3 ошибки подряд → stop, notify admin
+- OpenAI: quota exceeded → skip summary, send raw messages
+- Bot API: rate limit → exponential backoff
+
+**Приоритет:** HIGH (критично для production stability)
+
+**Связано:** См. `.claude/ARCHITECTURE.md` → Error Handling Strategy
+
+---
+
+#### RESIL-2: Graceful Shutdown с сохранением состояния
+**Проблема:** При критичной ошибке (unrecoverable) теряется прогресс обработки. При следующем запуске начинаем с начала, возможны дубли сообщений.
+
+**Решение:** Сохранение checkpoint при прерывании + resume from last state.
+
+**Задачи:**
+- [ ] StateManager сохраняет прогресс: последний обработанный `chat_id`, `message_id`
+- [ ] При критичной ошибке → flush state to disk перед exit
+- [ ] При restart → проверить checkpoint, resume from last position
+- [ ] Graceful cleanup: закрыть TDLib соединение, flush логи
+- [ ] Exit с понятным сообщением: error code + recommended action
+
+**Пример выхода:**
+```
+[ERROR] SESSION_REVOKED: Telegram session terminated by user
+[INFO] Progress saved: processed 50/100 chats (last_id=12345)
+[ACTION] Re-authorization required. Run: ./tg-client auth
+```
+
+**Требования:**
+- Checkpoint должен быть атомарным (write to temp + rename)
+- Формат: JSON с `version`, `timestamp`, `last_chat_id`, `last_message_id`
+- Валидация checkpoint при загрузке (не старше 24 часов?)
+
+**Приоритет:** HIGH (критично для не потерять прогресс)
+
+---
+
+#### RESIL-3: Error Classification & Metadata Logging
+**Проблема:** Текущее логирование ошибок не даёт достаточно контекста для диагностики production проблем.
+
+**Решение:** Структурированное логирование ошибок с категориями и метаданными.
+
+**Задачи:**
+- [ ] Enum `ErrorCategory`: `.recoverable`, `.unrecoverable`, `.needsAuth`, `.serviceSpecific`
+- [ ] Extension для TDLibErrorResponse: `var category: ErrorCategory`
+- [ ] Логирование с metadata: error code, category, retry count, context (operation)
+- [ ] DigestOrchestrator принимает решение на основе category
+- [ ] Retry только для `.recoverable` с exponential backoff
+
+**Примеры категорий:**
+```swift
+extension TDLibErrorResponse {
+    var category: ErrorCategory {
+        switch self.code {
+        case 401 where message.contains("SESSION_REVOKED"):
+            return .needsAuth
+        case 406, 500:
+            return .unrecoverable
+        case 429: // rate limit
+            return .recoverable
+        default:
+            return .serviceSpecific
+        }
+    }
+}
+```
+
+**Пример лога:**
+```
+[ERROR] TDLib getChats failed
+  code: 401
+  message: SESSION_REVOKED
+  category: needsAuth
+  retry_count: 0
+  operation: fetch_unread_chats
+  action: terminate_and_notify_admin
+```
+
+**Приоритет:** MEDIUM (нужно для observability в production)
 
 ---
 

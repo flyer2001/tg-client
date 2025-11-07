@@ -32,7 +32,435 @@
 
 ## TDD Workflow
 
-RED → GREEN → REFACTOR
+### Структура E2E сценария (DoCC документация)
+
+**Цель:** Описать пользовательский сценарий с точки зрения пользователя (user story), без излишних технических деталей.
+
+#### Обязательные элементы E2E сценария
+
+**1. Заголовок и краткое описание**
+```markdown
+# [Feature Name]
+
+[Одно предложение — что делает пользователь]
+```
+
+**2. User Story**
+Описание с позиции пользователя — что он хочет сделать и какой результат получить.
+
+```markdown
+## User Story
+
+Как пользователь, я хочу [действие], чтобы [результат].
+
+**Ожидаемое поведение:**
+- Успешный сценарий: [описание]
+- Ошибки: Явное сообщение об ошибке на каждом этапе
+```
+
+**3. Официальная документация (если есть)**
+Ссылки только на статьи/руководства, описывающие весь флоу (не модели!).
+
+```markdown
+## Официальная документация
+
+- [Название статьи](https://example.com/flow-guide)
+```
+
+**4. Предусловия**
+Что должно быть настроено/выполнено до запуска сценария.
+
+```markdown
+## Предусловия
+
+- `.env` файл с настройками (см. `.env.example`)
+- Конфигурация: `api_id`, `api_hash`, `encryption_key`, `tdlib_path`
+- [Другие предусловия]
+```
+
+**5. Шаги сценария**
+Краткое описание основных этапов с точки зрения пользователя.
+
+```markdown
+## Шаги
+
+1. **[Название шага]** — [краткое описание]
+   - **Ввод:** [что вводит пользователь]
+   - **Результат:** [что видит пользователь]
+   - **Ошибки:** Возможные сообщения об ошибках
+
+2. **[Следующий шаг]** — ...
+
+**Примечание:** Для опциональных шагов (например, 2FA) указать явно.
+```
+
+**6. Как проверить сценарий**
+Инструкция для запуска и проверки сценария вручную.
+
+```markdown
+## Как проверить сценарий
+
+**Запуск:**
+\`\`\`bash
+swift run tg-client [команда]
+# или
+./scripts/test-scenario.sh
+\`\`\`
+
+**Что проверяем:**
+1. [Шаг проверки 1]
+2. [Шаг проверки 2]
+
+**Ожидаемый результат:** [описание успешного выполнения]
+```
+
+**7. Ссылка на компонентный тест**
+Одна ссылка на соответствующий Component Test (не на модели!).
+
+```markdown
+## Компонентный тест
+
+<doc:ComponentTestName>
+```
+
+#### Что НЕ включать в E2E сценарий
+
+❌ **Документацию на модели** — они будут в Component/Unit тестах
+❌ **Таблицы кодов ошибок** — добавляются в модели ошибок
+❌ **Список используемых компонентов** — структура может меняться
+❌ **Внешние зависимости на Request/Response модели** — только общий флоу
+❌ **Диаграммы состояний** — есть в официальной документации
+❌ **Примеры кода** — это детали реализации, не user story
+❌ **Технические детали (JSON, API вызовы)** — в Component тестах
+
+#### Регистрация E2E сценария в TgClient.md
+
+**ВАЖНО:** Каждый новый E2E сценарий должен быть добавлен в главный файл документации с кратким описанием сценария.
+
+```markdown
+# В Sources/TgClient/TgClient.docc/TgClient.md
+
+## Пользовательские (E2E) сценарии
+
+Полные пользовательские сценарии с навигацией по компонентам:
+- <doc:Authentication> - авторизация пользователя в Telegram
+- <doc:FetchUnreadMessages> - получение непрочитанных сообщений из каналов
+- <doc:[YourNewScenario]> - краткое описание
+```
+
+---
+
+### Outside-In TDD для TDLib интеграции
+
+**Принцип:** начинаем с пользовательского сценария (E2E), спускаемся к деталям реализации.
+
+#### Порядок разработки новой фичи
+
+```
+1. E2E сценарий (DoCC)
+   └─> Описание user story в документации
+   └─> Пример: "Пользователь получает список непрочитанных чатов"
+
+2. Component Test (RED)
+   └─> Пишем РЕАЛЬНЫЙ вызов метода (не заглушку!): mockClient.getChats()
+   └─> Комментарий: требуемые Request/Response модели + ссылки на TDLib docs
+   └─> Пример JSON из TDLib (в комментарии или fixtures)
+   └─> Тест НЕ КОМПИЛИРУЕТСЯ — метод не существует
+   └─> ЭТО И ЕСТЬ RED: код не собирается, а не "тест фейлится с заглушкой"
+
+3. Protocol extension (определяем интерфейс)
+   └─> Добавляем сигнатуру метода в TDLibClientProtocol
+   └─> Смотрим TDLib docs — какие параметры нужны, что возвращается
+   └─> Определяем типы: func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse
+   └─> Component Test всё ещё НЕ КОМПИЛИРУЕТСЯ (нет типов ChatsResponse, ChatList)
+
+4. Unit Tests для моделей (RED)
+   ├─> GetChatsRequestTests — проверка кодирования
+   ├─> ChatsResponseTests — проверка декодирования реального JSON
+   └─> Используем реальные примеры из TDLib docs
+   └─> Тесты НЕ КОМПИЛИРУЮТСЯ (нет моделей)
+
+5. Models implementation (GREEN unit tests)
+   ├─> Создаём GetChatsRequest, ChatsResponse, ChatList enum
+   ├─> Unit-тесты компилируются и зелёные
+   └─> Component Test всё ещё НЕ КОМПИЛИРУЕТСЯ (нет реализации в TDLibClient/Mock)
+
+6. Real implementation (TDLibClient)
+   └─> Реализуем getChats() на реальном клиенте
+   └─> Используем Request/Response из шага 5
+   └─> Обработка ошибок, async/await, логирование
+   └─> Component Test компилируется, но всё ещё RED (MockTDLibClient не реализован)
+
+7. Mock implementation (MockTDLibClient)
+   └─> ВАЖНО: Mock создаём ПОСЛЕ реальной реализации
+   └─> Mock точно имитирует поведение Real (включая edge cases)
+   └─> Используем те же JSON примеры из fixtures
+
+8. Component Test (GREEN)
+   └─> Теперь Mock корректно работает
+   └─> Component Test зелёный
+
+9. E2E validation (manual)
+   └─> Проверяем на живом TDLib
+   └─> Обновляем DoCC сценарий если нужно
+
+10. REFACTOR
+    └─> Документация, edge cases, оптимизация
+```
+
+#### Ключевые правила
+
+1. **RED = не компилируется** — настоящий RED тест пишется как будто метод уже существует:
+   ```swift
+   @Test("Получение списка чатов")
+   func getChatsFromMainList() async throws {
+       let mockClient = MockTDLibClient()
+       let response = try await mockClient.getChats(chatList: .main, limit: 100)
+       #expect(response.chatIds.count > 0)
+   }
+   // Этот тест НЕ СОБЕРЁТСЯ — метода getChats() не существует
+   // НЕ ПИШИ заглушки типа #expect(Bool(false), "TODO")!
+   ```
+
+2. **Mock ПОСЛЕ Real** — имитируем реальное поведение, а не придумываем
+   - Сначала пишем реализацию в TDLibClient (шаг 6)
+   - Потом имитируем это поведение в MockTDLibClient (шаг 7)
+   - Mock должен возвращать те же структуры и обрабатывать те же ошибки
+
+3. **Комментарии в Component Tests** — явно указываем зависимости:
+   ```swift
+   // Требуется: GetChatsRequest, ChatsResponse
+   // TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
+   // Mock JSON: см. Tests/Fixtures/TDLib/chats_response.json
+   ```
+
+4. **Реальные JSON примеры** — берём из TDLib docs, храним в `Tests/Fixtures/TDLib/`
+
+5. **Итеративность** — если на шаге 6 находим новые требования, возвращаемся к шагу 3-4
+
+#### Репозиторий fixtures
+
+```
+Tests/
+└── Fixtures/
+    └── TDLib/
+        ├── chats_response.json          # getChats ответ
+        ├── chat_history_response.json   # getChatHistory ответ
+        ├── authorization_state.json     # authorization updates
+        └── error_response.json          # TDLib ошибки
+```
+
+**Использование:**
+- Unit-тесты проверяют декодирование этих файлов
+- Component-тесты используют в MockTDLibClient
+- Гарантирует соответствие реальным структурам TDLib
+
+---
+
+## Структура файлов моделей
+
+### Request модели (TDLibRequest)
+
+**Расположение:** `Sources/TDLibAdapter/TDLibCodableModels/Requests/`
+
+**Обязательные элементы:**
+- Conformance: `TDLibRequest, Sendable, Equatable`
+- Свойство `type: String` с TDLib методом (например, `"getChats"`)
+- `CodingKeys` enum с маппингом snake_case → camelCase (если нужно)
+- `init` с параметрами запроса (публичный, БЕЗ #if DEBUG)
+
+**Вспомогательные типы:**
+- Enum-ы (например, `ChatList`) находятся в ОДНОМ файле с Request
+- Приватные helper-структуры для сложного кодирования (например, `ChatListMain`)
+
+**Пример:**
+```swift
+public enum ChatList: Sendable, Equatable {
+    case main
+    case archive
+}
+
+public struct GetChatsRequest: TDLibRequest, Sendable, Equatable {
+    public let type = "getChats"
+    public let chatList: ChatList
+    public let limit: Int
+
+    enum CodingKeys: String, CodingKey {
+        case type = "@type"
+        case chatList = "chat_list"
+        case limit
+    }
+
+    public init(chatList: ChatList, limit: Int) {
+        self.chatList = chatList
+        self.limit = limit
+    }
+}
+```
+
+---
+
+### Response модели (TDLibResponse)
+
+**Расположение:** `Sources/TDLibAdapter/TDLibCodableModels/Responses/`
+
+**Обязательные элементы:**
+- Conformance: `TDLibResponse, Sendable` + `Equatable` (если нужно для тестов)
+- Свойство `type: String` с TDLib типом (например, `"chats"`)
+- `CodingKeys` enum с маппингом snake_case → camelCase (если нужно)
+- `init` под `#if DEBUG` для создания в тестах (если используется только в моках)
+
+**Правило для init:**
+- **С #if DEBUG** — если init используется ТОЛЬКО в тестах для создания mock-данных
+  - Примеры: `ChatsResponse`, `AuthorizationStateUpdateResponse`, `TDLibErrorResponse`
+  - Это простые обёртки, которые в production коде создаются только через Decodable
+- **БЕЗ #if DEBUG** — если init используется в production коде
+  - Пример: `UserResponse` — имеет обязательные поля + опциональные, может создаваться программно
+
+**Пример с #if DEBUG:**
+```swift
+public struct ChatsResponse: TDLibResponse, Sendable, Equatable {
+    public let type = "chats"
+    public let chatIds: [Int64]
+
+    enum CodingKeys: String, CodingKey {
+        case chatIds = "chat_ids"
+    }
+
+    #if DEBUG
+    public init(chatIds: [Int64]) {
+        self.chatIds = chatIds
+    }
+    #endif
+}
+```
+
+**Пример БЕЗ #if DEBUG:**
+```swift
+public struct UserResponse: TDLibResponse, Sendable {
+    public let type = "user"
+    public let id: Int64
+    public let firstName: String
+    public let lastName: String
+    public let username: String?
+
+    // Init доступен в production (сложная модель с опциональными полями)
+    public init(id: Int64, firstName: String, lastName: String, username: String? = nil) {
+        self.id = id
+        self.firstName = firstName
+        self.lastName = lastName
+        self.username = username
+    }
+}
+```
+
+---
+
+### Error модели (TDLibErrorResponse)
+
+**Расположение:** `Sources/TDLibAdapter/TDLibCodableModels/Responses/`
+
+**Обязательные элементы:**
+- Conformance: `TDLibResponse, Error, Sendable`
+- Свойство `type = "error"`
+- Свойства `code: Int`, `message: String`
+- `init` под `#if DEBUG` (используется только в моках)
+
+**Пример:**
+```swift
+public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
+    public let type = "error"
+    public let code: Int
+    public let message: String
+
+    #if DEBUG
+    public init(code: Int, message: String) {
+        self.code = code
+        self.message = message
+    }
+    #endif
+}
+```
+
+---
+
+### Ключевые правила
+
+1. **Держите связанные типы вместе** — enum ChatList в файле GetChatsRequest.swift
+2. **Используйте #if DEBUG для mock-only init** — если init нужен только для тестов
+3. **Публичные init для production** — если модель создаётся программно (не только через JSON)
+4. **Всегда Sendable** — для использования в async контексте
+5. **Equatable по требованию** — для тестов с #expect(model1 == model2)
+6. **CodingKeys для snake_case** — TDLib использует snake_case, Swift — camelCase
+
+---
+
+### Chicago School TDD для Core логики
+
+**Принцип:** начинаем с моделей данных и бизнес-логики (Inside-Out), двигаемся к API.
+
+#### Когда использовать Chicago (Inside-Out)
+
+- ✅ **Core бизнес-логика** (DigestOrchestrator, StateManager)
+- ✅ **Наши протоколы** (MessageSourceProtocol, SummaryGeneratorProtocol)
+- ✅ **Модели домена** (SourceMessage, DigestSummary)
+- ✅ **Когда мы контролируем дизайн** (не зависим от внешних структур)
+
+#### Порядок разработки (Inside-Out)
+
+```
+1. Unit Tests для моделей (RED)
+   └─> Тесты на модели данных (SourceMessage, DigestSummary)
+
+2. Models implementation (GREEN)
+   └─> Создаём модели с валидацией
+
+3. Unit Tests для логики (RED)
+   └─> Тесты бизнес-правил (например, фильтрация сообщений)
+
+4. Business logic (GREEN)
+   └─> Реализация core логики
+
+5. Protocol definition
+   └─> Определяем публичный контракт (MessageSourceProtocol)
+
+6. Component Tests (RED)
+   └─> Тестируем интеграцию компонентов (например, DigestOrchestrator использует MessageSource)
+
+7. Implementation (GREEN)
+   └─> Реализация оркестрации
+
+8. E2E validation (manual)
+   └─> Проверка всего флоу
+```
+
+#### Гибридный подход в проекте
+
+**Реальность:** в одном проекте комбинируем оба подхода.
+
+```
+DigestOrchestrator (Chicago — наша логика)
+    ├─> ChannelMessageSource (Chicago — наш дизайн)
+    │   └─> TDLibClient.getChats() (London — TDLib adapter)
+    ├─> SummaryGenerator (Chicago — наш интерфейс)
+    │   └─> OpenAIClient (London — OpenAI adapter)
+    └─> BotNotifier (Chicago — наш интерфейс)
+        └─> TelegramBotClient (London — Telegram adapter)
+```
+
+**Правило:**
+- **Границы системы (adapters к внешним API):** London TDD (Outside-In)
+- **Внутренняя логика (core, протоколы):** Chicago TDD (Inside-Out)
+- **Переход:** готовый adapter становится зависимостью для core логики
+
+**Пример:**
+1. Сначала: `TDLibClient.getChats()` — **London** (адаптируемся к TDLib)
+2. Потом: `ChannelMessageSource.fetchUnreadMessages()` — **Chicago** (наш дизайн, использует готовый TDLibClient через моки)
+3. Наконец: `DigestOrchestrator.run()` — **Chicago** (оркестрация, использует готовые MessageSource/SummaryGenerator)
+
+---
+
+### RED → GREEN → REFACTOR
 
 ### Документация через тесты
 

@@ -7,7 +7,7 @@ extension TDLibClient: TDLibClientProtocol {
 
     // MARK: - Authentication Methods
 
-    public func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdate {
+    public func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdateResponse {
         // Отправляем запрос на установку номера телефона
         send(SetAuthenticationPhoneNumberRequest(phoneNumber: phoneNumber))
 
@@ -15,7 +15,7 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForAuthorizationUpdate()
     }
 
-    public func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdate {
+    public func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdateResponse {
         // Отправляем запрос на проверку кода
         send(CheckAuthenticationCodeRequest(code: code))
 
@@ -23,7 +23,7 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForAuthorizationUpdate()
     }
 
-    public func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate {
+    public func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdateResponse {
         // Отправляем запрос на проверку пароля 2FA
         send(CheckAuthenticationPasswordRequest(password: password))
 
@@ -33,12 +33,22 @@ extension TDLibClient: TDLibClientProtocol {
 
     // MARK: - User Methods
 
-    public func getMe() async throws -> User {
+    public func getMe() async throws -> UserResponse {
         // Отправляем запрос на получение информации о текущем пользователе
         send(GetMeRequest())
 
         // Ожидаем ответа от TDLib
-        return try await waitForResponse(ofType: User.self)
+        return try await waitForResponse(ofType: UserResponse.self)
+    }
+
+    // MARK: - Chat Methods
+
+    public func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse {
+        // Отправляем запрос на получение списка чатов
+        send(GetChatsRequest(chatList: chatList, limit: limit))
+
+        // Ожидаем ответа от TDLib
+        return try await waitForResponse(ofType: ChatsResponse.self)
     }
 
     // MARK: - Helper Methods
@@ -52,7 +62,7 @@ extension TDLibClient: TDLibClientProtocol {
     ///
     /// - Returns: Обновление состояния авторизации
     /// - Throws: `TDLibError` если TDLib вернул ошибку
-    private func waitForAuthorizationUpdate() async throws -> AuthorizationStateUpdate {
+    private func waitForAuthorizationUpdate() async throws -> AuthorizationStateUpdateResponse {
         // Используем таймаут для каждого receive call
         let timeout = authorizationPollTimeout
 
@@ -99,9 +109,21 @@ extension TDLibClient: TDLibClientProtocol {
     ///
     /// **Таймаут:** использует `authorizationPollTimeout` из конфигурации клиента.
     ///
+    /// **Error handling:**
+    /// Все ошибки TDLib пробрасываются как `TDLibErrorResponse`. Критичные коды:
+    /// - **SESSION_REVOKED / AUTH_KEY_UNREGISTERED**: Требуется ре-авторизация (пользователь завершил все сессии)
+    /// - **500**: TDLib client закрыт, необходим restart приложения
+    /// - **406**: Не показывать пользователю (внутренняя ошибка TDLib)
+    /// - **USER_DEACTIVATED**: Аккаунт заблокирован/деактивирован
+    ///
+    /// См. https://core.telegram.org/api/errors для полного списка кодов ошибок.
+    ///
+    /// **TODO (post-MVP):** Circuit breaker для предотвращения retry loops при критичных ошибках.
+    /// См. `.claude/ARCHITECTURE.md`: Error Handling Strategy
+    ///
     /// - Parameter ofType: Тип ожидаемого ответа
     /// - Returns: Ответ указанного типа
-    /// - Throws: `TDLibError` если TDLib вернул ошибку
+    /// - Throws: `TDLibErrorResponse` если TDLib вернул ошибку
     private func waitForResponse<T: TDLibResponse>(ofType: T.Type) async throws -> T {
         let timeout = authorizationPollTimeout
 

@@ -28,7 +28,7 @@ actor MockTDLibClient: TDLibClientProtocol {
     ///
     /// Ключ - TDLibRequest.type (например, "setAuthenticationPhoneNumber", "getMe")
     /// Значение - Result с TDLibResponse (любого типа) или ошибкой
-    private var mockResponses: [String: Result<any TDLibResponse, TDLibError>] = [:]
+    private var mockResponses: [String: Result<any TDLibResponse, TDLibErrorResponse>] = [:]
 
     /// Logger для записи событий (опционально, для тестов логирования)
     private let logger: Logger?
@@ -50,16 +50,16 @@ actor MockTDLibClient: TDLibClientProtocol {
     ///
     /// **Примеры:**
     /// ```swift
-    /// // Для методов авторизации - передаём AuthorizationStateUpdate
+    /// // Для методов авторизации - передаём AuthorizationStateUpdateResponse
     /// await mockClient.setMockResponse(
     ///     for: CheckAuthenticationPasswordRequest.testWith2FAPassword,
-    ///     response: .success(AuthorizationStateUpdate(authorizationState: AuthorizationStateInfo(type: "authorizationStateReady")))
+    ///     response: .success(AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateReady")))
     /// )
     ///
-    /// // Для getMe - передаём User
+    /// // Для getMe - передаём UserResponse
     /// await mockClient.setMockResponse(
     ///     for: GetMeRequest(),
-    ///     response: .success(User(id: 123, firstName: "John", lastName: "Doe"))
+    ///     response: .success(UserResponse(id: 123, firstName: "John", lastName: "Doe"))
     /// )
     /// ```
     ///
@@ -68,30 +68,35 @@ actor MockTDLibClient: TDLibClientProtocol {
     ///   - response: Result с TDLibResponse или ошибкой
     func setMockResponse<Request: TDLibRequest, Response: TDLibResponse>(
         for request: Request,
-        response: Result<Response, TDLibError>
+        response: Result<Response, TDLibErrorResponse>
     ) {
         mockResponses[request.type] = response.map { $0 as any TDLibResponse }
     }
 
     // MARK: - TDLibClientProtocol
 
-    func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdate {
+    func setAuthenticationPhoneNumber(_ phoneNumber: String) async throws -> AuthorizationStateUpdateResponse {
         let request = SetAuthenticationPhoneNumberRequest(phoneNumber: phoneNumber)
         return try getMockResponse(for: request)
     }
 
-    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdate {
+    func checkAuthenticationCode(_ code: String) async throws -> AuthorizationStateUpdateResponse {
         let request = CheckAuthenticationCodeRequest(code: code)
         return try getMockResponse(for: request)
     }
 
-    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdate {
+    func checkAuthenticationPassword(_ password: String) async throws -> AuthorizationStateUpdateResponse {
         let request = CheckAuthenticationPasswordRequest(password: password)
         return try getMockResponse(for: request)
     }
 
-    func getMe() async throws -> User {
+    func getMe() async throws -> UserResponse {
         let request = GetMeRequest()
+        return try getMockResponse(for: request)
+    }
+
+    func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse {
+        let request = GetChatsRequest(chatList: chatList, limit: limit)
         return try getMockResponse(for: request)
     }
 
@@ -104,7 +109,7 @@ actor MockTDLibClient: TDLibClientProtocol {
     ///
     /// - Parameter request: TDLib запрос
     /// - Returns: Ответ указанного типа
-    /// - Throws: MockError.responseNotConfigured если ответ не настроен, или TDLibError если настроен .failure
+    /// - Throws: MockError.responseNotConfigured если ответ не настроен, или TDLibErrorResponse если настроен .failure
     private func getMockResponse<Request: TDLibRequest, Response: TDLibResponse>(for request: Request) throws -> Response {
         guard let result = mockResponses[request.type] else {
             throw MockError.responseNotConfigured(requestType: request.type)
@@ -183,21 +188,21 @@ extension CheckAuthenticationPasswordRequest {
     }
 }
 
-// MARK: - AuthorizationStateUpdate Test Helpers
+// MARK: - AuthorizationStateUpdateResponse Test Helpers
 
-extension AuthorizationStateUpdate {
+extension AuthorizationStateUpdateResponse {
     /// Создаёт update для состояния "waiting for code"
     static var waitCode: Self {
-        AuthorizationStateUpdate(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitCode"))
+        AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitCode"))
     }
 
     /// Создаёт update для состояния "waiting for password"
     static var waitPassword: Self {
-        AuthorizationStateUpdate(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitPassword"))
+        AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitPassword"))
     }
 
     /// Создаёт update для состояния "ready"
     static var ready: Self {
-        AuthorizationStateUpdate(authorizationState: AuthorizationStateInfo(type: "authorizationStateReady"))
+        AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateReady"))
     }
 }

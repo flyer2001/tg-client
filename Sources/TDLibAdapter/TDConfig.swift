@@ -58,6 +58,24 @@ public struct TDConfig: Sendable {
     /// **По умолчанию:** `.fatal`
     public let logVerbosity: TDLibLogVerbosity
 
+    /// Ключ шифрования для базы данных TDLib (AES-256).
+    ///
+    /// **Безопасность:**
+    /// - Пустая строка (`""`) - БД не шифруется (НЕБЕЗОПАСНО!)
+    /// - Непустая строка - БД шифруется AES-256
+    ///
+    /// **Рекомендации:**
+    /// - Используйте случайную строку 32+ символов
+    /// - Генерация: `openssl rand -base64 32`
+    /// - Храните в переменной окружения `TDLIB_DATABASE_ENCRYPTION_KEY`
+    ///
+    /// **Важно:**
+    /// - При смене ключа старая БД станет недоступной
+    /// - Храните ключ безопасно (не коммитьте в git!)
+    ///
+    /// **По умолчанию:** пустая строка (НЕ рекомендуется для production)
+    public let databaseEncryptionKey: String
+
     /// Создаёт новую конфигурацию TDLib.
     ///
     /// - Parameters:
@@ -66,11 +84,20 @@ public struct TDConfig: Sendable {
     ///   - stateDir: Директория для базы данных и файлов (рекомендуется `~/.tdlib`)
     ///   - logPath: Путь к файлу логов (рекомендуется `~/.tdlib/tdlib.log`)
     ///   - logVerbosity: Уровень детализации логов TDLib (по умолчанию `.fatal`)
-    public init(apiId: Int32, apiHash: String, stateDir: String, logPath: String, logVerbosity: TDLibLogVerbosity = .fatal) {
+    ///   - databaseEncryptionKey: Ключ шифрования БД (рекомендуется задать из env)
+    public init(
+        apiId: Int32,
+        apiHash: String,
+        stateDir: String,
+        logPath: String,
+        logVerbosity: TDLibLogVerbosity = .fatal,
+        databaseEncryptionKey: String = ""
+    ) {
         self.apiId = apiId
         self.apiHash = apiHash
         self.stateDir = stateDir
         self.logPath = logPath
         self.logVerbosity = logVerbosity
+        self.databaseEncryptionKey = databaseEncryptionKey
     }
 }

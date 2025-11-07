@@ -60,6 +60,88 @@ CLI-приложение, которое:
 - Структура директории состояния: `$TDLIB_STATE_DIR/{db,files}` плюс `tdlib.log`
 - Клиент автоматически уничтожается при deinit, освобождая ресурсы TDLib
 
+## Error Handling Strategy
+
+### Принципы обработки ошибок
+
+В проекте различаем три категории ошибок внешних сервисов:
+
+#### 1. Recoverable (можно retry)
+Временные проблемы, которые могут исчезнуть при повторной попытке:
+- Network timeout
+- TDLib 500 (можно пересоздать клиент)
+- Rate limit 429 (retry с exponential backoff)
+
+#### 2. Unrecoverable (требуется вмешательство администратора)
+Критичные ошибки, при которых автоматический retry бесполезен:
+- **SESSION_REVOKED / AUTH_KEY_UNREGISTERED**: Пользователь завершил все сессии → нужна ре-авторизация
+- **USER_DEACTIVATED**: Аккаунт заблокирован/деактивирован → проверить статус аккаунта
+- **500 (TDLib closed)**: TDLib client в final state → restart приложения
+- **406**: Внутренняя ошибка TDLib, не показывать пользователю
+
+#### 3. Service-specific (специфичные для сервиса)
+- **OpenAI quota exceeded**: Skip summary, отправить raw messages
+- **Bot API rate limit**: Exponential backoff
+
+### Graceful Shutdown
+
+При критичной ошибке (unrecoverable) приложение должно:
+1. **Сохранить состояние**: Прогресс обработки (последний обработанный chat_id)
+2. **Cleanup resources**: Закрыть соединения, flush логи
+3. **Exit с понятным сообщением**: Указать причину и рекомендуемые действия
+
+**Пример:**
+```
+[ERROR] SESSION_REVOKED: Telegram session terminated by user
+[INFO] Progress saved: processed 50/100 chats (last_id=12345)
+[ACTION] Re-authorization required. Run: ./tg-client auth
+```
+
+### Circuit Breaker Pattern
+
+**TODO (post-MVP):** Предотвращение retry loops при критичных ошибках.
+
+**Проблема:** Если TDLib возвращает SESSION_REVOKED, а DigestOrchestrator в retry loop → спам запросов.
+
+**Решение:**
+- Считать последовательные ошибки одного типа
+- После N ошибок подряд (например, 3) → stop, перейти в graceful shutdown
+- Не применять для transient errors (network timeout)
+
+**Пример реализации:**
+```swift
+actor CircuitBreaker {
+    private var consecutiveErrors: [String: Int] = [:]
+
+    func recordError(code: Int) throws {
+        let key = String(code)
+        consecutiveErrors[key, default: 0] += 1
+
+        if consecutiveErrors[key]! >= 3 {
+            throw CircuitBreakerError.open(code: code)
+        }
+    }
+
+    func reset() {
+        consecutiveErrors.removeAll()
+    }
+}
+```
+
+**Связанные задачи:** См. `.claude/IDEAS.md` → RESIL-1, RESIL-2, RESIL-3
+
+### Логирование ошибок
+
+Все ошибки внешних сервисов логируются с метаданными:
+- **Error code** и **message** из сервиса
+- **Категория** (recoverable/unrecoverable)
+- **Retry count** (если применимо)
+- **Context**: какая операция выполнялась (getChats, summarize, sendNotification)
+
+**TDLib ошибки:** См. https://core.telegram.org/api/errors
+
+---
+
 ## Зависимости
 
 См. `Package.swift`. Основные:

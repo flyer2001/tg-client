@@ -12,10 +12,10 @@ import Foundation
 /// - Обновляется `init(from:)` для декодирования
 public enum TDLibUpdate: Sendable {
     /// Обновление состояния авторизации
-    case authorizationState(AuthorizationStateUpdate)
+    case authorizationState(AuthorizationStateUpdateResponse)
 
     /// Ошибка от TDLib
-    case error(TDLibError)
+    case error(TDLibErrorResponse)
 
     /// Успешный ответ без данных (ok)
     case ok
@@ -39,11 +39,11 @@ public enum TDLibUpdate: Sendable {
 
         switch type {
         case "error":
-            let error = try JSONDecoder().decode(TDLibError.self, from: data)
+            let error = try JSONDecoder().decode(TDLibErrorResponse.self, from: data)
             self = .error(error)
 
         case "updateAuthorizationState":
-            let update = try JSONDecoder().decode(AuthorizationStateUpdate.self, from: data)
+            let update = try JSONDecoder().decode(AuthorizationStateUpdateResponse.self, from: data)
             self = .authorizationState(update)
 
         case "ok":
