@@ -165,7 +165,8 @@ swift run tg-client [команда]
 ☐ Real implementation (TDLibClient) → Component Test компилируется но RED
 ☐ Mock implementation (MockTDLibClient) → Component Test GREEN
 ☐ E2E validation (manual на живом TDLib)
-☐ Refactor (документация, edge cases)
+☐ Валидация DoCC документации (генерация + проверка ссылок)
+☐ Refactor (код + документация)
 ```
 
 **На каждом этапе:** делай паузу и спрашивай "Продолжаем дальше?"
@@ -220,9 +221,90 @@ swift run tg-client [команда]
    └─> Проверяем на живом TDLib
    └─> Обновляем DoCC сценарий если нужно
 
-10. REFACTOR
-    └─> Документация, edge cases, оптимизация
+10. Валидация документации
+    └─> Запускаем скрипт генерации: ./scripts/generate-docc-from-tests.sh
+    └─> Проверяем создание Component Test документации (.docc/Tests/Component-Tests/)
+    └─> Проверяем ссылки на Unit-тесты моделей внутри Component теста
+    └─> Добавляем E2E сценарий в TgClient.md (если новый)
+    └─> Проверяем ссылку на Component Test в E2E сценарии
+
+11. REFACTOR
+    └─> Код: edge cases, оптимизация, читаемость
+    └─> Документация: уточнение формулировок, добавление примеров
 ```
+
+#### Валидация DoCC документации (обязательный шаг)
+
+После завершения реализации фичи **обязательно** проверяем корректность документации:
+
+**Шаг 1: Генерация документации**
+```bash
+./scripts/generate-docc-from-tests.sh
+```
+
+**Шаг 2: Проверка Component Test документации**
+```bash
+# Проверяем что создан .md файл для component теста
+ls Sources/TgClient/TgClient.docc/Tests/Component-Tests/[YourComponentTest].md
+```
+
+Внутри файла должны быть:
+- ✅ Описание компонентного теста (из @Suite doc comment)
+- ✅ Секция `## Topics` → `### Unit-тесты используемых моделей`
+- ✅ Ссылки на все Request/Response модели через `<doc:ModelNameTests>`
+
+**Пример корректной секции Topics:**
+```markdown
+## Topics
+
+### Связанная документация
+
+- <doc:TgClient>
+- <doc:Authentication>
+
+### Unit-тесты используемых моделей
+
+- <doc:SetAuthenticationPhoneNumberRequestTests>
+- <doc:CheckAuthenticationCodeRequestTests>
+- <doc:AuthorizationStateUpdateResponseTests>
+- <doc:TDLibErrorResponseTests>
+```
+
+**Шаг 3: Проверка Unit Test документации**
+```bash
+# Проверяем что созданы .md файлы для каждой модели
+ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/SetAuthenticationPhoneNumberRequestTests.md
+ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/AuthorizationStateUpdateResponseTests.md
+```
+
+**Шаг 4: Регистрация E2E сценария (если новый)**
+
+Добавляем ссылку в `Sources/TgClient/TgClient.docc/TgClient.md`:
+```markdown
+## Topics
+
+### Пользовательские (E2E) сценарии
+
+- <doc:Authentication>
+- <doc:FetchUnreadMessages>
+- <doc:[YourNewScenario]>  ← добавить здесь
+```
+
+**Шаг 5: Проверка ссылки на Component Test в E2E сценарии**
+
+В E2E сценарии (`Sources/TgClient/TgClient.docc/E2E-Scenarios/[Scenario].md`) должна быть секция:
+```markdown
+## Компонентный тест
+
+<doc:[YourComponentTest]>
+```
+
+**Если что-то не генерируется:**
+1. Проверь наличие `@Suite` doc comment в тестовом файле
+2. Проверь что имена Request/Response моделей упоминаются в комментариях component теста
+3. Запусти скрипт повторно с выводом ошибок: `bash -x ./scripts/generate-docc-from-tests.sh`
+
+---
 
 #### Ключевые правила
 

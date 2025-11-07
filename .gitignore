@@ -54,3 +54,8 @@ run.sh
 *.doccarchive
 docs/generated/
 .docc-build/
+
+# DoCC документация, автоматически сгенерированная из тестов (генерируется в CI)
+# E2E-Scenarios/ - вручную созданные, поэтому НЕ игнорируются
+Sources/TgClient/TgClient.docc/Tests/Unit-Tests/
+Sources/TgClient/TgClient.docc/Tests/Component-Tests/

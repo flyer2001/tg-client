@@ -257,64 +257,16 @@ EOF
 }
 
 # Обработка Unit тестов
-for test_file in Tests/TgClientUnitTests/**/*Tests.swift; do
-    if [ -f "$test_file" ]; then
-        generate_docc_from_test "$test_file" "$UNIT_TESTS_DIR" "Unit"
-    fi
-done
+while IFS= read -r test_file; do
+    generate_docc_from_test "$test_file" "$UNIT_TESTS_DIR" "Unit"
+done < <(find Tests/TgClientUnitTests -name "*Tests.swift" -type f)
 
 # Обработка Component тестов
-for test_file in Tests/TgClientComponentTests/**/*Tests.swift; do
-    if [ -f "$test_file" ]; then
-        # Пропускаем Mocks (они не тесты)
-        if [[ "$test_file" != *"Mock"* ]]; then
-            generate_docc_from_test "$test_file" "$COMPONENT_TESTS_DIR" "Component"
-        fi
+while IFS= read -r test_file; do
+    # Пропускаем Mocks (они не тесты)
+    if [[ "$test_file" != *"Mock"* ]]; then
+        generate_docc_from_test "$test_file" "$COMPONENT_TESTS_DIR" "Component"
     fi
-done
+done < <(find Tests/TgClientComponentTests -name "*Tests.swift" -type f)
 
-# Создание индексного файла для навигации
-INDEX_FILE="$DOCC_BASE/Tests/Tests-Overview.md"
-cat > "$INDEX_FILE" <<'EOF'
-# Документация тестов
-
-Документация автоматически сгенерирована из тестовых файлов проекта.
-
-## Описание
-
-Тесты в этом проекте следуют принципу **"Документация через тесты"**:
-- Тесты = источник правды о внешних API (TDLib, OpenAI, Bot API)
-- Doc comments содержат примеры реальных JSON ответов
-- Ссылки на официальную документацию внешних API
-
-## Иерархия тестов
-
-```
-E2E Сценарии (пользовательские)
-    ↓
-Компонентные тесты (интеграция)
-    ↓
-Юнит-тесты (изолированные)
-```
-
-## Topics
-
-### Компонентные тесты
-
-Компонентные тесты проверяют интеграцию между модулями:
-- Используют моки для изоляции внешних зависимостей
-- Проверяют полные пользовательские сценарии (авторизация, получение сообщений)
-- Содержат документацию о работе внешних API
-
-### Юнит-тесты
-
-Юнит-тесты проверяют изолированные функции/классы:
-- Декодирование JSON моделей
-- Валидация входных данных
-- Обработка граничных случаев
-
-## Связанная документация
-
-- <doc:TgClient> — главная страница документации
-- <doc:Authentication> — E2E сценарий авторизации
-EOF
+echo "✅ DoCC документация успешно сгенерирована"
