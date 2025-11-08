@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import TDLibAdapter
+@testable import DigestCore
 
 /// Component тест для ChannelMessageSource.
 ///

@@ -48,6 +48,11 @@ let package = Package(
                 .copy("TgClient.docc")
             ]
         ),
+        .target(
+            name: "DigestCore",
+            dependencies: ["TDLibAdapter"],
+            path: "Sources/DigestCore"
+        ),
         // Test targets
         .testTarget(
             name: "TgClientUnitTests",
@@ -56,12 +61,12 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter"],
+            dependencies: ["TDLibAdapter", "DigestCore"],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(
             name: "TgClientE2ETests",
-            dependencies: ["TDLibAdapter", "App"],
+            dependencies: ["TDLibAdapter", "DigestCore", "App"],
             path: "Tests/TgClientE2ETests"
         )
     ]

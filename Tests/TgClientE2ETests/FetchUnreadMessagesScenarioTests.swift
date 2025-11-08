@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import Logging
 @testable import TDLibAdapter
+@testable import DigestCore
 
 /// E2E тест для сценария получения непрочитанных сообщений из каналов.
 ///
