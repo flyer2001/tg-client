@@ -1,3 +1,25 @@
+## [2025-01-08] - MVP-1.6 RED фаза: ChatType + ChannelMessageSource тесты
+
+**Реализовано:**
+- ChatType enum (TDD: RED → GREEN) - декодирование всех типов чатов TDLib (private, basicGroup, supergroup, secret)
+- E2E тест FetchUnreadMessages (RED - не компилируется, ждёт ChannelMessageSource)
+- Component Test ChannelMessageSourceTests (RED - фокус на интеграции, правильный подход)
+
+**Изменения в процессе разработки:**
+- Удалён GetChatsTests (component test от которого отказались)
+- Удалён E2ETestsPlaceholder (заменён на реальный тест)
+- TESTING.md усилён: добавлены явные запреты на преждевременное создание Mock API (антипаттерны + правильный подход)
+
+**Статистика:**
+- 6 unit-тестов для ChatType ✔
+- 1 E2E тест (RED - не компилируется)
+- 1 Component test (RED - не компилируется)
+
+**Следующая сессия:**
+- Декомпозиция ChannelMessageSource на подкомпоненты (ChannelCache, UpdatesHandler, MessageFetcher)
+- Unit тесты для подкомпонентов
+- TDLib модели: Chat, Message, loadChats/getChat/getChatHistory
+
 ## [2025-01-08] - Архитектурное решение: ChannelMessageSource с декомпозицией
 
 **Проблема:**

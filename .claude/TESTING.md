@@ -179,7 +179,8 @@ swift run tg-client [команда]
    └─> Пример: "Пользователь получает список непрочитанных чатов"
 
 2. Component Test (RED)
-   └─> Пишем РЕАЛЬНЫЙ вызов метода (не заглушку!): mockClient.getChats()
+   └─> ⚠️ ВАЖНО: Пишем РЕАЛЬНЫЙ вызов метода: `mockClient.getChats()`, а НЕ `mockClient.mockGetChats()`
+   └─> ⚠️ НЕ ПРИДУМЫВАЙ Mock API! Используй то же имя метода что будет в TDLibClient
    └─> Комментарий: требуемые Request/Response модели + ссылки на TDLib docs
    └─> Пример JSON из TDLib (в комментарии или fixtures)
    └─> Тест НЕ КОМПИЛИРУЕТСЯ — метод не существует
@@ -492,10 +493,39 @@ ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/AuthorizationStateUpdateRespo
    // НЕ ПИШИ заглушки типа #expect(Bool(false), "TODO")!
    ```
 
-2. **Mock ПОСЛЕ Real** — имитируем реальное поведение, а не придумываем
-   - Сначала пишем реализацию в TDLibClient (шаг 6)
-   - Потом имитируем это поведение в MockTDLibClient (шаг 7)
-   - Mock должен возвращать те же структуры и обрабатывать те же ошибки
+2. **Mock ПОСЛЕ Real — НИКОГДА не придумывай Mock API раньше времени!**
+
+   **✅ ПРАВИЛЬНО:**
+   - Шаг 2: Component Test вызывает `mockClient.getChat(id: 123)` (РЕАЛЬНЫЙ метод)
+   - Шаг 6: Реализуем `TDLibClient.getChat(id:)` с обработкой ошибок, async/await
+   - Шаг 7: MockTDLibClient получает тот же метод `getChat(id:)` и имитирует поведение Real
+
+   **❌ НЕПРАВИЛЬНО (антипаттерн):**
+   ```swift
+   // ❌ НЕ ДЕЛАЙ ТАК! Придумывание Mock API раньше Real:
+   mockClient.mockGetChat(id: 123, title: "Channel", type: .supergroup, unreadCount: 5)
+   mockClient.mockLoadChats(chatIds: [123, 456])
+   mockClient.setupMockData(...)
+
+   // Проблема: мы не знаем как будет работать РЕАЛЬНЫЙ getChat()!
+   // - Какие параметры нужны?
+   // - Какие ошибки может вернуть?
+   // - Как обрабатывается edge case?
+   ```
+
+   **✅ ПРАВИЛЬНО:**
+   ```swift
+   // Пишем как будто метод уже существует:
+   let chat = try await mockClient.getChat(id: 123)
+   #expect(chat.type == .supergroup(supergroupId: 123, isChannel: true))
+   #expect(chat.unreadCount == 5)
+
+   // Component Test НЕ КОМПИЛИРУЕТСЯ (это RED)
+   // Переходим к шагу 3: Protocol extension, шагу 4: Unit Tests моделей, шагу 6: Real implementation
+   // ТОЛЬКО ПОСЛЕ реализации Real - создаём Mock (шаг 7)
+   ```
+
+   **Правило:** Mock имитирует РЕАЛЬНОЕ поведение, а не придуманное. Если ты не знаешь как работает Real - НЕЛЬЗЯ делать Mock.
 
 3. **Комментарии для DoCC генерации** — явно указывай Request/Response модели:
    ```swift

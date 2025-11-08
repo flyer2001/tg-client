@@ -64,10 +64,12 @@
 - [ ] **REFACTOR:** Добавить Sendable, Equatable, документацию
 - [ ] Поля: id, type (enum ChatType), title, lastReadInboxMessageId, unreadCount
 
-**1.2 Enum ChatType** (~15 мин)
-- [ ] **RED:** Тест декодирования всех типов чатов
-- [ ] **GREEN:** Создать `ChatType` enum (private, supergroup, channel, secret, basic)
-- [ ] **REFACTOR:** Документация для каждого типа
+**1.2 Enum ChatType** ✅ (~15 мин) **[ЗАВЕРШЕНО 2025-01-08]**
+- [x] **RED:** Тест декодирования всех типов чатов
+- [x] **GREEN:** Создать `ChatType` enum (private, supergroup, channel, secret, basic)
+- [x] **REFACTOR:** Документация для каждого типа
+- [x] **Файлы:** `Sources/TDLibAdapter/TDLibCodableModels/Responses/ChatType.swift`, `Tests/TgClientUnitTests/.../ChatTests.swift`
+- [x] **Тесты:** 6 unit-тестов проходят ✔
 
 **1.3 Модель Message** (~45 мин)
 - [ ] **RED:** Тест декодирования `Message` из JSON
@@ -124,7 +126,13 @@
 - Coordinator pattern: `ChannelMessageSource` координирует Workers
 - Dependency Injection: зависимости через `init`
 
-**Статус:** Планируется (следующая сессия)
+**Статус:** В работе - RED фаза завершена (E2E + Component тесты созданы, не компилируются)
+
+**Контекст для следующей сессии (2025-01-08):**
+- E2E и Component тесты написаны (RED - не компилируются, ждут реализации)
+- Удалён устаревший GetChatsTests (component test на getChats)
+- TESTING.md усилён: запрет на преждевременное создание Mock API
+- Следующий шаг: декомпозиция на подкомпоненты (ChannelCache, UpdatesHandler, MessageFetcher) с Unit тестами
 
 #### Задачи (по Outside-In TDD с декомпозицией):
 
@@ -134,17 +142,19 @@
 - [x] Обновить `TESTING.md` — добавить раздел "Декомпозиция при обнаружении сложности"
 - [x] Обновить `ARCHITECTURE.md` — добавить раздел "Single Responsibility Principle (SRP)"
 
-**1.2 E2E сценарий (тест)** (~30 мин)
-- [ ] **RED:** Создать `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift`
-- [ ] Тест: подключение → получение непрочитанных → проверка структуры
-- [ ] Использовать реальный TDLib клиент (сохранённая сессия)
-- [ ] Тест НЕ КОМПИЛИРУЕТСЯ (нет ChannelMessageSource)
-- [ ] Добавить комментарий с ожидаемым поведением
+**1.2 E2E сценарий (тест)** ✅ (~30 мин) **[ЗАВЕРШЕНО 2025-01-08]**
+- [x] **RED:** Создать `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift`
+- [x] Тест: подключение → получение непрочитанных → проверка структуры
+- [x] Использовать реальный TDLib клиент (упрощённая версия - фокус на ChannelMessageSource)
+- [x] Тест НЕ КОМПИЛИРУЕТСЯ (нет ChannelMessageSource) ✔ RED достигнут
+- [x] Удалён placeholder test `E2ETestsPlaceholder.swift`
 
-**1.3 Component Test → обнаружение сложности** (~1 час)
-- [ ] **RED:** Создать `Tests/TgClientComponentTests/ChannelMessageSourceTests.swift`
-- [ ] Попытаться написать тест с MockTDLibClient
-- [ ] **ОБНАРУЖЕНИЕ:** нужен updates handler, cache, фильтрация → СТОП!
+**1.3 Component Test** ✅ (~30 мин) **[ЗАВЕРШЕНО 2025-01-08]**
+- [x] **RED:** Создать `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift`
+- [x] Тест вызывает `messageSource.fetchUnreadMessages()` (фокус на интеграции, НЕ на внутренних шагах)
+- [x] Тест НЕ КОМПИЛИРУЕТСЯ (нет ChannelMessageSource) ✔ RED достигнут
+- [x] Документация TDLib методов: loadChats, getChat, getChatHistory с примерами JSON
+- [x] **ВАЖНО:** Следование TDD - НЕ придумывать Mock API раньше Real (усилены инструкции в TESTING.md)
 - [ ] Документировать найденные требования в комментариях теста:
   - loadChats loop (pagination)
   - updates handler (фоновый процесс)
