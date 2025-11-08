@@ -1,3 +1,21 @@
+## [2025-11-08] - MVP-1.6: Scaffold DigestCore (RED фаза)
+
+**Реализовано:**
+- Создан DigestCore target с базовой структурой декомпозиции по SRP
+- MessageSourceProtocol + SourceMessage модель для DigestCore
+- ChannelMessageSource (coordinator stub) + ChannelCache (actor stub)
+- E2E и Component тесты компилируются (RED фаза: fatalError в stubs)
+
+**Технические детали:**
+- Package.swift: добавлен DigestCore target с зависимостью от TDLibAdapter
+- Структура: Protocols/, Models/, Sources/, Cache/ (Updates/, Fetchers/ - TODO)
+- Тесты обновлены: import DigestCore
+
+**Следующий шаг:** Unit-тесты для ChannelCache (задача MVP-1.6.1.5) → GREEN фаза
+
+**Коммиты:**
+- 5b32e0a feat: scaffold для DigestCore (MessageSource + декомпозиция по SRP)
+
 ## [2025-01-08] - MVP-1.6 RED фаза: ChatType + ChannelMessageSource тесты
 
 **Реализовано:**
