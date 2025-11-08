@@ -233,6 +233,178 @@ swift run tg-client [команда]
     └─> Документация: уточнение формулировок, добавление примеров
 ```
 
+---
+
+### Декомпозиция при обнаружении сложности
+
+**Проблема:** User Story простой, но при написании Component Test обнаруживается сложная реализация:
+- Фоновые процессы (updates handler, polling)
+- Кэширование состояния (in-memory cache, persistence)
+- Множество edge cases (timeout, retry, circuit breaker)
+- Несколько зон ответственности в одном компоненте
+
+**Решение:** Декомпозиция на подкомпоненты с применением **Single Responsibility Principle (SRP)**.
+
+#### Когда применять декомпозицию?
+
+**Признаки сложности при написании Component Test:**
+
+1. **Mock становится сложным:**
+   ```swift
+   // ❌ Плохо: MockTDLibClient должен эмулировать updates, кэш, retry logic
+   mockClient.mockUpdatesSequence = [...]
+   mockClient.mockCacheState = [...]
+   mockClient.mockRetryBehavior = ...
+   ```
+
+2. **Тест проверяет несколько аспектов:**
+   ```swift
+   // ❌ Плохо: один тест проверяет loadChats, updates, кэширование, фильтрацию
+   @Test func fetchUnreadMessages() async throws {
+       // 50+ строк теста
+   }
+   ```
+
+3. **Компонент имеет > 1 зоны ответственности:**
+   ```swift
+   // ❌ Плохо: ChannelMessageSource делает всё
+   class ChannelMessageSource {
+       func loadChats() { ... }          // Загрузка чатов
+       func handleUpdate() { ... }       // Обработка updates
+       func cacheChannel() { ... }       // Кэширование
+       func filterUnread() { ... }       // Фильтрация
+       func fetchMessages() { ... }      // Получение сообщений
+   }
+   ```
+
+#### Процесс декомпозиции (расширенный Outside-In TDD)
+
+```
+1. E2E сценарий (HIGH-LEVEL)
+   └─> User Story: "Получить непрочитанные сообщения из каналов"
+   └─> Игнорируем детали реализации
+
+2. Component Test (MEDIUM-LEVEL) → ОБНАРУЖИВАЕМ СЛОЖНОСТЬ
+   └─> Пытаемся написать тест с MockTDLibClient
+   └─> Видим: нужен updates handler, cache, фильтрация
+   └─> ⚠️ СТОП! Компонент слишком сложный
+
+3. Декомпозиция (ARCHITECTURE DECISION)
+   └─> Выделяем подкомпоненты по зонам ответственности:
+       ├─ ChannelCache (actor) — кэширование списка каналов
+       ├─ UpdatesHandler — обработка TDLib updates
+       ├─ MessageFetcher — получение сообщений из каналов
+       └─ ChannelMessageSource — координация (использует подкомпоненты)
+
+4. Unit Tests для подкомпонентов (LOW-LEVEL)
+   ├─ ChannelCacheTests — изолированно
+   ├─ UpdatesHandlerTests — изолированно
+   └─ MessageFetcherTests — изолированно
+
+5. Models + Unit Tests
+   └─> Request/Response модели для TDLib методов
+
+6. Integration (ASSEMBLY)
+   └─> ChannelMessageSource собирает всё вместе
+   └─> Component Test использует реальные подкомпоненты + MockTDLibClient
+
+7. E2E validation
+   └─> Проверка на живом TDLib
+```
+
+#### Пример декомпозиции: ChannelMessageSource
+
+**До (монолитный компонент):**
+```swift
+// ❌ Нарушение SRP: слишком много ответственности
+actor ChannelMessageSource: MessageSourceProtocol {
+    func fetchUnreadMessages() async throws -> [SourceMessage] {
+        // 1. Загрузка чатов через loadChats loop
+        // 2. Обработка updates
+        // 3. Кэширование каналов
+        // 4. Фильтрация непрочитанных
+        // 5. Получение сообщений
+        // 6. Формирование ссылок
+        // 100+ строк кода, 5 зон ответственности
+    }
+}
+```
+
+**После (декомпозиция по SRP):**
+```swift
+// ✅ ChannelCache: отвечает ТОЛЬКО за кэширование
+actor ChannelCache {
+    private var channels: [Int64: ChannelInfo] = [:]
+
+    func add(_ chat: Chat) { ... }
+    func updateUnreadCount(chatId: Int64, count: Int) { ... }
+    func getUnreadChannels() -> [ChannelInfo] { ... }
+}
+
+// ✅ UpdatesHandler: отвечает ТОЛЬКО за обработку updates
+actor UpdatesHandler {
+    func start(tdlib: TDLibClientProtocol, onUpdate: @escaping (Update) -> Void) { ... }
+    func stop() { ... }
+}
+
+// ✅ MessageFetcher: отвечает ТОЛЬКО за получение сообщений
+struct MessageFetcher {
+    func fetch(from channels: [ChannelInfo]) async throws -> [SourceMessage] { ... }
+}
+
+// ✅ ChannelMessageSource: КООРДИНАТОР (использует подкомпоненты)
+actor ChannelMessageSource: MessageSourceProtocol {
+    private let cache: ChannelCache
+    private let updatesHandler: UpdatesHandler
+    private let messageFetcher: MessageFetcher
+
+    func fetchUnreadMessages() async throws -> [SourceMessage] {
+        // Простая координация: делегирует подкомпонентам
+        let channels = await cache.getUnreadChannels()
+        return try await messageFetcher.fetch(from: channels)
+    }
+}
+```
+
+#### Правила декомпозиции
+
+**1. Single Responsibility Principle (SRP):**
+- Один компонент = одна зона ответственности
+- Если класс/actor > 100 строк → проверить на SRP
+
+**2. Dependency Injection:**
+- Компоненты получают зависимости через `init`
+- Не создают зависимости внутри себя
+
+**3. Testability:**
+- Каждый подкомпонент тестируется изолированно
+- Mock только для внешних зависимостей (TDLibClient, сеть)
+
+**4. Координатор vs Worker:**
+- **Координатор** (ChannelMessageSource) — делегирует задачи, не содержит бизнес-логику
+- **Worker** (ChannelCache, MessageFetcher) — содержит конкретную логику
+
+#### Обновление документации после декомпозиции
+
+После декомпозиции обновляем:
+
+**1. ARCHITECTURE.md:**
+- Добавить диаграмму компонентов
+- Описать зоны ответственности каждого
+
+**2. E2E сценарий (FetchUnreadMessages.md):**
+- НЕ упоминать подкомпоненты (это детали реализации)
+- Фокус на user story
+
+**3. Component Test документация:**
+- Упомянуть использование подкомпонентов (в комментариях)
+- Ссылки на Unit-тесты подкомпонентов (если публичные)
+
+**См. также:**
+- <doc:../ARCHITECTURE.md#single-responsibility-principle> — детали SRP в проекте
+
+---
+
 #### Валидация DoCC документации (обязательный шаг)
 
 После завершения реализации фичи **обязательно** проверяем корректность документации:

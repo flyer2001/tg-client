@@ -25,18 +25,24 @@
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-> ⚠️ **ПЕРЕД НАЧАЛОМ:** Переписать задачи MVP-1.5 и MVP-1 по методологии **Outside-In TDD** (см. [TESTING.md](.claude/TESTING.md#outside-in-tdd-для-tdlib-интеграции))
-> - Добавить шаги: E2E сценарий → Component Test → Fixtures → Unit Tests → Models → Protocol → Real → Mock → GREEN → Refactor
-> - Указать ссылки на TDLib docs в комментариях Component тестов
-> - Создать структуру `Tests/Fixtures/TDLib/` для JSON примеров
+**Контекст предыдущей сессии (2025-01-08):**
+- Обнаружена проблема: `getChats` возвращает **все** чаты, а не только непрочитанные
+- Исследованы альтернативы: `searchChats` (не подходит), `loadChats` + updates (правильный подход)
+- Архитектурное решение: декомпозиция ChannelMessageSource на подкомпоненты (SRP)
+- Обновлена документация: TESTING.md (декомпозиция), ARCHITECTURE.md (SRP), FetchUnreadMessages.md
 
-1. **[MVP-1.5] Типизация TDLib методов** 🔥 - Chat, Message, GetChats, GetChatHistory, ViewMessages (~2-3 часа)
-2. **[MVP-1] ChannelMessageSource** - Получение непрочитанных сообщений из каналов (~3-4 часа)
+**Приоритеты:**
+
+1. **[MVP-1.6] ChannelMessageSource (loadChats + updates)** 🔥 - Реализация через декомпозицию (~13-15 часов, 2-3 сессии)
+   - Начать с задачи 1.2: E2E тест `FetchUnreadMessagesScenarioTests.swift`
+   - См. детальный план ниже
+2. **[MVP-1.5] Типизация TDLib методов** - Расширение моделей (Chat, Message, loadChats, getChatHistory) по мере реализации MVP-1.6
 3. **[MVP-2] SummaryGenerator** - AI-саммаризация через OpenAI (~3-4 часа)
 
 > **См. детали:**
-> - [MVP-1: ChannelMessageSource](#mvp-1-channelmessagesource-tdlib-integration) — получение сообщений
-> - [MVP.md — TDLib API](MVP.md#tdlib-api-работа-с-непрочитанными-сообщениями) — детали работы с TDLib
+> - [MVP-1.6: ChannelMessageSource](#mvp-16-channelmessagesource-получение-непрочитанных-через-loadchats--updates-приоритет) — детальный план с декомпозицией
+> - [TESTING.md](.claude/TESTING.md#декомпозиция-при-обнаружении-сложности) — процесс декомпозиции
+> - [ARCHITECTURE.md](.claude/ARCHITECTURE.md#single-responsibility-principle-srp) — паттерн Coordinator + Workers
 
 ---
 
@@ -104,67 +110,186 @@
 
 **Зависимости:** Нет (базовая инфраструктура уже есть)
 
-**Разблокирует:** MVP-1 (ChannelMessageSource)
+**Разблокирует:** MVP-1.6 (ChannelMessageSource с декомпозицией)
 
 ---
 
-### MVP-1. ChannelMessageSource (TDLib Integration)
+### MVP-1.6. ChannelMessageSource: Получение непрочитанных через loadChats + updates (🔥 ПРИОРИТЕТ)
 
-**Цель:** Получение непрочитанных сообщений из Telegram каналов.
+**Цель:** Реализовать получение непрочитанных сообщений из каналов через `loadChats` + updates механизм TDLib с применением декомпозиции по SRP.
 
-> **📖 Детали работы с TDLib API:** [MVP.md — TDLib API: Работа с непрочитанными сообщениями](.claude/MVP.md#tdlib-api-работа-с-непрочитанными-сообщениями)
+**Архитектурное решение:**
+- Отдельный `MessageSourceProtocol` (НЕ в TDLibClient)
+- Декомпозиция на подкомпоненты: `ChannelCache`, `UpdatesHandler`, `MessageFetcher`
+- Coordinator pattern: `ChannelMessageSource` координирует Workers
+- Dependency Injection: зависимости через `init`
 
-**Архитектура:**
-```swift
-protocol MessageSourceProtocol {
-    func fetchUnreadMessages(since: Date?) async throws -> [SourceMessage]
-    func markAsRead(messages: [SourceMessage]) async throws
-}
+**Статус:** Планируется (следующая сессия)
 
-class ChannelMessageSource: MessageSourceProtocol {
-    // Реализация для каналов
-}
-```
+#### Задачи (по Outside-In TDD с декомпозицией):
 
-#### Задачи (по TDD):
+**1.1 Обновление документации** (~20 мин) ✅
+- [x] Обновить `FetchUnreadMessages.md` — упростить шаги, убрать технические детали
+- [x] Добавить ссылку на E2E тест в `FetchUnreadMessages.md`
+- [x] Обновить `TESTING.md` — добавить раздел "Декомпозиция при обнаружении сложности"
+- [x] Обновить `ARCHITECTURE.md` — добавить раздел "Single Responsibility Principle (SRP)"
 
-**1.1 Протокол и модели DigestCore** (~1 час)
-- [ ] **RED:** Тест инициализации `SourceMessage`
-- [ ] **GREEN:** Создать `SourceMessage` (Sources/DigestCore/Models/)
-- [ ] **REFACTOR:** Codable, Equatable, edge cases
-- [ ] **RED:** Тест для `MessageSourceProtocol` (mock implementation)
-- [ ] **GREEN:** Создать протокол `MessageSourceProtocol` (Sources/DigestCore/Protocols/)
-- [ ] Создать stub `ChannelMessageSource` (Sources/DigestCore/Sources/)
+**1.2 E2E сценарий (тест)** (~30 мин)
+- [ ] **RED:** Создать `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift`
+- [ ] Тест: подключение → получение непрочитанных → проверка структуры
+- [ ] Использовать реальный TDLib клиент (сохранённая сессия)
+- [ ] Тест НЕ КОМПИЛИРУЕТСЯ (нет ChannelMessageSource)
+- [ ] Добавить комментарий с ожидаемым поведением
 
-**1.2 Получение списка каналов** (~1 час)
-- [ ] **RED:** Component-тест `fetchUnreadChannels()` с MockTDLibClient
-- [ ] **GREEN:** Реализовать получение чатов через `getChats(chatList: .main)`
-- [ ] **GREEN:** Фильтрация: только каналы (тип `channel`)
-- [ ] **GREEN:** Фильтрация: не в архиве (`chatList != .archive`)
-- [ ] **GREEN:** Фильтрация: есть непрочитанные (`unreadCount > 0`)
-- [ ] **REFACTOR:** Error handling, логирование
-- [ ] Тесты на edge cases
+**1.3 Component Test → обнаружение сложности** (~1 час)
+- [ ] **RED:** Создать `Tests/TgClientComponentTests/ChannelMessageSourceTests.swift`
+- [ ] Попытаться написать тест с MockTDLibClient
+- [ ] **ОБНАРУЖЕНИЕ:** нужен updates handler, cache, фильтрация → СТОП!
+- [ ] Документировать найденные требования в комментариях теста:
+  - loadChats loop (pagination)
+  - updates handler (фоновый процесс)
+  - ChannelCache (in-memory)
+  - Фильтрация по type=channel + unreadCount>0
+  - Получение сообщений из каналов
 
-**1.3 Извлечение сообщений из канала** (~1.5 часа)
-- [ ] **RED:** Тест оптимизированного запроса (fromMessageId=0, limit=unreadCount)
-- [ ] **GREEN:** `getChatHistory(chatId:, fromMessageId: 0, offset: 0, limit: unreadCount)`
-- [ ] **GREEN:** Фильтр по `lastReadInboxMessageId`
-- [ ] **GREEN:** Формирование ссылок: `https://t.me/<username>/<messageId>`
-- [ ] **GREEN:** Обработка каналов без username
-- [ ] **REFACTOR:** Конвертация `Message` → `SourceMessage`
-- [ ] Тесты на edge cases
+**1.4 Декомпозиция (архитектурное решение)** (~30 мин)
+- [ ] Выделить подкомпоненты по зонам ответственности:
+  - `ChannelCache` (actor) — кэширование списка каналов
+  - `UpdatesHandler` — обработка TDLib updates
+  - `MessageFetcher` — получение сообщений из каналов
+  - `ChannelMessageSource` — координатор
+- [ ] Создать пустые файлы (scaffold):
+  - `Sources/DigestCore/Cache/ChannelCache.swift`
+  - `Sources/DigestCore/Updates/UpdatesHandler.swift`
+  - `Sources/DigestCore/Fetchers/MessageFetcher.swift`
+  - `Sources/DigestCore/Sources/ChannelMessageSource.swift`
+- [ ] Обновить `ARCHITECTURE.md` — добавить диаграмму компонентов (в комментариях для будущего)
 
-**1.4 Отметка прочитанным** (~30 мин)
-- [ ] **RED:** Тест `markAsRead()` с MockTDLibClient
-- [ ] **GREEN:** `viewMessages(chatId:, messageIds:, forceRead: true)`
-- [ ] **GREEN:** Группировка по chatId
-- [ ] Вызов ТОЛЬКО после успешной отправки дайджеста
-- [ ] **REFACTOR:** Обработка ошибок
-- [ ] Тесты на edge cases
+**1.5 Unit Tests для ChannelCache** (~1.5 часа)
+- [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift`
+- [ ] Тесты:
+  - `add(_:Chat)` — добавление канала (игнорирует non-channels)
+  - `updateUnreadCount(chatId:count:)` — обновление счётчика
+  - `getUnreadChannels()` — получение списка с unreadCount > 0
+  - `remove(chatId:)` — удаление канала (если архивирован)
+  - Edge cases: nil, пустой список, Int64.max
+- [ ] **GREEN:** Реализация `ChannelCache`
+- [ ] Actor isolation корректна (thread-safe)
 
-**Оценка времени:** ~3-4 часа
+**1.6 Unit Tests для UpdatesHandler** (~1.5 часа)
+- [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/UpdatesHandlerTests.swift`
+- [ ] Тесты:
+  - `start(tdlib:onUpdate:)` — запуск фонового процесса
+  - `stop()` — остановка
+  - Обработка `updateNewChat` → вызов callback
+  - Обработка `updateChatReadInbox` → вызов callback
+  - Edge cases: множественные starts, stop без start
+- [ ] **GREEN:** Реализация `UpdatesHandler`
+- [ ] Использовать `AsyncStream<Update>` от TDLibClient
 
-**Зависимости:** MVP-1.5 (типизация TDLib)
+**1.7 TDLib модели для loadChats/getChat** (~2 часа)
+- [ ] **RED:** Unit-тесты для моделей:
+  - `LoadChatsRequest` — параметры: chatList, limit
+  - `LoadChatsResponse` — пустой Ok (все данные через updates)
+  - `GetChatRequest` — параметр: chatId
+  - `ChatResponse` — полная модель Chat (id, title, type, unreadCount, lastReadInboxMessageId, username)
+  - `ChatType` — enum (private, basicGroup, supergroup, secret)
+  - `Update` — enum для updates (updateNewChat, updateChatReadInbox)
+- [ ] **GREEN:** Реализация моделей (Codable, Sendable, Equatable)
+- [ ] **RED:** Component Test для TDLibClient:
+  - `loadChats(chatList:limit:)` → Ok
+  - `getChat(id:)` → Chat
+  - `updates: AsyncStream<Update>` — stream для updates
+- [ ] **GREEN:** Реализация в TDLibClient + MockTDLibClient
+- [ ] Mock должен эмулировать updates sequence
+
+**1.8 Unit Tests для MessageFetcher** (~1 час)
+- [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/MessageFetcherTests.swift`
+- [ ] Тесты:
+  - `fetch(from: [ChannelInfo])` → [SourceMessage]
+  - Параллельные запросы через TaskGroup
+  - Формирование ссылок (публичные/приватные каналы): `https://t.me/{username}/{messageId}`
+  - Edge cases: пустой список, ошибка getChatHistory, канал без username
+- [ ] **GREEN:** Реализация `MessageFetcher`
+- [ ] Использовать MockTDLibClient
+
+**1.9 Модели для getChatHistory** (~1.5 часа)
+- [ ] **RED:** Unit-тесты:
+  - `GetChatHistoryRequest` — параметры: chatId, fromMessageId, offset, limit
+  - `MessagesResponse` — модель Messages (массив Message)
+  - `Message` — модель сообщения (id, chatId, date, content)
+  - `MessageContent` — enum (для MVP только textContent)
+- [ ] **GREEN:** Реализация моделей
+- [ ] **RED:** Component Test для TDLibClient.getChatHistory()
+- [ ] **GREEN:** Реализация + Mock
+
+**1.10 Protocol + Models для MessageSource** (~1 час)
+- [ ] **RED:** Unit-тесты:
+  - `SourceMessage` — модель для DigestCore (chatId, messageId, content, link, channelTitle)
+  - `ChannelInfo` — модель для кэша (id, title, unreadCount, lastReadMessageId, username)
+- [ ] **GREEN:** Реализация моделей (Codable, Equatable, Sendable)
+- [ ] Создать `MessageSourceProtocol`:
+  ```swift
+  protocol MessageSourceProtocol {
+      func fetchUnreadMessages() async throws -> [SourceMessage]
+      func markAsRead(messages: [SourceMessage]) async throws
+  }
+  ```
+
+**1.11 Модели для viewMessages (markAsRead)** (~1 час)
+- [ ] **RED:** Unit-тесты:
+  - `ViewMessagesRequest` — параметры: chatId, messageIds, forceRead
+  - `ViewMessagesResponse` — Ok
+- [ ] **GREEN:** Реализация моделей
+- [ ] **RED:** Component Test для TDLibClient.viewMessages()
+- [ ] **GREEN:** Реализация + Mock
+
+**1.12 Integration: ChannelMessageSource** (~2 часа)
+- [ ] **GREEN:** Реализация `ChannelMessageSource`
+- [ ] Dependency Injection (cache, updatesHandler, messageFetcher, tdlib через init)
+- [ ] Инициализация:
+  - Запуск loadChats loop (пока не вернёт 404)
+  - Запуск UpdatesHandler
+  - Обработка updates → обновление cache
+  - Флаг `isInitialized` для ожидания готовности
+- [ ] `fetchUnreadMessages()`:
+  - Ждать инициализации (while !isInitialized)
+  - Получить непрочитанные из cache
+  - Делегировать MessageFetcher
+- [ ] `markAsRead(messages:)`:
+  - Группировка по chatId
+  - Вызов viewMessages для каждого чата
+  - Error handling (логировать, но не прерывать)
+- [ ] Component Test GREEN (с MockTDLibClient + реальные Workers)
+
+**1.13 E2E validation** (~30 мин)
+- [ ] Запустить E2E тест на реальном TDLib
+- [ ] Проверить:
+  - Получение всех каналов (не только 100)
+  - Корректная фильтрация (только каналы с unreadCount > 0)
+  - Корректное получение сообщений
+  - Формирование ссылок (публичные/приватные)
+- [ ] Логировать результаты для ручной проверки
+
+**1.14 Refactor + Documentation** (~1 час)
+- [ ] Refactor: edge cases, error handling, логирование
+- [ ] Добавить DoCC комментарии для публичных API
+- [ ] Запустить `./scripts/generate-docc-from-tests.sh`
+- [ ] Проверить создание Component Test документации
+- [ ] Обновить ARCHITECTURE.md — финальная диаграмма компонентов
+
+**Оценка времени:** ~13-15 часов (разбить на 2-3 сессии)
+
+**Зависимости:** MVP-1.5 (частично — Chat модель нужно расширить)
+
+**Разблокирует:** MVP-2 (SummaryGenerator будет использовать SourceMessage модель)
+
+**Критичные моменты:**
+- ⚠️ AsyncStream для updates — может быть сложность в TDLibClient (нужна новая архитектура receive loop)
+- ⚠️ loadChats pagination — нужна проверка на 404 (все чаты загружены)
+- ⚠️ Thread-safety для ChannelCache (actor isolation)
+- ⚠️ Graceful shutdown UpdatesHandler при ошибках
+- ⚠️ Инициализация может занимать 10-30 сек (первый запуск) — нужен timeout
 
 ---
 

@@ -142,6 +142,90 @@ actor CircuitBreaker {
 
 ---
 
+---
+
+## Single Responsibility Principle (SRP)
+
+### Применение в проекте
+
+Проект следует принципу **Single Responsibility Principle**: каждый модуль/класс/компонент отвечает за одну зону ответственности.
+
+### Когда разбивать компонент?
+
+**Признаки нарушения SRP:**
+1. Класс/actor > 100 строк кода
+2. Множество приватных методов для разных задач
+3. Сложность тестирования (mock должен эмулировать несколько аспектов)
+4. Название компонента содержит "And" или "Manager" (размытая ответственность)
+
+**Решение:** Декомпозиция на подкомпоненты с чёткими зонами ответственности.
+
+### Паттерн: Coordinator + Workers
+
+**Coordinator (координатор):**
+- Не содержит бизнес-логику
+- Делегирует задачи Workers
+- Управляет жизненным циклом
+
+**Worker (рабочий компонент):**
+- Содержит конкретную логику
+- Одна чётко определённая ответственность
+- Легко тестируется изолированно
+
+### Пример: ChannelMessageSource
+
+**Архитектура:**
+```
+ChannelMessageSource (Coordinator)
+├─ ChannelCache (Worker) — кэширование списка каналов
+├─ UpdatesHandler (Worker) — обработка TDLib updates
+├─ MessageFetcher (Worker) — получение сообщений из каналов
+└─ TDLibClient (External Dependency) — адаптер к TDLib
+```
+
+**Зоны ответственности:**
+
+| Компонент | Ответственность | Тестируется |
+|-----------|----------------|-------------|
+| `ChannelCache` | Хранение и обновление списка каналов в памяти | Изолированно (unit tests) |
+| `UpdatesHandler` | Прослушивание TDLib updates, маршрутизация событий | Изолированно (unit tests) |
+| `MessageFetcher` | Получение сообщений через TDLibClient | С MockTDLibClient |
+| `ChannelMessageSource` | Координация: инициализация, делегирование задач | Component test (с реальными Workers) |
+
+**Преимущества:**
+- ✅ Простота тестирования (каждый Worker изолированно)
+- ✅ Переиспользование (ChannelCache можно использовать в других модулях)
+- ✅ Масштабируемость (добавление функций не раздувает один класс)
+- ✅ Читаемость (понятно где искать логику кэширования, где — обработку updates)
+
+### Dependency Injection
+
+**Правило:** Компоненты получают зависимости через `init`, не создают внутри себя.
+
+```swift
+// ❌ Плохо: создаёт зависимости внутри
+actor ChannelMessageSource {
+    private let cache = ChannelCache()  // Tight coupling
+    private let tdlib = TDLibClient()   // Нельзя заменить на mock
+}
+
+// ✅ Хорошо: зависимости через init
+actor ChannelMessageSource {
+    private let cache: ChannelCache
+    private let tdlib: TDLibClientProtocol  // Protocol для мокирования
+
+    init(cache: ChannelCache, tdlib: TDLibClientProtocol) {
+        self.cache = cache
+        self.tdlib = tdlib
+    }
+}
+```
+
+**См. также:**
+- `.claude/TESTING.md` → Декомпозиция при обнаружении сложности
+
+---
+
 ## Зависимости
 
 См. `Package.swift`. Основные:

@@ -5,7 +5,8 @@
       "Bash(./scripts/generate-docc-from-tests.sh:*)",
       "Bash(git mv:*)",
       "Bash(swift test:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
