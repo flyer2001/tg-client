@@ -1,3 +1,18 @@
+## [2025-11-08] - Planning Session (15 min)
+
+**Контекст:**
+- Обсуждение следующих шагов MVP-1.6 (ChannelMessageSource)
+- Добавлена задача TD-4: автогенерация DoCC для внутренних моделей и компонентных тестов
+
+**Ключевые решения:**
+- `ChannelInfo` определена как внутренняя модель DigestCore (не TDLib Response)
+- Маппинг: `Chat` (TDLib) → `ChannelInfo` (DigestCore)
+- Расширение скрипта документации для компонентных тестов и внутренних моделей
+
+**Следующая сессия:**
+- Начать MVP-1.6 задачу 1.5: Unit-тесты для ChannelCache (RED фаза)
+- Создать `ChannelInfo` модель и тесты `ChannelCacheTests.swift`
+
 ## [2025-11-08] - MVP-1.6: Scaffold DigestCore (RED фаза)
 
 **Реализовано:**
