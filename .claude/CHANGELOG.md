@@ -1,3 +1,22 @@
+## [2025-11-09] - ChannelInfo Model Implementation
+
+**Реализовано:**
+- ✅ Создана модель `ChannelInfo` для DigestCore (76 строк)
+- ✅ Маппинг: Chat (TDLib) → ChannelInfo (DigestCore Model)
+- ✅ Поля: chatId, title, unreadCount, lastReadInboxMessageId, username
+- ✅ Добавлена задача TD-4: автогенерация DoCC для внутренних моделей
+
+**Коммиты:**
+- `a14645e` - feat: добавлена модель ChannelInfo для DigestCore
+
+**Следующая сессия:**
+- Начать MVP-1.6 задачу 1.5: Unit-тесты для ChannelCache (RED фаза)
+- Создать `ChannelCacheTests.swift` с полным покрытием
+
+**Контекст:**
+- Короткая сессия (15 мин) из-за недельного лимита токенов (97% использовано)
+- Модель готова, скомпилирована, протестирована сборкой
+
 ## [2025-11-08] - Planning Session (15 min)
 
 **Контекст:**
