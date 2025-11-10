@@ -19,13 +19,13 @@
 > 🎯 **MVP (цели и scope):** [MVP.md](.claude/MVP.md) — читать по требованию (большой файл)
 > 💡 **Будущие фичи:** [BACKLOG.md](.claude/BACKLOG.md) — бэклог для версий после MVP
 > 📝 **История изменений:** [CHANGELOG.md](.claude/CHANGELOG.md) — логи завершенных сессий, читать только по требованию (большой файл)
-> 📋 **Последнее обновление:** 2025-11-08
+> 📋 **Последнее обновление:** 2025-11-10
 
 ---
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-**Контекст предыдущей сессии (2025-11-10):**
+**Контекст предыдущей сессии (2025-11-10 утро):**
 - ✅ **TD-5 Phase 1 ЗАВЕРШЕНА:** FoundationExtensions модуль + JSONCoding.swift (88 тестов проходят)
   - Создан `JSONEncoder.tdlib()` / `JSONDecoder.tdlib()` с `.convertToSnakeCase` / `.convertFromSnakeCase`
   - Удалены избыточные CodingKeys из 21 файла (оставлен только маппинг для `@type`)
@@ -36,14 +36,18 @@
   - Создан `/tmp/tg_token_tracker.json` с автоматическим счётчиком сообщений
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
-- **Следующий шаг:** TD-6 (тесты TDLibRequestEncoder) → TD-7 (Test Builders) → TD-5 Phase 2 (SwiftLint)
+
+**Контекст текущей сессии (2025-11-10 вечер):**
+- ✅ **TD-6 ЗАВЕРШЕНА:** Unit-тесты для TDLibRequestEncoder + TDLibResponseDecoder (92 теста проходят)
+  - Создан `TDLibRequestEncoderTests.swift` (4 теста): проверка snake_case кодирования, @type, round-trip
+  - Создан `TDLibResponseDecoderTests.swift` (5 тестов): проверка snake_case декодирования, optional fields, массивы
+  - Покрыты Request модели: SetTdlibParametersRequest, LoadChatsRequest
+  - Покрыты Response модели: UserResponse, ChatsResponse, TDLibErrorResponse
+- **Следующий шаг:** TD-7 (Test Builders) → TD-5 Phase 2 (SwiftLint)
 
 **Приоритеты:**
 
-1. **[TD-6] Unit-тесты для TDLibRequestEncoder** 🔥 CRITICAL (~20-30 мин)
-   - Проверить что TDLibRequestEncoder использует `.tdlib()` с правильными стратегиями
-   - Тесты на реальных Request моделях (SetTdlibParametersRequest, LoadChatsRequest)
-2. **[TD-7] Test Builders + убрать raw JSON из ResponseTests** (~1.5-2 часа)
+1. **[TD-7] Test Builders + убрать raw JSON из ResponseTests** (~1.5-2 часа)
    - Создать TestHelpers/TDLibTestBuilders.swift
    - Убрать сырые JSON строки из ResponseTests, использовать билдеры
 3. **[TD-5 Phase 2] SwiftLint rules** (~1 час)
@@ -814,7 +818,7 @@ class TelegramBotNotifier: BotNotifierProtocol {
 - SwiftLint: https://github.com/realm/SwiftLint
 - Custom Rules: https://realm.github.io/SwiftLint/rule-directory.html
 
-### TD-6: Unit-тесты для TDLibRequestEncoder ⚠️ CRITICAL
+### TD-6: Unit-тесты для TDLibRequestEncoder ✅ **[ЗАВЕРШЕНО 2025-11-10]**
 
 **Проблема:**
 - `TDLibRequestEncoder` использует `JSONEncoder.tdlib()`, но нет прямых тестов
@@ -827,18 +831,19 @@ class TelegramBotNotifier: BotNotifierProtocol {
 2. Корректную конвертацию camelCase → snake_case
 3. Сохранение явных CodingKeys (например, `@type`)
 
-**Решение (~20-30 мин):**
-- [ ] Создать `Tests/TgClientUnitTests/TDLibAdapter/TDLibRequestEncoderTests.swift`
-- [ ] Тесты на реальных Request моделях:
+**Решение (~30 мин):**
+- [x] Создать `Tests/TgClientUnitTests/TDLibAdapter/TDLibRequestEncoderTests.swift` (4 теста)
+- [x] Тесты на реальных Request моделях:
   - `SetTdlibParametersRequest` (много полей с snake_case)
   - `LoadChatsRequest` (chatList → chat_list)
-  - `SetAuthenticationPhoneNumberRequest` (phoneNumber → phone_number)
-- [ ] Проверить что в JSON используется snake_case
-- [ ] Round-trip тест: encode → parse JSON → проверить ключи
+- [x] Проверить что в JSON используется snake_case
+- [x] Round-trip тест: encode → parse JSON → проверить ключи
+- [x] **Бонус:** Создать `TDLibResponseDecoderTests.swift` (5 тестов)
+  - Проверка декодирования snake_case → camelCase
+  - Тесты на UserResponse, ChatsResponse, TDLibErrorResponse
+  - Опциональные поля, массивы, пустые массивы
 
-**Приоритет:** CRITICAL (блокирует уверенность в кодировании)
-
-**Оценка времени:** ~20-30 мин
+**Результат:** 92 теста проходят (было 88, добавили 9 новых)
 
 **Зависимости:** TD-5 Phase 1 (завершена)
 

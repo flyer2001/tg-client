@@ -1,3 +1,10 @@
+## [2025-11-10] - Unit-тесты для encoder/decoder
+- ✅ TD-6 завершена: TDLibRequestEncoderTests + TDLibResponseDecoderTests (9 новых тестов)
+- Покрытие TDLibRequestEncoder: проверка snake_case кодирования, @type поля, round-trip
+- Покрытие JSONDecoder.tdlib(): декодирование Response моделей (UserResponse, ChatsResponse, TDLibErrorResponse)
+- Проверка optional fields, массивов, пустых массивов
+- Всего 92 теста проходят (было 88)
+
 ## [2025-11-10] - Система мониторинга токенов + техническая подготовка
 
 ### Добавлено

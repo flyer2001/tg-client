@@ -10,7 +10,8 @@
       "Bash(git pull:*)",
       "Bash(git commit:*)",
       "Bash(cat:*)",
-      "Bash(jq:*)"
+      "Bash(jq:*)",
+      "Bash(/tmp/tg_token_tracker.json.tmp)"
     ],
     "deny": [],
     "ask": []
