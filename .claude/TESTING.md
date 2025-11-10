@@ -550,6 +550,33 @@ ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/AuthorizationStateUpdateRespo
 
 5. **Итеративность** — если на шаге 6 находим новые требования, возвращаемся к шагу 3-4
 
+6. **ЗАПРЕЩЕНО использовать force unwrap в тестах** (`!`, `as!`, `try!`)
+
+   **Проблема:** Force unwrap крашит тест с неинформативной ошибкой вместо понятного сообщения.
+
+   **❌ НЕПРАВИЛЬНО:**
+   ```swift
+   let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+   let value = json["key"]!  // Краш: "Unexpectedly found nil"
+   ```
+
+   **✅ ПРАВИЛЬНО:**
+   ```swift
+   // Вариант 1: С #require (Swift Testing)
+   let jsonObject = try JSONSerialization.jsonObject(with: data)
+   let json = try #require(jsonObject as? [String: Any], "JSON должен быть словарём")
+   let value = try #require(json["key"] as? String, "Ключ 'key' должен быть строкой")
+
+   // Вариант 2: С optional chaining + #expect
+   let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+   #expect(json?["key"] as? String == "expected")
+   ```
+
+   **Почему это важно:**
+   - ✅ Понятное сообщение об ошибке: "Expected String, got Int"
+   - ✅ Тест fail gracefully с контекстом
+   - ❌ Force unwrap даёт stack trace без контекста
+
 #### Репозиторий fixtures
 
 ```
@@ -566,6 +593,90 @@ Tests/
 - Unit-тесты проверяют декодирование этих файлов
 - Component-тесты используют в MockTDLibClient
 - Гарантирует соответствие реальным структурам TDLib
+
+---
+
+## Правила документирования
+
+### Request/Response/Error модели TDLib
+
+**ЗАПРЕЩЕНО документировать в коде моделей:**
+- ❌ Комментарии к полям модели
+- ❌ Дублирование структуры JSON из официальной доки
+- ❌ "Используется в", "Примеры использования"
+- ❌ Дублирование enum значений из официальной доки
+- ❌ Список всех параметров (есть в коде)
+
+**Вся документация находится в unit-тестах:**
+- ✅ Ссылка на официальную документацию TDLib
+- ✅ Примеры реального JSON (в тестах декодирования)
+- ✅ Описание поведения модели (в docstring теста)
+
+**В коде модели допустимо ТОЛЬКО:**
+- Однострочное описание ЧТО это за модель (без деталей)
+- Ссылка на TDLib API docs
+
+**Пример:**
+
+```swift
+// ❌ НЕПРАВИЛЬНО: избыточная документация
+/// Запрос getChats для получения списка чатов.
+///
+/// Используется в: ChannelMessageSource, DigestOrchestrator
+///
+/// Параметры:
+/// - chat_list: тип списка (main или archive)
+/// - limit: максимальное количество чатов
+///
+/// Возвращает: Ok (данные через updates)
+public struct GetChatsRequest: TDLibRequest { ... }
+
+// ✅ ПРАВИЛЬНО: минимум
+/// Запрос getChats для TDLib.
+///
+/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
+public struct GetChatsRequest: TDLibRequest { ... }
+```
+
+### Business logic helpers
+
+**Документируем только инварианты** (что НЕ изменится):
+
+```swift
+// ✅ ПРАВИЛЬНО: описываем поведение
+extension TDLibErrorResponse {
+    /// Все чаты уже загружены (TDLib вернул 404).
+    public var isAllChatsLoaded: Bool { code == 404 }
+}
+
+// ❌ НЕПРАВИЛЬНО: привязка к использованию
+extension TDLibErrorResponse {
+    /// Используется в ChannelMessageSource при pagination loop.
+    /// Пример: if error.isAllChatsLoaded { break }
+    public var isAllChatsLoaded: Bool { code == 404 }
+}
+```
+
+### Enum из официальной доки
+
+**ЗАПРЕЩЕНО дублировать:**
+
+```swift
+// ❌ НЕ ДЕЛАЙ ТАК: список протухнет
+/// Коды ошибок TDLib:
+/// - 400: Validation errors
+/// - 401: Authentication errors
+/// - 404: Not found
+/// - 429: Rate limit
+/// - 500: Internal errors
+```
+
+**ПРАВИЛЬНО:**
+
+```swift
+// ✅ Только ссылка на источник правды
+/// Коды ошибок см. https://core.telegram.org/api/errors
+```
 
 ---
 

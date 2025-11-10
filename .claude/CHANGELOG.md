@@ -1,3 +1,55 @@
+## [2025-11-10] - TD-5 Phase 1: Централизованные Encoder/Decoder + упрощение моделей
+
+**Выполнено (40 мин):**
+- ✅ Создан модуль `FoundationExtensions` с централизованными `JSONEncoder.tdlib()` / `JSONDecoder.tdlib()`
+- ✅ Включена автоконвертация camelCase ↔ snake_case (`.convertToSnakeCase` / `.convertFromSnakeCase`)
+- ✅ Удалены избыточные CodingKeys из 21 файла (Requests + Responses): оставлен только маппинг для `@type`
+- ✅ Все прямые использования `JSONEncoder()` / `JSONDecoder()` заменены на `.tdlib()` (11 файлов Sources + 8 Tests)
+- ✅ Добавлены 16 unit-тестов для JSONCoding: базовые кейсы, вложенные объекты, массивы, опциональные поля, round-trip
+
+**Результат:**
+- 88 тестов проходят (66 существующих + 16 новых + 6 component)
+- Меньше boilerplate: `chatList = "chat_list"` → `chatList` (автоконвертация)
+- Централизованная стратегия кодирования (легко изменить для всех моделей)
+
+**TODO следующая сессия:**
+- TD-6: Добавить unit-тесты для `TDLibRequestEncoder` (проверка что использует `.tdlib()` с правильными стратегиями)
+- TD-7: Test Builders для Response моделей + убрать raw JSON из ResponseTests
+- TD-5 Phase 2: SwiftLint rules (блокировать прямое использование JSONEncoder/JSONDecoder)
+
+## [2025-11-10] - Session: ChannelCache GREEN + LoadChatsRequest + Documentation Rules
+
+**Выполнено:**
+- ✅ **MVP-1.6 Task 1.5 GREEN:** ChannelCache полностью реализован (actor-based, 13 unit-тестов проходят)
+- ✅ **MVP-1.7 частично:** LoadChatsRequest + OkResponse модели (6 тестов, все проходят)
+- ✅ **TDLibErrorResponse:** Helper `isAllChatsLoaded` для pagination logic (3 теста)
+- ✅ **Правила документирования:** Усилены в TESTING.md и DEVELOPMENT.md
+  - Принцип минимализма (без "используется в", без примеров)
+  - Request/Response/Error модели НЕ документируются в коде (только в тестах)
+  - Rule #6: Запрет force unwrap (`as!`, `try!`) в тестах → использовать `#require`
+  - Централизованные JSON Encoder/Decoder правила (DEVELOPMENT.md)
+- ✅ **TD-5 задача создана:** Централизованные encoder/decoder + SwiftLint rules (CRITICAL priority)
+
+**Изменённые файлы:**
+- Sources/DigestCore/Cache/ChannelCache.swift (GREEN)
+- Sources/TDLibAdapter/TDLibCodableModels/Requests/LoadChatsRequest.swift (NEW)
+- Sources/TDLibAdapter/TDLibCodableModels/Responses/OkResponse.swift (NEW)
+- Sources/TDLibAdapter/TDLibCodableModels/Responses/TDLibErrorResponse.swift (helper added)
+- Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift (13 тестов, XCTest → Swift Testing)
+- Tests/TgClientUnitTests/TDLibAdapter/.../LoadChatsRequestTests.swift (NEW, 4 теста)
+- Tests/TgClientUnitTests/TDLibAdapter/.../OkResponseTests.swift (NEW, 2 теста)
+- Tests/TgClientUnitTests/TDLibAdapter/.../TDLibErrorResponseTests.swift (3 теста added)
+- Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift (disabled RED test)
+- .claude/TESTING.md (Rule #6, документация)
+- .claude/DEVELOPMENT.md (JSON encoding, минимализм)
+- .claude/TASKS.md (статус обновлён)
+
+**Следующая сессия:**
+- TD-5 Phase 1: Централизованные encoder/decoder (30 мин, CRITICAL)
+- MVP-1.7: GetChatRequest + ChatResponse модели
+
+---
+
 ## [2025-11-10] - ChannelCache Unit Tests (RED фаза)
 
 **Выполненные задачи:**

@@ -25,21 +25,27 @@
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
 
-**Контекст предыдущей сессии (2025-11-09):**
-- ✅ **Scaffold завершён:** DigestCore target создан с базовой структурой
-- ✅ **RED фаза выполнена:** E2E и Component тесты компилируются (с fatalError)
-- ✅ **Декомпозиция по SRP:** MessageSourceProtocol, SourceMessage, ChannelMessageSource (stub), ChannelCache (stub)
-- ✅ **Добавлена задача TD-4:** Автогенерация DoCC для внутренних моделей и компонентных тестов
-- ✅ **Создана модель ChannelInfo:** Внутренняя модель DigestCore для кэширования (коммит a14645e)
-- **Следующий шаг:** Unit-тесты для ChannelCache (задача 1.5) → RED фаза (создание тестов)
+**Контекст предыдущей сессии (2025-11-10, 40 мин):**
+- ✅ **TD-5 Phase 1 ЗАВЕРШЕНА:** FoundationExtensions модуль + JSONCoding.swift (88 тестов проходят)
+  - Создан `JSONEncoder.tdlib()` / `JSONDecoder.tdlib()` с `.convertToSnakeCase` / `.convertFromSnakeCase`
+  - Удалены избыточные CodingKeys из 21 файла (оставлен только маппинг для `@type`)
+  - Добавлены 16 unit-тестов для encoder/decoder (базовые + краевые случаи + round-trip)
+- ✅ **Упрощение моделей:** chatList = "chat_list" → chatList (автоконвертация)
+- ✅ **Централизация:** все JSONEncoder()/JSONDecoder() заменены на .tdlib()
+- **Следующий шаг:** TD-6 (тесты TDLibRequestEncoder) → TD-7 (Test Builders) → TD-5 Phase 2 (SwiftLint)
 
 **Приоритеты:**
 
-1. **[MVP-1.6] ChannelMessageSource (loadChats + updates)** 🔥 - GREEN фаза началась (~12-14 часов, 2-3 сессии)
-   - Начать с задачи 1.5: Unit-тесты для ChannelCache (RED → GREEN)
-   - Затем задачи 1.6-1.11 (см. детальный план ниже)
-2. **[MVP-1.5] Типизация TDLib методов** - Расширение моделей (Chat, Message, loadChats, getChatHistory) по мере реализации MVP-1.6
-3. **[MVP-2] SummaryGenerator** - AI-саммаризация через OpenAI (~3-4 часа)
+1. **[TD-6] Unit-тесты для TDLibRequestEncoder** 🔥 CRITICAL (~20-30 мин)
+   - Проверить что TDLibRequestEncoder использует `.tdlib()` с правильными стратегиями
+   - Тесты на реальных Request моделях (SetTdlibParametersRequest, LoadChatsRequest)
+2. **[TD-7] Test Builders + убрать raw JSON из ResponseTests** (~1.5-2 часа)
+   - Создать TestHelpers/TDLibTestBuilders.swift
+   - Убрать сырые JSON строки из ResponseTests, использовать билдеры
+3. **[TD-5 Phase 2] SwiftLint rules** (~1 час)
+   - Установить SwiftLint + настроить custom rules
+   - Блокировать прямое использование JSONEncoder()/JSONDecoder()
+4. **[MVP-1.7] TDLib модели для loadChats/getChat** - Завершить (GetChatRequest, ChatResponse, Update enum)
 
 > **См. детали:**
 > - [MVP-1.6: ChannelMessageSource](#mvp-16-channelmessagesource-получение-непрочитанных-через-loadchats--updates-приоритет) — детальный план с декомпозицией
@@ -182,7 +188,7 @@
 - [x] Проверить компиляцию: `swift build` успешно ✅
 - [ ] Обновить `ARCHITECTURE.md` — добавить диаграмму компонентов (TODO: после GREEN фазы)
 
-**1.5 Unit Tests для ChannelCache** (~1.5 часа) ⚠️ **[В РАБОТЕ 2025-11-10]**
+**1.5 Unit Tests для ChannelCache** (~1.5 часа) ✅ **[ЗАВЕРШЕНО 2025-11-10]**
 - [x] **RED:** `Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift` ✅ Создан
 - [x] Тесты написаны (13 тестов):
   - `add(_:ChannelInfo)` — добавление канала, обновление при дубликатах
@@ -190,15 +196,14 @@
   - `getUnreadChannels()` — фильтрация + сортировка по unreadCount (DESC)
   - `remove(chatId:)` — удаление канала
   - Edge cases: Int64.max, Int32.max, nil username
-- [ ] **GREEN:** Реализация `ChannelCache` (методы: add, updateUnreadCount, getUnreadChannels, remove)
-- [ ] Проверить actor isolation (thread-safe)
-- [ ] Запустить тесты и убедиться в GREEN
+- [x] **GREEN:** Реализация `ChannelCache` (actor с методами: add, updateUnreadCount, getUnreadChannels, remove) ✅
+- [x] Проверить actor isolation (thread-safe) ✅
+- [x] Запустить тесты и убедиться в GREEN ✅ (13 тестов проходят)
 
 **Контекст для следующей сессии:**
-- RED фаза завершена (тесты компилируются, ждут реализации)
-- Package.swift обновлён: TgClientUnitTests теперь зависит от DigestCore
-- ⚠️ **Проблема:** `swift test` зависает на Linux (использовать `./scripts/build-clean.sh` перед тестами)
-- Следующий шаг: реализовать ChannelCache (private var channels: [Int64: ChannelInfo])
+- GREEN фаза завершена (все 13 тестов проходят)
+- ChannelCache полностью реализован (actor-based, thread-safe)
+- Следующий шаг: MVP-1.7 — TDLib модели для loadChats/getChat/updates
 
 **1.6 Unit Tests для UpdatesHandler** (~1.5 часа)
 - [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/UpdatesHandlerTests.swift`
@@ -211,21 +216,25 @@
 - [ ] **GREEN:** Реализация `UpdatesHandler`
 - [ ] Использовать `AsyncStream<Update>` от TDLibClient
 
-**1.7 TDLib модели для loadChats/getChat** (~2 часа)
-- [ ] **RED:** Unit-тесты для моделей:
-  - `LoadChatsRequest` — параметры: chatList, limit
-  - `LoadChatsResponse` — пустой Ok (все данные через updates)
+**1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-10]**
+- [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)
+  - `LoadChatsRequest` — параметры: chatList, limit ✅
+  - `OkResponse` — универсальный успешный ответ TDLib ✅ (2 теста проходят)
+- [x] **GREEN:** Реализация моделей (Codable, Sendable, Equatable) ✅
+- [x] **RED:** Unit-тесты для `TDLibErrorResponse.isAllChatsLoaded` helper ✅ (3 новых теста)
+- [x] **GREEN:** Реализация helper для 404 ошибки (pagination) ✅
+- [ ] **TODO следующая сессия:**
   - `GetChatRequest` — параметр: chatId
   - `ChatResponse` — полная модель Chat (id, title, type, unreadCount, lastReadInboxMessageId, username)
-  - `ChatType` — enum (private, basicGroup, supergroup, secret)
   - `Update` — enum для updates (updateNewChat, updateChatReadInbox)
-- [ ] **GREEN:** Реализация моделей (Codable, Sendable, Equatable)
-- [ ] **RED:** Component Test для TDLibClient:
-  - `loadChats(chatList:limit:)` → Ok
-  - `getChat(id:)` → Chat
-  - `updates: AsyncStream<Update>` — stream для updates
-- [ ] **GREEN:** Реализация в TDLibClient + MockTDLibClient
-- [ ] Mock должен эмулировать updates sequence
+  - Component Test для TDLibClient: `loadChats()`, `getChat()`, `updates: AsyncStream<Update>`
+  - Mock должен эмулировать updates sequence
+
+**Важные изменения:**
+- Конвертация тестов из XCTest → Swift Testing
+- Убрана избыточная документация "используется в"
+- Добавлено правило: запрет force unwrap в тестах (Rule #6 в TESTING.md)
+- Все `as!` заменены на `#require` (0 instances в проекте)
 
 **1.8 Unit Tests для MessageFetcher** (~1 час)
 - [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/MessageFetcherTests.swift`
@@ -687,3 +696,184 @@ class TelegramBotNotifier: BotNotifierProtocol {
 
 **Зависимости:** Нет (можно делать параллельно)
 
+---
+
+### TD-5: Централизованные Encoder/Decoder + SwiftLint правила ⚠️ CRITICAL
+
+**Проблема:**
+- В проекте используются разные способы создания encoder/decoder
+- Нет гарантии консистентности настроек (snake_case маппинг)
+- Регулярно добавляется `import XCTest` вместо Swift Testing
+- Нет автоматической проверки правил кодирования
+
+**Цель:**
+1. Централизовать создание encoder/decoder через `.tdlib()` factory методы
+2. **ЗАПРЕТИТЬ** использование `JSONEncoder()` / `JSONDecoder()` напрямую во всём проекте
+3. Добавить SwiftLint rules для автоматической проверки:
+   - Блокировать `import XCTest` (должен быть `import Testing`)
+   - Блокировать `JSONEncoder()` / `JSONDecoder()` (должны быть `.tdlib()`)
+4. Создать test builders для упрощения тестов
+
+**Решение:**
+
+**Фаза 1: Централизованные Encoder/Decoder** ✅ **[ЗАВЕРШЕНО 2025-11-10]** (~40 мин)
+- [x] Создать `Sources/FoundationExtensions/JSONCoding.swift` (модуль вместо Shared):
+  ```swift
+  import Foundation
+
+  extension JSONEncoder {
+      /// Централизованный encoder для TDLib API.
+      ///
+      /// Настройки:
+      /// - snake_case encoding для всех ключей
+      public static func tdlib() -> JSONEncoder {
+          let encoder = JSONEncoder()
+          encoder.keyEncodingStrategy = .convertToSnakeCase
+          return encoder
+      }
+  }
+
+  extension JSONDecoder {
+      /// Централизованный decoder для TDLib API.
+      ///
+      /// Настройки:
+      /// - snake_case decoding для всех ключей
+      public static func tdlib() -> JSONDecoder {
+          let decoder = JSONDecoder()
+          decoder.keyDecodingStrategy = .convertFromSnakeCase
+          return decoder
+      }
+  }
+  ```
+- [x] Найти все `JSONEncoder()` → заменить на `JSONEncoder.tdlib()` (11 файлов)
+- [x] Найти все `JSONDecoder()` → заменить на `JSONDecoder.tdlib()` (11 файлов)
+- [x] Удалить избыточные CodingKeys из моделей (21 файл): оставлен только маппинг для `@type`
+- [x] Создать unit-тесты для `.tdlib()` методов (16 тестов): базовые + краевые + round-trip
+- [x] Прогнать тесты: 88 тестов проходят ✅
+
+**Фаза 2: SwiftLint правила (~1 час)**
+- [ ] Установить SwiftLint: `brew install swiftlint`
+- [ ] Создать `.swiftlint.yml` в корне проекта:
+  ```yaml
+  included:
+    - Sources
+    - Tests
+
+  disabled_rules:
+    - line_length
+    - type_body_length
+
+  custom_rules:
+    no_xctest_import:
+      name: "No XCTest Import"
+      message: "Use 'import Testing' instead of 'import XCTest'"
+      regex: "^\\s*import XCTest"
+      severity: error
+
+    no_direct_json_encoder:
+      name: "No Direct JSONEncoder"
+      message: "Use 'JSONEncoder.tdlib()' instead of 'JSONEncoder()'"
+      regex: "JSONEncoder\\(\\)"
+      severity: error
+
+    no_direct_json_decoder:
+      name: "No Direct JSONDecoder"
+      message: "Use 'JSONDecoder.tdlib()' instead of 'JSONDecoder()'"
+      regex: "JSONDecoder\\(\\)"
+      severity: error
+  ```
+- [ ] Добавить в `.github/workflows/ci.yml` проверку SwiftLint
+- [ ] Прогнать `swiftlint` локально, убедиться что нарушений нет
+
+**Фаза 3: Test Builders (~2 часа)**
+- [ ] Создать `Tests/TestHelpers/TDLibTestBuilders.swift`:
+  - `func makeGetChatsRequest(...) -> GetChatsRequest`
+  - `func makeGetChatsResponse(...) -> GetChatsResponse`
+  - `func makeChatInfo(...) -> ChatInfo`
+  - `func makeTDLibError(...) -> TDLibErrorResponse`
+- [ ] Рефакторить существующие тесты, убрать raw JSON где возможно
+- [ ] Обновить TESTING.md: добавить раздел "Test Builders"
+
+**Фаза 4: Рефакторинг тестов (~2 часа)**
+- [ ] Рефакторить GetChatsRequestTests (использовать builders)
+- [ ] Рефакторить TDLibErrorResponseTests (использовать builders)
+- [ ] Рефакторить LoadChatsRequestTests (использовать builders)
+- [ ] Прогнать все тесты, убедиться что ничего не сломалось
+
+**Приоритет:** CRITICAL (блокирует консистентность кода)
+
+**Оценка времени:** ~5-6 часов (фаза 1+2 критична, фаза 3+4 можно отложить)
+
+**Зависимости:** Нет (можно делать сразу)
+
+**Ссылки:**
+- SwiftLint: https://github.com/realm/SwiftLint
+- Custom Rules: https://realm.github.io/SwiftLint/rule-directory.html
+
+### TD-6: Unit-тесты для TDLibRequestEncoder ⚠️ CRITICAL
+
+**Проблема:**
+- `TDLibRequestEncoder` использует `JSONEncoder.tdlib()`, но нет прямых тестов
+- Нужна уверенность что Request модели правильно энкодятся с `.convertToSnakeCase`
+- Сырой JSON в тестах показывает ожидаемый формат для TDLib API
+
+**Цель:**
+Создать unit-тесты для `TDLibRequestEncoder`, проверяющие:
+1. Правильное использование `.tdlib()` encoder
+2. Корректную конвертацию camelCase → snake_case
+3. Сохранение явных CodingKeys (например, `@type`)
+
+**Решение (~20-30 мин):**
+- [ ] Создать `Tests/TgClientUnitTests/TDLibAdapter/TDLibRequestEncoderTests.swift`
+- [ ] Тесты на реальных Request моделях:
+  - `SetTdlibParametersRequest` (много полей с snake_case)
+  - `LoadChatsRequest` (chatList → chat_list)
+  - `SetAuthenticationPhoneNumberRequest` (phoneNumber → phone_number)
+- [ ] Проверить что в JSON используется snake_case
+- [ ] Round-trip тест: encode → parse JSON → проверить ключи
+
+**Приоритет:** CRITICAL (блокирует уверенность в кодировании)
+
+**Оценка времени:** ~20-30 мин
+
+**Зависимости:** TD-5 Phase 1 (завершена)
+
+---
+
+### TD-7: Test Builders + убрать raw JSON из ResponseTests ⚠️ IMPORTANT
+
+**Проблема:**
+- ResponseTests используют сырые JSON строки для декодирования
+- При изменении стратегии кодирования нужно обновлять JSON вручную
+- Нет переиспользуемых билдеров для создания тестовых данных
+
+**Цель:**
+1. Создать Test Builders для упрощения создания тестовых моделей
+2. Убрать raw JSON из ResponseTests там, где это возможно
+3. Оставить raw JSON только для тестов самих encoder/decoder стратегий
+
+**Решение:**
+
+**Часть 1: Создать Test Builders (~1 час)**
+- [ ] Создать `Tests/TestHelpers/TDLibTestBuilders.swift` с билдерами для Request/Response
+- [ ] Добавить `#if DEBUG` init в Response модели (если ещё нет)
+- [ ] Обновить TESTING.md: добавить раздел "Test Builders"
+
+**Часть 2: Рефакторинг ResponseTests (~1 час)**
+- [ ] Определить где можно убрать raw JSON:
+  - ✅ Оставить в JSONCodingTests (тесты самих стратегий)
+  - ✅ Оставить в TDLibRequestEncoderTests (проверка формата для TDLib)
+  - ❌ Убрать из UserResponseTests (использовать builder + encode)
+  - ❌ Убрать из ChatsResponseTests (использовать builder + encode)
+- [ ] Рефакторить тесты: UserResponseTests, ChatsResponseTests, AuthorizationStateUpdateResponseTests
+- [ ] Прогнать все тесты, убедиться что ничего не сломалось
+
+**Приоритет:** IMPORTANT (улучшает maintainability тестов)
+
+**Оценка времени:** ~1.5-2 часа
+
+**Зависимости:** TD-5 Phase 1 (завершена)
+
+**Примечание:** Оставляем raw JSON в тестах encoder/decoder стратегий (JSONCodingTests, TDLibRequestEncoderTests), т.к. там важно проверить конкретный формат JSON.
+
+---
