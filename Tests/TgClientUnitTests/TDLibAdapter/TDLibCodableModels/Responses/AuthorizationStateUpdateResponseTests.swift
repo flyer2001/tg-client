@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FoundationExtensions
 import TDLibAdapter
 
 /// Unit-тесты для декодирования AuthorizationStateUpdateResponse.
@@ -42,7 +43,7 @@ import TDLibAdapter
 @Suite("Декодирование AuthorizationStateUpdateResponse")
 struct AuthorizationStateUpdateResponseTests {
 
-    let decoder = JSONDecoder()
+    let decoder = JSONDecoder.tdlib()
 
     /// Декодирование состояния "waitTdlibParameters".
     ///

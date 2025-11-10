@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import FoundationExtensions
 @testable import TDLibAdapter
 
 /// Тесты для модели UserResponse.
@@ -39,7 +40,7 @@ struct UserResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let user = try decoder.decode(UserResponse.self, from: data)
 
         #expect(user.id == 123456789)
@@ -63,7 +64,7 @@ struct UserResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let user = try decoder.decode(UserResponse.self, from: data)
 
         #expect(user.id == 987654321)

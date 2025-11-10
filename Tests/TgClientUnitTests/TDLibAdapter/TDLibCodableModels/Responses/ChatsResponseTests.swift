@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import FoundationExtensions
 @testable import TDLibAdapter
 
 /// Тесты для модели ChatsResponse.
@@ -37,7 +38,7 @@ struct ChatsResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let response = try decoder.decode(ChatsResponse.self, from: data)
 
         #expect(response.chatIds.count == 3)
@@ -68,7 +69,7 @@ struct ChatsResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let response = try decoder.decode(ChatsResponse.self, from: data)
 
         #expect(response.chatIds.isEmpty)
@@ -89,7 +90,7 @@ struct ChatsResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let response = try decoder.decode(ChatsResponse.self, from: data)
 
         #expect(response.chatIds.count == 1)
@@ -110,7 +111,7 @@ struct ChatsResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
 
         // Должно успешно декодироваться несмотря на snake_case в JSON
         let response = try decoder.decode(ChatsResponse.self, from: data)
@@ -132,7 +133,7 @@ struct ChatsResponseTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let response = try decoder.decode(ChatsResponse.self, from: data)
 
         #expect(response.chatIds.count == 2)

@@ -1,0 +1,320 @@
+import Foundation
+import Testing
+import FoundationExtensions
+
+/// Unit-тесты для централизованных encoder/decoder (JSONCoding.swift).
+///
+/// **Цель:** Убедиться что `.tdlib()` factory методы используют правильные стратегии кодирования.
+///
+/// **Что тестируем:**
+/// - `JSONEncoder.tdlib()` использует `.convertToSnakeCase`
+/// - `JSONDecoder.tdlib()` использует `.convertFromSnakeCase`
+/// - Краевые случаи: вложенные объекты, массивы, опциональные поля
+/// - Явные CodingKeys имеют приоритет над автоматической конвертацией
+@Suite("JSONEncoder.tdlib() и JSONDecoder.tdlib()")
+struct JSONCodingTests {
+
+    // MARK: - Test Models
+
+    /// Модель для тестирования базовой конвертации snake_case.
+    struct SimpleModel: Codable, Equatable {
+        let chatId: Int64
+        let firstName: String
+        let isActive: Bool
+    }
+
+    /// Модель с вложенным объектом.
+    struct NestedModel: Codable, Equatable {
+        let userId: Int64
+        let userInfo: UserInfo
+
+        struct UserInfo: Codable, Equatable {
+            let firstName: String
+            let lastName: String
+        }
+    }
+
+    /// Модель с массивом.
+    struct ArrayModel: Codable, Equatable {
+        let chatIds: [Int64]
+        let userNames: [String]
+    }
+
+    /// Модель с опциональными полями.
+    struct OptionalModel: Codable, Equatable {
+        let userId: Int64
+        let userName: String?
+        let phoneNumber: String?
+    }
+
+    /// Модель с явными CodingKeys (приоритет над автоконвертацией).
+    struct ExplicitKeysModel: Codable, Equatable {
+        let type: String
+        let chatId: Int64
+
+        enum CodingKeys: String, CodingKey {
+            case type = "@type"  // явный маппинг (@ не конвертируется)
+            case chatId          // автоматическая конвертация (chat_id)
+        }
+    }
+
+    /// Модель с аббревиатурами и числами.
+    struct AbbreviationModel: Codable, Equatable {
+        let apiId: Int32
+        let apiHash: String
+        let userId2: Int64
+    }
+
+    // MARK: - Encoding Tests
+
+    @Test("Базовая конвертация camelCase → snake_case")
+    func encodeBasicSnakeCase() throws {
+        let model = SimpleModel(chatId: 123, firstName: "John", isActive: true)
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // Проверяем конвертацию camelCase → snake_case
+        #expect(result["chat_id"] as? Int64 == 123, "chatId → chat_id")
+        #expect(result["first_name"] as? String == "John", "firstName → first_name")
+        #expect(result["is_active"] as? Bool == true, "isActive → is_active")
+
+        // Убеждаемся что camelCase ключей НЕТ
+        #expect(result["chatId"] == nil, "Не должно быть camelCase ключа")
+        #expect(result["firstName"] == nil, "Не должно быть camelCase ключа")
+    }
+
+    @Test("Конвертация вложенных объектов")
+    func encodeNestedObjects() throws {
+        let model = NestedModel(
+            userId: 456,
+            userInfo: NestedModel.UserInfo(firstName: "Jane", lastName: "Doe")
+        )
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        #expect(result["user_id"] as? Int64 == 456, "userId → user_id")
+
+        let userInfo = try #require(result["user_info"] as? [String: Any], "user_info должен быть словарём")
+        #expect(userInfo["first_name"] as? String == "Jane", "Вложенный firstName → first_name")
+        #expect(userInfo["last_name"] as? String == "Doe", "Вложенный lastName → last_name")
+    }
+
+    @Test("Конвертация массивов")
+    func encodeArrays() throws {
+        let model = ArrayModel(chatIds: [1, 2, 3], userNames: ["alice", "bob"])
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        #expect(result["chat_ids"] as? [Int64] == [1, 2, 3], "chatIds → chat_ids")
+        #expect(result["user_names"] as? [String] == ["alice", "bob"], "userNames → user_names")
+    }
+
+    @Test("Кодирование опциональных полей (nil пропускается)")
+    func encodeOptionalFields() throws {
+        let model = OptionalModel(userId: 789, userName: "test", phoneNumber: nil)
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        #expect(result["user_id"] as? Int64 == 789)
+        #expect(result["user_name"] as? String == "test", "userName присутствует")
+        #expect(result["phone_number"] == nil, "phoneNumber=nil пропущен")
+    }
+
+    @Test("Явные CodingKeys имеют приоритет")
+    func encodeExplicitCodingKeys() throws {
+        let model = ExplicitKeysModel(type: "testType", chatId: 999)
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // Явный маппинг: type → "@type"
+        #expect(result["@type"] as? String == "testType", "Явный CodingKey работает")
+        #expect(result["type"] == nil, "Не должно быть 'type' ключа")
+
+        // Автоматическая конвертация: chatId → "chat_id"
+        #expect(result["chat_id"] as? Int64 == 999, "Автоконвертация работает параллельно")
+    }
+
+    @Test("Конвертация аббревиатур и чисел")
+    func encodeAbbreviations() throws {
+        let model = AbbreviationModel(apiId: 123, apiHash: "abc", userId2: 456)
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // Swift convertToSnakeCase: apiId → api_id, userId2 → user_id2
+        #expect(result["api_id"] as? Int32 == 123, "apiId → api_id")
+        #expect(result["api_hash"] as? String == "abc", "apiHash → api_hash")
+        #expect(result["user_id2"] as? Int64 == 456, "userId2 → user_id2")
+    }
+
+    // MARK: - Decoding Tests
+
+    @Test("Базовая конвертация snake_case → camelCase")
+    func decodeBasicSnakeCase() throws {
+        let json = """
+        {
+            "chat_id": 123,
+            "first_name": "John",
+            "is_active": true
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(SimpleModel.self, from: data)
+
+        #expect(result.chatId == 123, "chat_id → chatId")
+        #expect(result.firstName == "John", "first_name → firstName")
+        #expect(result.isActive == true, "is_active → isActive")
+    }
+
+    @Test("Декодирование вложенных объектов")
+    func decodeNestedObjects() throws {
+        let json = """
+        {
+            "user_id": 456,
+            "user_info": {
+                "first_name": "Jane",
+                "last_name": "Doe"
+            }
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(NestedModel.self, from: data)
+
+        #expect(result.userId == 456)
+        #expect(result.userInfo.firstName == "Jane")
+        #expect(result.userInfo.lastName == "Doe")
+    }
+
+    @Test("Декодирование массивов")
+    func decodeArrays() throws {
+        let json = """
+        {
+            "chat_ids": [1, 2, 3],
+            "user_names": ["alice", "bob"]
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(ArrayModel.self, from: data)
+
+        #expect(result.chatIds == [1, 2, 3])
+        #expect(result.userNames == ["alice", "bob"])
+    }
+
+    @Test("Декодирование опциональных полей (отсутствующие = nil)")
+    func decodeOptionalFields() throws {
+        let json = """
+        {
+            "user_id": 789,
+            "user_name": "test"
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(OptionalModel.self, from: data)
+
+        #expect(result.userId == 789)
+        #expect(result.userName == "test")
+        #expect(result.phoneNumber == nil, "Отсутствующее поле → nil")
+    }
+
+    @Test("Явные CodingKeys имеют приоритет при декодировании")
+    func decodeExplicitCodingKeys() throws {
+        let json = """
+        {
+            "@type": "testType",
+            "chat_id": 999
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(ExplicitKeysModel.self, from: data)
+
+        #expect(result.type == "testType", "Явный маппинг @type → type")
+        #expect(result.chatId == 999, "Автоконвертация chat_id → chatId")
+    }
+
+    @Test("Декодирование аббревиатур и чисел")
+    func decodeAbbreviations() throws {
+        let json = """
+        {
+            "api_id": 123,
+            "api_hash": "abc",
+            "user_id2": 456
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.tdlib()
+        let result = try decoder.decode(AbbreviationModel.self, from: data)
+
+        #expect(result.apiId == 123, "api_id → apiId")
+        #expect(result.apiHash == "abc", "api_hash → apiHash")
+        #expect(result.userId2 == 456, "user_id2 → userId2")
+    }
+
+    // MARK: - Round-trip Tests
+
+    @Test("Round-trip: encode → decode должен вернуть исходные данные")
+    func roundTripSimpleModel() throws {
+        let original = SimpleModel(chatId: 123, firstName: "John", isActive: true)
+        let encoder = JSONEncoder.tdlib()
+        let decoder = JSONDecoder.tdlib()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(SimpleModel.self, from: data)
+
+        #expect(decoded == original, "Round-trip должен вернуть исходные данные")
+    }
+
+    @Test("Round-trip: вложенные объекты")
+    func roundTripNestedModel() throws {
+        let original = NestedModel(
+            userId: 456,
+            userInfo: NestedModel.UserInfo(firstName: "Jane", lastName: "Doe")
+        )
+        let encoder = JSONEncoder.tdlib()
+        let decoder = JSONDecoder.tdlib()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(NestedModel.self, from: data)
+
+        #expect(decoded == original)
+    }
+
+    @Test("Round-trip: массивы")
+    func roundTripArrayModel() throws {
+        let original = ArrayModel(chatIds: [1, 2, 3], userNames: ["alice", "bob"])
+        let encoder = JSONEncoder.tdlib()
+        let decoder = JSONDecoder.tdlib()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(ArrayModel.self, from: data)
+
+        #expect(decoded == original)
+    }
+
+    @Test("Round-trip: опциональные поля")
+    func roundTripOptionalModel() throws {
+        let original = OptionalModel(userId: 789, userName: "test", phoneNumber: nil)
+        let encoder = JSONEncoder.tdlib()
+        let decoder = JSONDecoder.tdlib()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(OptionalModel.self, from: data)
+
+        #expect(decoded == original)
+    }
+}

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import FoundationExtensions
 @testable import TDLibAdapter
 
 /// Тесты для модели Chat и ChatType.
@@ -39,7 +40,7 @@ struct ChatTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let chatType = try decoder.decode(ChatType.self, from: data)
 
         #expect(chatType == .private(userId: 123456789))
@@ -67,7 +68,7 @@ struct ChatTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let chatType = try decoder.decode(ChatType.self, from: data)
 
         #expect(chatType == .basicGroup(basicGroupId: 987654321))
@@ -97,7 +98,7 @@ struct ChatTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let chatType = try decoder.decode(ChatType.self, from: data)
 
         #expect(chatType == .supergroup(supergroupId: 555666777, isChannel: false))
@@ -127,7 +128,7 @@ struct ChatTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let chatType = try decoder.decode(ChatType.self, from: data)
 
         #expect(chatType == .supergroup(supergroupId: 111222333, isChannel: true))
@@ -157,7 +158,7 @@ struct ChatTests {
         """
 
         let data = Data(json.utf8)
-        let decoder = JSONDecoder()
+        let decoder = JSONDecoder.tdlib()
         let chatType = try decoder.decode(ChatType.self, from: data)
 
         #expect(chatType == .secret(secretChatId: 444555666, userId: 777888999))

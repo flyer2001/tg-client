@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import FoundationExtensions
 import TDLibAdapter
 
 /// Unit-тесты для декодирования TDLibErrorResponse.
@@ -38,7 +39,7 @@ import TDLibAdapter
 @Suite("Декодирование TDLibErrorResponse")
 struct TDLibErrorResponseTests {
 
-    let decoder = JSONDecoder()
+    let decoder = JSONDecoder.tdlib()
 
     /// Декодирование базовой ошибки TDLib.
     ///
@@ -108,5 +109,34 @@ struct TDLibErrorResponseTests {
         // Ожидаем: пользователь ввел неверный SMS код
         #expect(error.code == 401)
         #expect(error.message == "PHONE_CODE_INVALID")
+    }
+
+    /// Проверка helper isAllChatsLoaded (код 404).
+    ///
+    /// Ошибка 404 означает что все чаты уже загружены (loadChats pagination).
+    @Test("isAllChatsLoaded возвращает true для кода 404")
+    func isAllChatsLoadedReturnsTrue() {
+        let error = TDLibErrorResponse(code: 404, message: "Not Found")
+        #expect(error.isAllChatsLoaded == true)
+    }
+
+    /// Проверка helper isAllChatsLoaded для других кодов.
+    @Test("isAllChatsLoaded возвращает false для других кодов")
+    func isAllChatsLoadedReturnsFalse() {
+        let error400 = TDLibErrorResponse(code: 400, message: "Bad Request")
+        let error500 = TDLibErrorResponse(code: 500, message: "Internal Error")
+
+        #expect(error400.isAllChatsLoaded == false)
+        #expect(error500.isAllChatsLoaded == false)
+    }
+
+    /// Проверка static factory allChatsLoaded().
+    @Test("allChatsLoaded() создает ошибку с кодом 404")
+    func allChatsLoadedFactoryCreatesError() {
+        let error = TDLibErrorResponse.allChatsLoaded()
+
+        #expect(error.code == 404)
+        #expect(error.message == "Not Found")
+        #expect(error.isAllChatsLoaded == true)
     }
 }

@@ -1,19 +1,21 @@
-import XCTest
+import Foundation
+import Testing
 @testable import DigestCore
 
 /// Unit-тесты для ChannelCache.
 ///
 /// **Тестируемая функциональность:**
-/// - Добавление каналов (игнорирование non-channels)
+/// - Добавление каналов (обновление при дубликатах)
 /// - Обновление unreadCount
-/// - Получение списка непрочитанных каналов
-/// - Удаление каналов (архивация)
+/// - Получение списка непрочитанных каналов (фильтрация + сортировка)
+/// - Удаление каналов
 /// - Thread-safety (actor isolation)
 ///
 /// **RED фаза (TDD):**
 /// Тесты написаны ДО реализации ChannelCache.
 /// Ожидаемое поведение задокументировано в комментариях.
-final class ChannelCacheTests: XCTestCase {
+@Suite("Unit-тесты для ChannelCache")
+struct ChannelCacheTests {
 
     // MARK: - Test Data Helpers
 
@@ -41,17 +43,18 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Канал сохранён с правильными данными
     /// - getUnreadChannels() возвращает этот канал (если unreadCount > 0)
-    func testAddChannel_EmptyCache_AddsSuccessfully() async throws {
+    @Test("Добавление канала в пустой кэш")
+    func addChannelToEmptyCache() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(chatId: 1, title: "Test", unreadCount: 3)
 
         await cache.add(channel)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 1)
-        XCTAssertEqual(unreadChannels.first?.chatId, 1)
-        XCTAssertEqual(unreadChannels.first?.title, "Test")
-        XCTAssertEqual(unreadChannels.first?.unreadCount, 3)
+        #expect(unreadChannels.count == 1)
+        #expect(unreadChannels.first?.chatId == 1)
+        #expect(unreadChannels.first?.title == "Test")
+        #expect(unreadChannels.first?.unreadCount == 3)
     }
 
     /// Тест: добавление канала с unreadCount = 0 (не должен появиться в getUnreadChannels).
@@ -59,14 +62,15 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Канал сохранён в кэше
     /// - getUnreadChannels() не возвращает этот канал
-    func testAddChannel_ZeroUnreadCount_NotInUnreadList() async throws {
+    @Test("Добавление канала с unreadCount=0")
+    func addChannelWithZeroUnreadCount() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(chatId: 1, unreadCount: 0)
 
         await cache.add(channel)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 0, "Канал с unreadCount=0 не должен быть в списке непрочитанных")
+        #expect(unreadChannels.isEmpty, "Канал с unreadCount=0 не должен быть в списке непрочитанных")
     }
 
     /// Тест: повторное добавление канала (обновление данных).
@@ -74,7 +78,8 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Данные канала обновлены (title, unreadCount, lastReadInboxMessageId)
     /// - chatId остаётся прежним (ключ)
-    func testAddChannel_DuplicateChatId_UpdatesExisting() async throws {
+    @Test("Повторное добавление канала обновляет данные")
+    func addDuplicateChannelUpdatesExisting() async throws {
         let cache = ChannelCache()
         let channel1 = makeChannelInfo(chatId: 1, title: "Old Title", unreadCount: 5)
         let channel2 = makeChannelInfo(chatId: 1, title: "New Title", unreadCount: 10)
@@ -83,9 +88,9 @@ final class ChannelCacheTests: XCTestCase {
         await cache.add(channel2)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 1, "Должен быть только один канал с chatId=1")
-        XCTAssertEqual(unreadChannels.first?.title, "New Title")
-        XCTAssertEqual(unreadChannels.first?.unreadCount, 10)
+        #expect(unreadChannels.count == 1, "Должен быть только один канал с chatId=1")
+        #expect(unreadChannels.first?.title == "New Title")
+        #expect(unreadChannels.first?.unreadCount == 10)
     }
 
     // MARK: - Tests: updateUnreadCount(chatId:count:)
@@ -95,7 +100,8 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - unreadCount обновлён
     /// - Остальные поля (title, lastReadInboxMessageId) не изменены
-    func testUpdateUnreadCount_ExistingChannel_UpdatesSuccessfully() async throws {
+    @Test("Обновление unreadCount для существующего канала")
+    func updateUnreadCountForExistingChannel() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(chatId: 1, title: "Test", unreadCount: 5, lastReadInboxMessageId: 100)
 
@@ -103,9 +109,9 @@ final class ChannelCacheTests: XCTestCase {
         await cache.updateUnreadCount(chatId: 1, count: 15)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.first?.unreadCount, 15)
-        XCTAssertEqual(unreadChannels.first?.title, "Test", "Title не должен измениться")
-        XCTAssertEqual(unreadChannels.first?.lastReadInboxMessageId, 100, "lastReadInboxMessageId не должен измениться")
+        #expect(unreadChannels.first?.unreadCount == 15)
+        #expect(unreadChannels.first?.title == "Test", "Title не должен измениться")
+        #expect(unreadChannels.first?.lastReadInboxMessageId == 100, "lastReadInboxMessageId не должен измениться")
     }
 
     /// Тест: обновление unreadCount до 0 (канал исчезает из getUnreadChannels).
@@ -113,7 +119,8 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Канал остаётся в кэше (не удаляется)
     /// - getUnreadChannels() не возвращает этот канал
-    func testUpdateUnreadCount_ToZero_RemovesFromUnreadList() async throws {
+    @Test("Обновление unreadCount до 0 убирает канал из списка непрочитанных")
+    func updateUnreadCountToZeroRemovesFromList() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(chatId: 1, unreadCount: 5)
 
@@ -121,7 +128,7 @@ final class ChannelCacheTests: XCTestCase {
         await cache.updateUnreadCount(chatId: 1, count: 0)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 0, "Канал с unreadCount=0 не должен быть в списке")
+        #expect(unreadChannels.isEmpty, "Канал с unreadCount=0 не должен быть в списке")
     }
 
     /// Тест: обновление unreadCount для несуществующего канала (no-op).
@@ -129,13 +136,14 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Операция игнорируется (не выбрасывает ошибку)
     /// - Кэш остаётся пустым
-    func testUpdateUnreadCount_NonExistentChannel_NoOp() async throws {
+    @Test("Обновление unreadCount для несуществующего канала - no-op")
+    func updateUnreadCountForNonExistentChannel() async throws {
         let cache = ChannelCache()
 
         await cache.updateUnreadCount(chatId: 999, count: 10)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 0, "Обновление несуществующего канала не должно создавать запись")
+        #expect(unreadChannels.isEmpty, "Обновление несуществующего канала не должно создавать запись")
     }
 
     // MARK: - Tests: getUnreadChannels()
@@ -144,12 +152,13 @@ final class ChannelCacheTests: XCTestCase {
     ///
     /// **Ожидается:**
     /// - Возвращается пустой массив
-    func testGetUnreadChannels_EmptyCache_ReturnsEmpty() async throws {
+    @Test("Получение списка из пустого кэша возвращает пустой массив")
+    func getUnreadChannelsFromEmptyCache() async throws {
         let cache = ChannelCache()
 
         let unreadChannels = await cache.getUnreadChannels()
 
-        XCTAssertEqual(unreadChannels.count, 0)
+        #expect(unreadChannels.isEmpty)
     }
 
     /// Тест: фильтрация каналов (только unreadCount > 0).
@@ -157,7 +166,8 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Возвращаются только каналы с unreadCount > 0
     /// - Каналы с unreadCount = 0 игнорируются
-    func testGetUnreadChannels_MixedChannels_ReturnsOnlyUnread() async throws {
+    @Test("Фильтрация: возвращаются только каналы с unreadCount > 0")
+    func getUnreadChannelsFiltersZeroUnread() async throws {
         let cache = ChannelCache()
         await cache.add(makeChannelInfo(chatId: 1, title: "Channel 1", unreadCount: 5))
         await cache.add(makeChannelInfo(chatId: 2, title: "Channel 2", unreadCount: 0))
@@ -165,17 +175,18 @@ final class ChannelCacheTests: XCTestCase {
 
         let unreadChannels = await cache.getUnreadChannels()
 
-        XCTAssertEqual(unreadChannels.count, 2)
-        XCTAssertTrue(unreadChannels.contains(where: { $0.chatId == 1 }))
-        XCTAssertTrue(unreadChannels.contains(where: { $0.chatId == 3 }))
-        XCTAssertFalse(unreadChannels.contains(where: { $0.chatId == 2 }), "Канал с unreadCount=0 не должен быть в списке")
+        #expect(unreadChannels.count == 2)
+        #expect(unreadChannels.contains(where: { $0.chatId == 1 }))
+        #expect(unreadChannels.contains(where: { $0.chatId == 3 }))
+        #expect(!unreadChannels.contains(where: { $0.chatId == 2 }), "Канал с unreadCount=0 не должен быть в списке")
     }
 
     /// Тест: сортировка каналов (по убыванию unreadCount).
     ///
     /// **Ожидается:**
     /// - Каналы отсортированы: сначала с большим unreadCount
-    func testGetUnreadChannels_MultiplChannels_SortedByUnreadCount() async throws {
+    @Test("Сортировка: каналы отсортированы по убыванию unreadCount")
+    func getUnreadChannelsSortedByUnreadCountDesc() async throws {
         let cache = ChannelCache()
         await cache.add(makeChannelInfo(chatId: 1, unreadCount: 3))
         await cache.add(makeChannelInfo(chatId: 2, unreadCount: 15))
@@ -183,10 +194,10 @@ final class ChannelCacheTests: XCTestCase {
 
         let unreadChannels = await cache.getUnreadChannels()
 
-        XCTAssertEqual(unreadChannels.count, 3)
-        XCTAssertEqual(unreadChannels[0].chatId, 2, "Первый канал должен иметь самый большой unreadCount")
-        XCTAssertEqual(unreadChannels[1].chatId, 3)
-        XCTAssertEqual(unreadChannels[2].chatId, 1)
+        #expect(unreadChannels.count == 3)
+        #expect(unreadChannels[0].chatId == 2, "Первый канал должен иметь самый большой unreadCount")
+        #expect(unreadChannels[1].chatId == 3)
+        #expect(unreadChannels[2].chatId == 1)
     }
 
     // MARK: - Tests: remove(chatId:)
@@ -196,7 +207,8 @@ final class ChannelCacheTests: XCTestCase {
     /// **Ожидается:**
     /// - Канал удалён из кэша
     /// - getUnreadChannels() не возвращает этот канал
-    func testRemoveChannel_ExistingChannel_RemovesSuccessfully() async throws {
+    @Test("Удаление существующего канала")
+    func removeExistingChannel() async throws {
         let cache = ChannelCache()
         await cache.add(makeChannelInfo(chatId: 1, unreadCount: 5))
         await cache.add(makeChannelInfo(chatId: 2, unreadCount: 10))
@@ -204,22 +216,23 @@ final class ChannelCacheTests: XCTestCase {
         await cache.remove(chatId: 1)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 1)
-        XCTAssertEqual(unreadChannels.first?.chatId, 2)
+        #expect(unreadChannels.count == 1)
+        #expect(unreadChannels.first?.chatId == 2)
     }
 
     /// Тест: удаление несуществующего канала (no-op).
     ///
     /// **Ожидается:**
     /// - Операция игнорируется (не выбрасывает ошибку)
-    func testRemoveChannel_NonExistentChannel_NoOp() async throws {
+    @Test("Удаление несуществующего канала - no-op")
+    func removeNonExistentChannel() async throws {
         let cache = ChannelCache()
         await cache.add(makeChannelInfo(chatId: 1, unreadCount: 5))
 
         await cache.remove(chatId: 999)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.count, 1, "Удаление несуществующего канала не должно влиять на кэш")
+        #expect(unreadChannels.count == 1, "Удаление несуществующего канала не должно влиять на кэш")
     }
 
     // MARK: - Tests: Edge Cases
@@ -228,7 +241,8 @@ final class ChannelCacheTests: XCTestCase {
     ///
     /// **Ожидается:**
     /// - Нет переполнения или крэшей
-    func testEdgeCases_MaxValues_HandlesCorrectly() async throws {
+    @Test("Edge case: Int64.max и Int32.max")
+    func handlesMaxValues() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(
             chatId: Int64.max,
@@ -239,21 +253,22 @@ final class ChannelCacheTests: XCTestCase {
         await cache.add(channel)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertEqual(unreadChannels.first?.chatId, Int64.max)
-        XCTAssertEqual(unreadChannels.first?.unreadCount, Int32.max)
+        #expect(unreadChannels.first?.chatId == Int64.max)
+        #expect(unreadChannels.first?.unreadCount == Int32.max)
     }
 
     /// Тест: работа с nil username (приватные каналы).
     ///
     /// **Ожидается:**
     /// - Канал корректно сохраняется с username = nil
-    func testEdgeCases_NilUsername_HandlesCorrectly() async throws {
+    @Test("Edge case: nil username для приватных каналов")
+    func handlesNilUsername() async throws {
         let cache = ChannelCache()
         let channel = makeChannelInfo(chatId: 1, username: nil)
 
         await cache.add(channel)
 
         let unreadChannels = await cache.getUnreadChannels()
-        XCTAssertNil(unreadChannels.first?.username)
+        #expect(unreadChannels.first?.username == nil)
     }
 }
