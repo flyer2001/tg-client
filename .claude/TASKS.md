@@ -182,16 +182,23 @@
 - [x] Проверить компиляцию: `swift build` успешно ✅
 - [ ] Обновить `ARCHITECTURE.md` — добавить диаграмму компонентов (TODO: после GREEN фазы)
 
-**1.5 Unit Tests для ChannelCache** (~1.5 часа)
-- [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift`
-- [ ] Тесты:
-  - `add(_:Chat)` — добавление канала (игнорирует non-channels)
-  - `updateUnreadCount(chatId:count:)` — обновление счётчика
-  - `getUnreadChannels()` — получение списка с unreadCount > 0
-  - `remove(chatId:)` — удаление канала (если архивирован)
-  - Edge cases: nil, пустой список, Int64.max
-- [ ] **GREEN:** Реализация `ChannelCache`
-- [ ] Actor isolation корректна (thread-safe)
+**1.5 Unit Tests для ChannelCache** (~1.5 часа) ⚠️ **[В РАБОТЕ 2025-11-10]**
+- [x] **RED:** `Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift` ✅ Создан
+- [x] Тесты написаны (13 тестов):
+  - `add(_:ChannelInfo)` — добавление канала, обновление при дубликатах
+  - `updateUnreadCount(chatId:count:)` — обновление счётчика, фильтрация при count=0
+  - `getUnreadChannels()` — фильтрация + сортировка по unreadCount (DESC)
+  - `remove(chatId:)` — удаление канала
+  - Edge cases: Int64.max, Int32.max, nil username
+- [ ] **GREEN:** Реализация `ChannelCache` (методы: add, updateUnreadCount, getUnreadChannels, remove)
+- [ ] Проверить actor isolation (thread-safe)
+- [ ] Запустить тесты и убедиться в GREEN
+
+**Контекст для следующей сессии:**
+- RED фаза завершена (тесты компилируются, ждут реализации)
+- Package.swift обновлён: TgClientUnitTests теперь зависит от DigestCore
+- ⚠️ **Проблема:** `swift test` зависает на Linux (использовать `./scripts/build-clean.sh` перед тестами)
+- Следующий шаг: реализовать ChannelCache (private var channels: [Int64: ChannelInfo])
 
 **1.6 Unit Tests для UpdatesHandler** (~1.5 часа)
 - [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/UpdatesHandlerTests.swift`

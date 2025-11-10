@@ -1,3 +1,25 @@
+## [2025-11-10] - ChannelCache Unit Tests (RED фаза)
+
+**Выполненные задачи:**
+- Создан файл `Tests/TgClientUnitTests/DigestCore/ChannelCacheTests.swift` с 13 unit-тестами
+- Обновлён `Package.swift`: добавлена зависимость DigestCore в TgClientUnitTests
+- Усилено правило в `CLAUDE.md`: обязательная проверка Platform перед сборкой (Linux → ./scripts/build-clean.sh)
+
+**Реализованные тесты (RED фаза):**
+- `add(_:ChannelInfo)` — добавление, обновление дубликатов, фильтрация по unreadCount
+- `updateUnreadCount(chatId:count:)` — обновление счётчика, исключение каналов с count=0
+- `getUnreadChannels()` — фильтрация (unreadCount > 0) + сортировка по убыванию
+- `remove(chatId:)` — удаление каналов из кэша
+- Edge cases: Int64.max, Int32.max, nil username
+
+**Следующий шаг:**
+- GREEN фаза: реализовать ChannelCache (методы: add, updateUnreadCount, getUnreadChannels, remove)
+
+**Известные проблемы:**
+- `swift test` зависает на Linux (обходное решение: использовать `./scripts/build-clean.sh` перед тестами)
+
+---
+
 ## [2025-11-09] - ChannelInfo Model Implementation
 
 **Реализовано:**
