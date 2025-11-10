@@ -1,4 +1,5 @@
 import Foundation
+import FoundationExtensions
 
 /// High-level API для TDLibClient.
 ///
@@ -143,7 +144,7 @@ extension TDLibClient: TDLibClientProtocol {
             // Пытаемся декодировать в нужный тип
             do {
                 let data = try JSONSerialization.data(withJSONObject: rawResponse)
-                let decoder = JSONDecoder()
+                let decoder = JSONDecoder.tdlib()
                 let response = try decoder.decode(T.self, from: data)
                 return response
             } catch {

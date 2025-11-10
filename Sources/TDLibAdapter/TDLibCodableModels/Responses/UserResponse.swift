@@ -20,8 +20,8 @@ public struct UserResponse: TDLibResponse, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id
-        case firstName = "first_name"
-        case lastName = "last_name"
+        case firstName
+        case lastName
         case username
     }
 

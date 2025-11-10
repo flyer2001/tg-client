@@ -23,8 +23,8 @@ public struct LogStreamFile: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case path
-        case maxFileSize = "max_file_size"
-        case redirectStderr = "redirect_stderr"
+        case maxFileSize
+        case redirectStderr
     }
 
     /// Создаёт настройки записи логов в файл.
@@ -75,7 +75,7 @@ public struct SetLogStreamRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case logStream = "log_stream"
+        case logStream
     }
 
     /// Создаёт запрос для установки потока логов.

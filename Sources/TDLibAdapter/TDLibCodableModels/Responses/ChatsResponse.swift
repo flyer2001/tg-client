@@ -10,7 +10,7 @@ public struct ChatsResponse: TDLibResponse, Sendable, Equatable {
     public let chatIds: [Int64]
 
     enum CodingKeys: String, CodingKey {
-        case chatIds = "chat_ids"
+        case chatIds
     }
 
     #if DEBUG

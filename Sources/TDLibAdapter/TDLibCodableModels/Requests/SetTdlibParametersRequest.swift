@@ -20,20 +20,20 @@ public struct SetTdlibParametersRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case useTestDc = "use_test_dc"
-        case databaseDirectory = "database_directory"
-        case filesDirectory = "files_directory"
-        case databaseEncryptionKey = "database_encryption_key"
-        case useFileDatabase = "use_file_database"
-        case useChatInfoDatabase = "use_chat_info_database"
-        case useMessageDatabase = "use_message_database"
-        case useSecretChats = "use_secret_chats"
-        case apiId = "api_id"
-        case apiHash = "api_hash"
-        case systemLanguageCode = "system_language_code"
-        case deviceModel = "device_model"
-        case systemVersion = "system_version"
-        case applicationVersion = "application_version"
+        case useTestDc
+        case databaseDirectory
+        case filesDirectory
+        case databaseEncryptionKey
+        case useFileDatabase
+        case useChatInfoDatabase
+        case useMessageDatabase
+        case useSecretChats
+        case apiId
+        case apiHash
+        case systemLanguageCode
+        case deviceModel
+        case systemVersion
+        case applicationVersion
     }
 
     public init(

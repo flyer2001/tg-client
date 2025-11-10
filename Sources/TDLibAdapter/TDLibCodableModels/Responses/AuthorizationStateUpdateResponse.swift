@@ -5,7 +5,7 @@ public struct AuthorizationStateUpdateResponse: TDLibResponse, Sendable {
     public let authorizationState: AuthorizationStateInfo
 
     enum CodingKeys: String, CodingKey {
-        case authorizationState = "authorization_state"
+        case authorizationState
     }
 
     #if DEBUG

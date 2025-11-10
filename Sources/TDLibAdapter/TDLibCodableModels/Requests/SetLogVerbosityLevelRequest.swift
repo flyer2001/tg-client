@@ -14,7 +14,7 @@ public struct SetLogVerbosityLevelRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case newVerbosityLevel = "new_verbosity_level"
+        case newVerbosityLevel
     }
 
     /// Создаёт запрос для установки уровня логирования.

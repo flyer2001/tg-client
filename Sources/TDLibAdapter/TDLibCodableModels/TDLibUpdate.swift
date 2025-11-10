@@ -1,4 +1,5 @@
 import Foundation
+import FoundationExtensions
 
 /// Type-safe представление всех возможных обновлений и ответов от TDLib.
 ///
@@ -39,11 +40,11 @@ public enum TDLibUpdate: Sendable {
 
         switch type {
         case "error":
-            let error = try JSONDecoder().decode(TDLibErrorResponse.self, from: data)
+            let error = try JSONDecoder.tdlib().decode(TDLibErrorResponse.self, from: data)
             self = .error(error)
 
         case "updateAuthorizationState":
-            let update = try JSONDecoder().decode(AuthorizationStateUpdateResponse.self, from: data)
+            let update = try JSONDecoder.tdlib().decode(AuthorizationStateUpdateResponse.self, from: data)
             self = .authorizationState(update)
 
         case "ok":

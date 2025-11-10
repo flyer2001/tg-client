@@ -22,11 +22,11 @@ public enum ChatType: Sendable, Equatable {
 extension ChatType: Decodable {
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case userId = "user_id"
-        case basicGroupId = "basic_group_id"
-        case supergroupId = "supergroup_id"
-        case isChannel = "is_channel"
-        case secretChatId = "secret_chat_id"
+        case userId
+        case basicGroupId
+        case supergroupId
+        case isChannel
+        case secretChatId
     }
 
     public init(from decoder: Decoder) throws {

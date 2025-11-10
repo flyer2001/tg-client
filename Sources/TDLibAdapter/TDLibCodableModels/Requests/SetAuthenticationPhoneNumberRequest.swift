@@ -6,7 +6,7 @@ public struct SetAuthenticationPhoneNumberRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case phoneNumber = "phone_number"
+        case phoneNumber
     }
 
     public init(phoneNumber: String) {

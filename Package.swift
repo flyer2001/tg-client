@@ -33,9 +33,15 @@ let package = Package(
             ]
         ),
         .target(
+            name: "FoundationExtensions",
+            dependencies: [],
+            path: "Sources/FoundationExtensions"
+        ),
+        .target(
             name: "TDLibAdapter",
             dependencies: [
                 "CTDLib",
+                "FoundationExtensions",
                 .product(name: "Logging", package: "swift-log")
             ],
             path: "Sources/TDLibAdapter"
@@ -56,7 +62,7 @@ let package = Package(
         // Test targets
         .testTarget(
             name: "TgClientUnitTests",
-            dependencies: ["TDLibAdapter", "DigestCore"],
+            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore"],
             path: "Tests/TgClientUnitTests"
         ),
         .testTarget(

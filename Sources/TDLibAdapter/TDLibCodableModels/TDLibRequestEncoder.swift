@@ -1,4 +1,5 @@
 import Foundation
+import FoundationExtensions
 
 /// Энкодер для сериализации TDLibRequest в JSON формат TDLib.
 ///
@@ -11,7 +12,7 @@ public struct TDLibRequestEncoder {
     private let jsonEncoder: JSONEncoder
 
     public init() {
-        self.jsonEncoder = JSONEncoder()
+        self.jsonEncoder = JSONEncoder.tdlib()
     }
 
     /// Кодирует TDLibRequest в JSON Data.

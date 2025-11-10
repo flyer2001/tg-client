@@ -49,7 +49,7 @@ public struct GetChatsRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case chatList = "chat_list"
+        case chatList
         case limit
     }
 

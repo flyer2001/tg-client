@@ -11,7 +11,7 @@ public struct CheckDatabaseEncryptionKeyRequest: TDLibRequest {
 
     enum CodingKeys: String, CodingKey {
         case type = "@type"
-        case encryptionKey = "encryption_key"
+        case encryptionKey
     }
 
     public init(encryptionKey: String) {
