@@ -56,7 +56,7 @@ let package = Package(
         // Test targets
         .testTarget(
             name: "TgClientUnitTests",
-            dependencies: ["TDLibAdapter"],
+            dependencies: ["TDLibAdapter", "DigestCore"],
             path: "Tests/TgClientUnitTests"
         ),
         .testTarget(
