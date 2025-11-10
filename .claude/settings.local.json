@@ -8,7 +8,9 @@
       "Bash(git fetch:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cat:*)",
+      "Bash(jq:*)"
     ],
     "deny": [],
     "ask": []
