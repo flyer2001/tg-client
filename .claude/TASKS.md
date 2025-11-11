@@ -44,11 +44,14 @@
   - Создан `GetChatRequest` с 3 unit-тестами (базовый, отрицательный ID, edge cases)
   - Создан `ChatResponse` с 8 unit-тестами (5 типов чатов + 3 edge cases)
   - Добавлен `ChatType.Encodable` для round-trip тестов
-- **Следующий шаг:** MVP-1.7 Phase 2 (Update enum, Component Test для getChat)
+- ✅ **MVP-1.7 Phase 2 ЗАВЕРШЕНА:** Update enum (107 тестов проходят)
+  - Создан `Update` enum для TDLib updates (updateNewChat, updateChatReadInbox, .unknown fallback)
+  - 5 unit-тестов: round-trip для обоих типов + edge cases
+- **Следующий шаг:** MVP-1.7 Phase 3 (Component Test для loadChats/getChat через TDLibClient)
 
 **Приоритеты:**
 
-1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Продолжить Phase 2 (Update enum, Component Tests)
+1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Продолжить Phase 3 (Component Tests для loadChats/getChat)
 2. **[MVP-1.6] ChannelMessageSource** - Продолжить реализацию (UpdatesHandler, MessageFetcher)
 3. **[MVP-1.5] Типизация TDLib методов** - Завершить (Message модель, GetChatHistoryRequest)
 
