@@ -1,0 +1,77 @@
+# SwiftLint configuration for tg-client project
+# Documentation: https://realm.github.io/SwiftLint/
+
+# Paths to include/exclude
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - .swiftpm
+  - build
+  - DerivedData
+  - Sources/FoundationExtensions/JSONCoding.swift  # Определяет .tdlib() методы
+
+# Disabled default rules
+disabled_rules:
+  - line_length          # Many TDLib JSON examples are long
+  - type_body_length     # Test files can be long
+  - file_length          # Test files with many cases
+  - function_body_length # Component tests can be complex
+
+# Opt-in rules (not enabled by default)
+opt_in_rules:
+  - explicit_init        # Prefer explicit .init() for clarity
+  - redundant_nil_coalescing
+
+# Rule configurations
+type_name:
+  min_length: 2
+  max_length: 50
+
+identifier_name:
+  min_length: 1          # Allow 'i' in loops
+  max_length: 50
+  excluded:
+    - id                 # Common TDLib field
+    - ok                 # TDLib response type
+
+# Custom rules for project consistency
+custom_rules:
+  # Запрет на использование XCTest (используем Swift Testing)
+  no_xctest_import:
+    name: "No XCTest Import"
+    message: "Use 'import Testing' instead of 'import XCTest'. Project uses Swift Testing framework."
+    regex: "^\\s*import XCTest"
+    severity: error
+    match_kinds:
+      - identifier
+
+  # Запрет на прямое использование JSONEncoder() (используем .tdlib())
+  no_direct_json_encoder:
+    name: "No Direct JSONEncoder"
+    message: "Use 'JSONEncoder.tdlib()' instead of 'JSONEncoder()'. This ensures snake_case encoding for TDLib API."
+    regex: "JSONEncoder\\(\\)"
+    severity: error
+
+  # Запрет на прямое использование JSONDecoder() (используем .tdlib())
+  no_direct_json_decoder:
+    name: "No Direct JSONDecoder"
+    message: "Use 'JSONDecoder.tdlib()' instead of 'JSONDecoder()'. This ensures snake_case decoding from TDLib API."
+    regex: "JSONDecoder\\(\\)"
+    severity: error
+
+  # Предупреждение о force unwrap (должен быть обоснован)
+  force_unwrap_warning:
+    name: "Force Unwrap Should Be Justified"
+    message: "Force unwrap (!) should be avoided. Use 'guard', 'if let', or '#require' in tests."
+    regex: "\\w+!"
+    severity: warning
+    match_kinds:
+      - identifier
+    excluded:
+      - ".*Tests\\.swift$"  # В тестах используем #require
+
+# Reporter type (xcode for Xcode integration, github-actions-logging for CI)
+reporter: "xcode"
