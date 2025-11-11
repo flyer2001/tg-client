@@ -1,3 +1,27 @@
+## [2025-11-12] - MVP-1.7 Phase 3: loadChats + getChat реализация
+
+**Реализовано:**
+- Добавлены методы `loadChats()` и `getChat()` в TDLibClientProtocol
+- Реализация в TDLibClient+HighLevelAPI.swift (через waitForResponse)
+- Manual тест на реальном TDLib: все модели корректно декодируются
+- MockTDLibClient обновлён с новыми методами
+- 5 Component тестов для loadChats/getChat (success, 404, errors, edge cases)
+- SETUP.md: добавлена инструкция для запуска с .env (`set -a && source .env`)
+- TD-8: добавлена задача для удаления устаревшего метода getChats
+
+**Тесты:** 112 проходят (107 unit + 5 component)
+
+**Файлы:**
+- `Sources/TDLibAdapter/TDLibClientProtocol.swift` - новые методы в протокол
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift` - реализация
+- `Tests/TgClientComponentTests/TDLibAdapter/LoadChatsAndGetChatTests.swift` - component тесты
+- `Tests/TgClientComponentTests/Mocks/MockTDLibClient.swift` - mock обновлён
+- `Sources/App/main.swift` - manual тест (временно)
+- `.claude/SETUP.md` - команда запуска с .env
+- `.claude/TASKS.md` - прогресс обновлён (TD-8 добавлен)
+
+**Следующая сессия:** MVP-1.7 Phase 4 - AsyncStream для updates от TDLib
+
 ## [2025-11-11] - MVP-1.7 Phase 1: GetChatRequest + ChatResponse
 ## 2025-11-11 | MVP-1.7 Phase 2 - Update enum ✅
 

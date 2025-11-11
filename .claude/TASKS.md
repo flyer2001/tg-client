@@ -37,17 +37,9 @@
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
 
-**Контекст текущей сессии (2025-11-11):**
-- ✅ **TD-7 ЗАВЕРШЕНА:** Test Builders + рефакторинг ResponseTests (91 тест)
-- ✅ **TD-5 Phase 2 ЗАВЕРШЕНА:** SwiftLint интеграция (CI + Git hooks)
-- ✅ **MVP-1.7 Phase 1 ЗАВЕРШЕНА:** GetChatRequest + ChatResponse (102 теста проходят)
-  - Создан `GetChatRequest` с 3 unit-тестами (базовый, отрицательный ID, edge cases)
-  - Создан `ChatResponse` с 8 unit-тестами (5 типов чатов + 3 edge cases)
-  - Добавлен `ChatType.Encodable` для round-trip тестов
-- ✅ **MVP-1.7 Phase 2 ЗАВЕРШЕНА:** Update enum (107 тестов проходят)
-  - Создан `Update` enum для TDLib updates (updateNewChat, updateChatReadInbox, .unknown fallback)
-  - 5 unit-тестов: round-trip для обоих типов + edge cases
-- **Следующий шаг:** MVP-1.7 Phase 3 (Component Test для loadChats/getChat через TDLibClient)
+**Контекст текущей сессии (2025-11-12):**
+- ✅ **MVP-1.7 Phase 3 ЗАВЕРШЕНА:** loadChats + getChat реализация (112 тестов)
+- **Следующий шаг:** MVP-1.7 Phase 4 (AsyncStream для updates от TDLib)
 
 **Приоритеты:**
 
@@ -820,6 +812,39 @@ class TelegramBotNotifier: BotNotifierProtocol {
 **Результат:** 92 теста проходят (было 88, добавили 9 новых)
 
 **Зависимости:** TD-5 Phase 1 (завершена)
+
+---
+
+### TD-8: Удаление getChats (заменён на loadChats + getChat)
+
+**Проблема:**
+- Метод `getChats()` возвращает только список ID чатов
+- Для получения полной информации всё равно нужен `getChat(chatId:)` для каждого ID
+- Правильный подход: `loadChats()` (pagination) + `getChat()` (детали)
+
+**Используется только в:**
+- `main.swift` (строка 67) - простая проверка после авторизации
+- Unit-тесты (`GetChatsRequestTests`, `ChatsResponseTests`)
+- MockTDLibClient
+- DoCC документация
+
+**Решение (~30 мин):**
+- [ ] Заменить `getChats()` в `main.swift` на `loadChats()` + `getChat()` пример
+- [ ] Удалить метод из `TDLibClientProtocol`
+- [ ] Удалить реализацию из `TDLibClient+HighLevelAPI.swift`
+- [ ] Удалить метод из `MockTDLibClient`
+- [ ] Удалить `GetChatsRequest.swift`
+- [ ] Удалить `ChatsResponse.swift`
+- [ ] Удалить `GetChatsRequestTests.swift`
+- [ ] Удалить `ChatsResponseTests.swift`
+- [ ] Удалить DoCC документацию (`GetChatsRequestTests.md`, `ChatsResponseTests.md`)
+- [ ] Запустить тесты: убедиться что всё компилируется
+
+**Приоритет:** Low (после завершения MVP-1.7 Phase 3 - loadChats/getChat реализации)
+
+**Оценка времени:** ~30 минут
+
+**Зависимости:** MVP-1.7 Phase 3 (loadChats/getChat реализация должна быть завершена и проверена)
 
 ---
 
