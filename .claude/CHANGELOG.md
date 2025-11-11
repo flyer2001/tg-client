@@ -1,3 +1,13 @@
+## [2025-11-11] - MVP-1.7 Phase 1: GetChatRequest + ChatResponse
+
+**Выполнено:**
+- Реализован `GetChatRequest` для получения полной информации о чате (3 unit-теста)
+- Реализован `ChatResponse` с полями: id, chatType, title, unreadCount, lastReadInboxMessageId (8 unit-тестов)
+- Добавлен `ChatType.Encodable` для round-trip кодирования в тестах
+- Все тесты проходят: 102 unit-теста (было 91, добавили 11)
+
+**Следующий шаг:**
+- MVP-1.7 Phase 2: Update enum для TDLib updates + Component Tests для getChat/loadChats
 ## [2025-11-11] - Рефакторинг тестов + SwiftLint интеграция
 
 **TD-7: Test Builders** ✅

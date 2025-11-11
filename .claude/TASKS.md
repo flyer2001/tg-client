@@ -19,7 +19,7 @@
 > 🎯 **MVP (цели и scope):** [MVP.md](.claude/MVP.md) — читать по требованию (большой файл)
 > 💡 **Будущие фичи:** [BACKLOG.md](.claude/BACKLOG.md) — бэклог для версий после MVP
 > 📝 **История изменений:** [CHANGELOG.md](.claude/CHANGELOG.md) — логи завершенных сессий, читать только по требованию (большой файл)
-> 📋 **Последнее обновление:** 2025-11-10
+> 📋 **Последнее обновление:** 2025-11-11
 
 ---
 
@@ -40,11 +40,15 @@
 **Контекст текущей сессии (2025-11-11):**
 - ✅ **TD-7 ЗАВЕРШЕНА:** Test Builders + рефакторинг ResponseTests (91 тест)
 - ✅ **TD-5 Phase 2 ЗАВЕРШЕНА:** SwiftLint интеграция (CI + Git hooks)
-- **Следующий шаг:** MVP-1.7 (GetChatRequest, ChatResponse, Update enum)
+- ✅ **MVP-1.7 Phase 1 ЗАВЕРШЕНА:** GetChatRequest + ChatResponse (102 теста проходят)
+  - Создан `GetChatRequest` с 3 unit-тестами (базовый, отрицательный ID, edge cases)
+  - Создан `ChatResponse` с 8 unit-тестами (5 типов чатов + 3 edge cases)
+  - Добавлен `ChatType.Encodable` для round-trip тестов
+- **Следующий шаг:** MVP-1.7 Phase 2 (Update enum, Component Test для getChat)
 
 **Приоритеты:**
 
-1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Завершить (GetChatRequest, ChatResponse, Update enum)
+1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Продолжить Phase 2 (Update enum, Component Tests)
 2. **[MVP-1.6] ChannelMessageSource** - Продолжить реализацию (UpdatesHandler, MessageFetcher)
 3. **[MVP-1.5] Типизация TDLib методов** - Завершить (Message модель, GetChatHistoryRequest)
 
@@ -104,11 +108,12 @@
 - [ ] **GREEN:** Создать `ViewMessagesRequest`
 - [ ] Параметры: chatId, messageIds, forceRead
 
-**1.7 Response модели** ✅ (~30 мин) **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-07]**
+**1.7 Response модели** ✅ (~30 мин) **[ЗАВЕРШЕНО 2025-11-11]**
 - [x] **RED:** Тест декодирования `ChatsResponse` (список chatIds)
 - [x] **GREEN:** Создать `ChatsResponse`
-- [ ] **RED:** Тест декодирования `MessagesResponse` (список Message)
-- [ ] **GREEN:** Создать `MessagesResponse`
+- [x] **RED:** Тест декодирования `ChatResponse` (полная модель Chat) — 8 тестов
+- [x] **GREEN:** Создать `ChatResponse` + `ChatType.Encodable`
+- [ ] **TODO следующая сессия:** MessagesResponse (список Message)
 
 **1.8 Проверка** ✅ (~15 мин) **[ЗАВЕРШЕНО 2025-11-07]**
 - [x] Проверить сборку: `swift build && swift test` (50 тестов проходят)
@@ -217,16 +222,18 @@
 - [ ] **GREEN:** Реализация `UpdatesHandler`
 - [ ] Использовать `AsyncStream<Update>` от TDLibClient
 
-**1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-10]**
+**1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-11]**
 - [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)
   - `LoadChatsRequest` — параметры: chatList, limit ✅
   - `OkResponse` — универсальный успешный ответ TDLib ✅ (2 теста проходят)
 - [x] **GREEN:** Реализация моделей (Codable, Sendable, Equatable) ✅
 - [x] **RED:** Unit-тесты для `TDLibErrorResponse.isAllChatsLoaded` helper ✅ (3 новых теста)
 - [x] **GREEN:** Реализация helper для 404 ошибки (pagination) ✅
+- [x] **RED:** Unit-тесты для `GetChatRequest` ✅ (3 теста: базовый, отрицательный ID, edge cases)
+- [x] **GREEN:** Реализация `GetChatRequest` ✅
+- [x] **RED:** Unit-тесты для `ChatResponse` ✅ (8 тестов: 5 типов чатов + edge cases)
+- [x] **GREEN:** Реализация `ChatResponse` + `ChatType.Encodable` ✅
 - [ ] **TODO следующая сессия:**
-  - `GetChatRequest` — параметр: chatId
-  - `ChatResponse` — полная модель Chat (id, title, type, unreadCount, lastReadInboxMessageId, username)
   - `Update` — enum для updates (updateNewChat, updateChatReadInbox)
   - Component Test для TDLibClient: `loadChats()`, `getChat()`, `updates: AsyncStream<Update>`
   - Mock должен эмулировать updates sequence
