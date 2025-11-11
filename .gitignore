@@ -44,6 +44,9 @@ run.sh
 .idea/
 *.sublime-*
 
+# Claude Code локальные настройки
+.claude/settings.local.json
+
 # Бинарники и артефакты сборки
 *.o
 *.so
