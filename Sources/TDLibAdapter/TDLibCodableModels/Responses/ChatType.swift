@@ -17,9 +17,9 @@ public enum ChatType: Sendable, Equatable {
     case secret(secretChatId: Int64, userId: Int64)
 }
 
-// MARK: - Decodable
+// MARK: - Codable
 
-extension ChatType: Decodable {
+extension ChatType: Codable {
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case userId
@@ -58,6 +58,30 @@ extension ChatType: Decodable {
                 in: container,
                 debugDescription: "Unknown ChatType: \(type)"
             )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .private(let userId):
+            try container.encode("chatTypePrivate", forKey: .type)
+            try container.encode(userId, forKey: .userId)
+
+        case .basicGroup(let basicGroupId):
+            try container.encode("chatTypeBasicGroup", forKey: .type)
+            try container.encode(basicGroupId, forKey: .basicGroupId)
+
+        case .supergroup(let supergroupId, let isChannel):
+            try container.encode("chatTypeSupergroup", forKey: .type)
+            try container.encode(supergroupId, forKey: .supergroupId)
+            try container.encode(isChannel, forKey: .isChannel)
+
+        case .secret(let secretChatId, let userId):
+            try container.encode("chatTypeSecret", forKey: .type)
+            try container.encode(secretChatId, forKey: .secretChatId)
+            try container.encode(userId, forKey: .userId)
         }
     }
 }
