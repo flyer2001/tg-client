@@ -37,23 +37,16 @@
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
 
-**Контекст текущей сессии (2025-11-10 вечер):**
-- ✅ **TD-6 ЗАВЕРШЕНА:** Unit-тесты для TDLibRequestEncoder + TDLibResponseDecoder (92 теста проходят)
-  - Создан `TDLibRequestEncoderTests.swift` (4 теста): проверка snake_case кодирования, @type, round-trip
-  - Создан `TDLibResponseDecoderTests.swift` (5 тестов): проверка snake_case декодирования, optional fields, массивы
-  - Покрыты Request модели: SetTdlibParametersRequest, LoadChatsRequest
-  - Покрыты Response модели: UserResponse, ChatsResponse, TDLibErrorResponse
-- **Следующий шаг:** TD-7 (Test Builders) → TD-5 Phase 2 (SwiftLint)
+**Контекст текущей сессии (2025-11-11):**
+- ✅ **TD-7 ЗАВЕРШЕНА:** Test Builders + рефакторинг ResponseTests (91 тест)
+- ✅ **TD-5 Phase 2 ЗАВЕРШЕНА:** SwiftLint интеграция (CI + Git hooks)
+- **Следующий шаг:** MVP-1.7 (GetChatRequest, ChatResponse, Update enum)
 
 **Приоритеты:**
 
-1. **[TD-7] Test Builders + убрать raw JSON из ResponseTests** (~1.5-2 часа)
-   - Создать TestHelpers/TDLibTestBuilders.swift
-   - Убрать сырые JSON строки из ResponseTests, использовать билдеры
-3. **[TD-5 Phase 2] SwiftLint rules** (~1 час)
-   - Установить SwiftLint + настроить custom rules
-   - Блокировать прямое использование JSONEncoder()/JSONDecoder()
-4. **[MVP-1.7] TDLib модели для loadChats/getChat** - Завершить (GetChatRequest, ChatResponse, Update enum)
+1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Завершить (GetChatRequest, ChatResponse, Update enum)
+2. **[MVP-1.6] ChannelMessageSource** - Продолжить реализацию (UpdatesHandler, MessageFetcher)
+3. **[MVP-1.5] Типизация TDLib методов** - Завершить (Message модель, GetChatHistoryRequest)
 
 > **См. детали:**
 > - [MVP-1.6: ChannelMessageSource](#mvp-16-channelmessagesource-получение-непрочитанных-через-loadchats--updates-приоритет) — детальный план с декомпозицией
@@ -759,19 +752,10 @@ class TelegramBotNotifier: BotNotifierProtocol {
 - [x] Создать unit-тесты для `.tdlib()` методов (16 тестов): базовые + краевые + round-trip
 - [x] Прогнать тесты: 88 тестов проходят ✅
 
-**Фаза 2: SwiftLint правила** ✅ (~1 час) **[ЗАВЕРШЕНО 2025-11-11]**
-- [x] Добавить SwiftLint как dependency в Package.swift (Swift Package Plugin)
-- [x] Создать `.swiftlint.yml` в корне проекта с custom rules:
-  - `no_xctest_import` — блокирует `import XCTest`
-  - `no_direct_json_encoder` — блокирует `JSONEncoder()`
-  - `no_direct_json_decoder` — блокирует `JSONDecoder()`
-- [x] Создать Git pre-commit hook (`scripts/install-git-hooks.sh`)
-- [x] Добавить в `.github/workflows/linux-build.yml` проверку SwiftLint (через `norio-nomura/action-swiftlint@3.2.1`)
-- [x] Обновить SETUP.md и DEPLOY.md с инструкциями по установке
-- [x] Проверка кода: 0 нарушений (исключён `JSONCoding.swift` из проверки)
-- [ ] **TODO для следующей сессии:** Проверить сборку на Linux машине после изменений
-
-**Результат:** SwiftLint полностью интегрирован (GitHub Actions CI + Git pre-commit hook). Проект собирается, 91 тест проходит.
+**Фаза 2: SwiftLint правила** ✅ **[ЗАВЕРШЕНО 2025-11-11]**
+- [x] SwiftLint интегрирован (CI + Git hooks)
+- [x] Настроены custom rules и disabled_rules для TDD
+- [x] Проверено на Linux сервере — CI проходит успешно ✅
 
 **Фаза 3: Test Builders (~2 часа)**
 - [ ] Создать `Tests/TestHelpers/TDLibTestBuilders.swift`:
@@ -831,35 +815,10 @@ class TelegramBotNotifier: BotNotifierProtocol {
 
 ### TD-7: Test Builders + убрать raw JSON из ResponseTests ✅ **[ЗАВЕРШЕНО 2025-11-11]**
 
-**Проблема:**
-- ResponseTests используют сырые JSON строки для декодирования
-- При изменении стратегии кодирования нужно обновлять JSON вручную
-- Нет переиспользуемых билдеров для создания тестовых данных
-
-**Цель:**
-1. Создать Test Helpers для упрощения создания тестовых моделей
-2. Убрать raw JSON из ResponseTests там, где это возможно
-3. Оставить raw JSON только для тестов самих encoder/decoder стратегий
-
-**Решение:**
-
-**Реализованный подход:**
-- [x] Создан `Tests/TestHelpers/EncodableExtensions.swift` с extension `Encodable.toTDLibData()`
-- [x] `TDLibResponse` изменён на `Codable` (вместо `Decodable`) для поддержки round-trip тестов
-- [x] Убран raw JSON из всех Response тестов:
-  - UserResponseTests → round-trip тесты
-  - ChatsResponseTests → round-trip тесты
-  - AuthorizationStateUpdateResponseTests → round-trip тесты
-- [x] Обновлён TESTING.md: добавлен раздел "Test Helpers" с примерами
-- [x] Все тесты проходят: 91 unit-тест ✅
-
-**Архитектурное решение:**
-- TestHelpers как отдельный target (не testTarget)
-- Extension без `#if DEBUG` (тестовый код не попадает в production)
-- `TDLibResponse: Codable` документирован (encode только для тестов)
-
-**Результат:** 91 тест проходят (было 92, один тест удалён при рефакторинге)
-
-**Зависимости:** TD-5 Phase 1 (завершена)
+**Результат:**
+- [x] TestHelpers модуль с `Encodable.toTDLibData()` helper
+- [x] `TDLibResponse` перешёл на `Codable` для round-trip тестов
+- [x] Убран raw JSON из всех Response тестов
+- [x] 91 unit-тест проходят ✅
 
 ---

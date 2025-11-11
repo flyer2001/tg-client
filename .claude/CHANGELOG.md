@@ -1,3 +1,31 @@
+## [2025-11-11] - Рефакторинг тестов + SwiftLint интеграция
+
+**TD-7: Test Builders** ✅
+- Создан TestHelpers модуль с helper `Encodable.toTDLibData()`
+- `TDLibResponse` перешёл на `Codable` для поддержки round-trip тестов
+- Убран raw JSON из всех Response тестов (UserResponseTests, ChatsResponseTests, AuthorizationStateUpdateResponseTests)
+- Упрощены тесты через encode → decode pattern
+- 91 unit-тест проходят
+
+**TD-5 Phase 2: SwiftLint интеграция** ✅
+- SwiftLint добавлен в Package.swift (dependency + plugin)
+- Создан `.swiftlint.yml` с custom rules:
+  - `no_xctest_import` — блокировка XCTest (используем Swift Testing)
+  - `no_direct_json_encoder/decoder` — требование `.tdlib()` методов
+- Настроены disabled_rules под TDD workflow (todo, nesting, cyclomatic_complexity)
+- GitHub Actions CI job для линтера (`norio-nomura/action-swiftlint@3.2.1`)
+- Git pre-commit hook (`scripts/install-git-hooks.sh`)
+- SwiftLint установлен на Linux сервере (v0.57.0)
+- CI проходит успешно ✅
+
+**Commits:**
+- `refactor: TDLibResponse перешёл на Codable для поддержки тестов`
+- `test: упрощение тестов Response через JSONEncoder/Decoder`
+- `feat: SwiftLint + TestHelpers модуль + git hooks`
+- `build: SwiftLint зависимость + CI job для линтера`
+- `build: настройка SwiftLint под TDD workflow`
+- `docs: актуализация SETUP, TESTING, TASKS, CHANGELOG`
+
 ## [2025-11-11] - TD-5 Phase 2: SwiftLint Integration + TD-7: Test Helpers
 
 **Основные изменения:**
