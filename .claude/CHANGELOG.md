@@ -1,4 +1,25 @@
 ## [2025-11-11] - MVP-1.7 Phase 1: GetChatRequest + ChatResponse
+## 2025-11-11 | MVP-1.7 Phase 2 - Update enum ✅
+
+**Контекст:** Продолжение реализации TDLib моделей для updates механизма (MVP-1.6 ChannelMessageSource).
+
+**Выполнено:**
+- ✅ **Update enum для TDLib updates**
+  - Создан `Update` enum с поддержкой `updateNewChat` и `updateChatReadInbox`
+  - `.unknown` fallback для будущих типов updates
+  - 5 unit-тестов (round-trip, edge cases, unknown type)
+  - 107 unit-тестов проходят (было 102)
+
+**Файлы:**
+- `Sources/TDLibAdapter/TDLibCodableModels/Responses/Update.swift` (76 строк)
+- `Tests/TgClientUnitTests/.../UpdateTests.swift` (135 строк)
+
+**Следующий шаг:** MVP-1.7 Phase 3 — Component Tests для loadChats/getChat через TDLibClient
+
+**Время:** ~30 минут
+
+---
+
 
 **Выполнено:**
 - Реализован `GetChatRequest` для получения полной информации о чате (3 unit-теста)
