@@ -62,12 +62,29 @@ struct TGClient {
             exit(1)
         }
 
-        // Проверяем getChats()
+        // Manual test: loadChats + getChat
         do {
-            let chats = try await td.getChats(chatList: .main, limit: 100)
-            print("✅ Chats retrieved: \(chats.chatIds.count)")
+            print("\n📋 Manual test: loadChats")
+            _ = try await td.loadChats(chatList: .main, limit: 100)
+            print("✅ loadChats: Ok")
+
+            print("\n📋 Manual test: getChats (first 3 IDs)")
+            let chats = try await td.getChats(chatList: .main, limit: 3)
+            print("✅ getChats: \(chats.chatIds.count) chat IDs")
+
+            if let firstChatId = chats.chatIds.first {
+                print("\n📋 Manual test: getChat(chatId: \(firstChatId))")
+                let chat = try await td.getChat(chatId: firstChatId)
+                print("✅ getChat:")
+                print("   Title: \(chat.title)")
+                print("   Type: \(chat.chatType)")
+                print("   Unread: \(chat.unreadCount)")
+                print("   LastRead: \(chat.lastReadInboxMessageId)")
+            }
+
+            print("\n✅ All manual tests passed!")
         } catch {
-            print("⚠️ Failed to get chats: \(error)")
+            print("⚠️ Manual test failed: \(error)")
             exit(1)
         }
     }

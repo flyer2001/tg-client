@@ -96,4 +96,14 @@ public protocol TDLibClientProtocol: Sendable {
     /// - Response: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chats.html
     /// - ChatList: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chat_list.html
     func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse
+
+    /// Загружает чаты в TDLib cache.
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
+    func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse
+
+    /// Получает информацию о чате.
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat.html
+    func getChat(chatId: Int64) async throws -> ChatResponse
 }

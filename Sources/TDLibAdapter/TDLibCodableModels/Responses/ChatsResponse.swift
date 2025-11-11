@@ -3,7 +3,7 @@ import Foundation
 /// Модель ответа TDLib с списком ID чатов.
 ///
 /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chats.html
-public struct ChatsResponse: TDLibResponse, Sendable, Equatable {
+public struct `ChatsResponse`: TDLibResponse, Sendable, Equatable {
     public let type = "chats"
 
     /// Список ID чатов

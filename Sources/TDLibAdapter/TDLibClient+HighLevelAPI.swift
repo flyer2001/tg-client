@@ -52,6 +52,22 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForResponse(ofType: ChatsResponse.self)
     }
 
+    public func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse {
+        // Отправляем запрос на загрузку чатов
+        send(LoadChatsRequest(chatList: chatList, limit: limit))
+
+        // Ожидаем ответа от TDLib
+        return try await waitForResponse(ofType: OkResponse.self)
+    }
+
+    public func getChat(chatId: Int64) async throws -> ChatResponse {
+        // Отправляем запрос на получение чата
+        send(GetChatRequest(chatId: chatId))
+
+        // Ожидаем ответа от TDLib
+        return try await waitForResponse(ofType: ChatResponse.self)
+    }
+
     // MARK: - Helper Methods
 
     /// Ожидает следующего обновления состояния авторизации от TDLib.
