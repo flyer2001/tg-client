@@ -11,7 +11,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
-        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3"),
+        .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
     ],
     targets: [
         .executableTarget(
@@ -60,19 +61,24 @@ let package = Package(
             path: "Sources/DigestCore"
         ),
         // Test targets
+        .target(
+            name: "TestHelpers",
+            dependencies: ["TDLibAdapter"],
+            path: "Tests/TestHelpers"
+        ),
         .testTarget(
             name: "TgClientUnitTests",
-            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore"],
+            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore", "TestHelpers"],
             path: "Tests/TgClientUnitTests"
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore"],
+            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers"],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(
             name: "TgClientE2ETests",
-            dependencies: ["TDLibAdapter", "DigestCore", "App"],
+            dependencies: ["TDLibAdapter", "DigestCore", "App", "TestHelpers"],
             path: "Tests/TgClientE2ETests"
         )
     ]
