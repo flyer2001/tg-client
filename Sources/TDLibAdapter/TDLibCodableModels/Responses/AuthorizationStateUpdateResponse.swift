@@ -15,7 +15,7 @@ public struct AuthorizationStateUpdateResponse: TDLibResponse, Sendable {
     #endif
 }
 
-public struct AuthorizationStateInfo: Decodable, Sendable {
+public struct AuthorizationStateInfo: Codable, Sendable {
     public let type: String
 
     enum CodingKeys: String, CodingKey {

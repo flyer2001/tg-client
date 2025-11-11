@@ -9,11 +9,17 @@ import Foundation
 /// Все Response типы должны уметь декодироваться из JSON, полученного от TDLib.
 /// Поле `@type` используется для определения конкретного типа при декодировании в `TDLibUpdate`.
 ///
+/// ## Кодирование
+///
+/// `Codable` (вместо просто `Decodable`) необходим для тестов — позволяет создавать
+/// тестовые модели программно и кодировать их обратно в JSON для round-trip проверок.
+/// В production коде encode не используется.
+///
 /// ## Для кодогенерации
 ///
 /// Этот протокол спроектирован для автоматической генерации из `td_api.tl` схемы.
 /// Кодогенератор должен создавать структуры conforming к этому протоколу.
-public protocol TDLibResponse: Decodable, Sendable {
+public protocol TDLibResponse: Codable, Sendable {
     /// TDLib тип ответа (значение поля "@type" в JSON).
     ///
     /// Например: "error", "user", "updateAuthorizationState"
