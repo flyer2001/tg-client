@@ -19,6 +19,11 @@ disabled_rules:
   - type_body_length     # Test files can be long
   - file_length          # Test files with many cases
   - function_body_length # Component tests can be complex
+  - todo                 # TODOs are part of TDD workflow (RED phase)
+  - nesting              # Nested test types for organization
+  - function_parameter_count # Mock objects may have many parameters
+  - cyclomatic_complexity    # Complex state machines (TODO: refactor TDLibClient)
+  - optional_data_string_conversion # Legacy pattern, will refactor later
 
 # Opt-in rules (not enabled by default)
 opt_in_rules:
