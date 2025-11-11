@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FoundationExtensions
+import TestHelpers
 @testable import TDLibAdapter
 
 /// Тесты для модели ChatsResponse.
@@ -12,89 +13,48 @@ import FoundationExtensions
 @Suite("Декодирование модели ChatsResponse")
 struct ChatsResponseTests {
 
-    /// Тест декодирования списка чатов с несколькими ID.
-    ///
-    /// **Пример реального ответа TDLib на `getChats`:**
-    ///
-    /// ```json
-    /// {
-    ///   "@type": "chats",
-    ///   "total_count": 3,
-    ///   "chat_ids": [123456789, 987654321, 555666777]
-    /// }
-    /// ```
+    /// Тест round-trip кодирования списка чатов с несколькими ID.
     ///
     /// **TDLib docs:**
     /// - Method: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
     /// - Response: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chats.html
-    @Test("Декодирование списка чатов с несколькими ID")
-    func decodeChatsWithMultipleIds() throws {
-        let json = """
-        {
-            "@type": "chats",
-            "total_count": 3,
-            "chat_ids": [123456789, 987654321, 555666777]
-        }
-        """
+    @Test("Round-trip кодирование списка чатов с несколькими ID")
+    func roundTripChatsWithMultipleIds() throws {
+        let original = ChatsResponse(chatIds: [123456789, 987654321, 555666777])
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let response = try decoder.decode(ChatsResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(ChatsResponse.self, from: data)
 
-        #expect(response.chatIds.count == 3)
-        #expect(response.chatIds == [123456789, 987654321, 555666777])
+        #expect(decoded.chatIds.count == 3)
+        #expect(decoded.chatIds == [123456789, 987654321, 555666777])
     }
 
-    /// Тест декодирования пустого списка чатов.
-    ///
-    /// **Пример ответа TDLib когда нет чатов:**
-    ///
-    /// ```json
-    /// {
-    ///   "@type": "chats",
-    ///   "total_count": 0,
-    ///   "chat_ids": []
-    /// }
-    /// ```
+    /// Тест round-trip кодирования пустого списка чатов.
     ///
     /// Это валидный ответ — например, когда пользователь новый или все чаты в архиве.
-    @Test("Декодирование пустого списка чатов")
-    func decodeEmptyChats() throws {
-        let json = """
-        {
-            "@type": "chats",
-            "total_count": 0,
-            "chat_ids": []
-        }
-        """
+    @Test("Round-trip кодирование пустого списка чатов")
+    func roundTripEmptyChats() throws {
+        let original = ChatsResponse(chatIds: [])
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let response = try decoder.decode(ChatsResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(ChatsResponse.self, from: data)
 
-        #expect(response.chatIds.isEmpty)
-        #expect(response.chatIds.count == 0)
+        #expect(decoded.chatIds.isEmpty)
+        #expect(decoded.chatIds.count == 0)
     }
 
-    /// Тест декодирования одного чата.
+    /// Тест round-trip кодирования одного чата.
     ///
     /// Проверяем edge case: один элемент в массиве.
-    @Test("Декодирование одного чата")
-    func decodeSingleChat() throws {
-        let json = """
-        {
-            "@type": "chats",
-            "total_count": 1,
-            "chat_ids": [111222333]
-        }
-        """
+    @Test("Round-trip кодирование одного чата")
+    func roundTripSingleChat() throws {
+        let original = ChatsResponse(chatIds: [111222333])
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let response = try decoder.decode(ChatsResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(ChatsResponse.self, from: data)
 
-        #expect(response.chatIds.count == 1)
-        #expect(response.chatIds.first == 111222333)
+        #expect(decoded.chatIds.count == 1)
+        #expect(decoded.chatIds.first == 111222333)
     }
 
     /// Тест проверки snake_case маппинга для chat_ids.
@@ -102,43 +62,27 @@ struct ChatsResponseTests {
     /// TDLib использует `chat_ids` (snake_case), Swift должен маппить в `chatIds` (camelCase).
     @Test("Проверка snake_case маппинга")
     func verifySnakeCaseMapping() throws {
-        let json = """
-        {
-            "@type": "chats",
-            "total_count": 2,
-            "chat_ids": [111, 222]
-        }
-        """
+        let original = ChatsResponse(chatIds: [111, 222])
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(ChatsResponse.self, from: data)
 
-        // Должно успешно декодироваться несмотря на snake_case в JSON
-        let response = try decoder.decode(ChatsResponse.self, from: data)
-
-        #expect(response.chatIds == [111, 222])
+        #expect(decoded.chatIds == [111, 222])
     }
 
-    /// Тест декодирования больших ID чатов (Int64).
+    /// Тест round-trip кодирования больших ID чатов (Int64).
     ///
     /// ID чатов в TDLib — это Int64, могут быть очень большими числами.
-    @Test("Декодирование больших ID (Int64)")
-    func decodeLargeInt64ChatIds() throws {
-        let json = """
-        {
-            "@type": "chats",
-            "total_count": 2,
-            "chat_ids": [9223372036854775807, -9223372036854775808]
-        }
-        """
+    @Test("Round-trip кодирование больших ID (Int64)")
+    func roundTripLargeInt64ChatIds() throws {
+        let original = ChatsResponse(chatIds: [Int64.max, Int64.min])
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let response = try decoder.decode(ChatsResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(ChatsResponse.self, from: data)
 
-        #expect(response.chatIds.count == 2)
-        #expect(response.chatIds[0] == Int64.max)
-        #expect(response.chatIds[1] == Int64.min)
+        #expect(decoded.chatIds.count == 2)
+        #expect(decoded.chatIds[0] == Int64.max)
+        #expect(decoded.chatIds[1] == Int64.min)
     }
 
     /// Тест создания ChatsResponse программно (для тестов).

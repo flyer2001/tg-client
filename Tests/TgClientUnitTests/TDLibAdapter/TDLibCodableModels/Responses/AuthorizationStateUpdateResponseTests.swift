@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import FoundationExtensions
+import TestHelpers
 import TDLibAdapter
 
 /// Unit-тесты для декодирования AuthorizationStateUpdateResponse.
@@ -45,114 +46,74 @@ struct AuthorizationStateUpdateResponseTests {
 
     let decoder = JSONDecoder.tdlib()
 
-    /// Декодирование состояния "waitTdlibParameters".
+    /// Round-trip кодирование состояния "waitTdlibParameters".
     ///
     /// Первое состояние после создания TDLib клиента. TDLib ожидает параметры через `setTdlibParameters`.
-    @Test("Декодирование AuthorizationStateUpdateResponse - waitTdlibParameters")
-    func decodeAuthorizationStateWaitTdlibParameters() throws {
-        // Given: JSON ответ от TDLib с состоянием waitTdlibParameters
-        let json = """
-        {
-            "authorization_state": {
-                "@type": "authorizationStateWaitTdlibParameters"
-            }
-        }
-        """
-        let data = Data(json.utf8)
+    @Test("Round-trip кодирование - waitTdlibParameters")
+    func roundTripAuthorizationStateWaitTdlibParameters() throws {
+        let stateInfo = AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters")
+        let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
-        // When: декодируем JSON в модель AuthorizationStateUpdateResponse
-        let response = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 
-        // Then: поле authorizationState.type должно содержать "authorizationStateWaitTdlibParameters"
-        #expect(response.authorizationState.type == "authorizationStateWaitTdlibParameters")
+        #expect(decoded.authorizationState.type == "authorizationStateWaitTdlibParameters")
     }
 
-    /// Декодирование состояния "waitPhoneNumber".
+    /// Round-trip кодирование состояния "waitPhoneNumber".
     ///
     /// TDLib ожидает номер телефона через `setAuthenticationPhoneNumber`.
-    @Test("Декодирование AuthorizationStateUpdateResponse - waitPhoneNumber")
-    func decodeAuthorizationStateWaitPhoneNumber() throws {
-        // Given: JSON ответ от TDLib с состоянием waitPhoneNumber
-        let json = """
-        {
-            "authorization_state": {
-                "@type": "authorizationStateWaitPhoneNumber"
-            }
-        }
-        """
-        let data = Data(json.utf8)
+    @Test("Round-trip кодирование - waitPhoneNumber")
+    func roundTripAuthorizationStateWaitPhoneNumber() throws {
+        let stateInfo = AuthorizationStateInfo(type: "authorizationStateWaitPhoneNumber")
+        let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
-        // When: декодируем JSON в модель
-        let response = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 
-        // Then: поле authorizationState.type должно содержать "authorizationStateWaitPhoneNumber"
-        #expect(response.authorizationState.type == "authorizationStateWaitPhoneNumber")
+        #expect(decoded.authorizationState.type == "authorizationStateWaitPhoneNumber")
     }
 
-    /// Декодирование состояния "waitCode".
+    /// Round-trip кодирование состояния "waitCode".
     ///
     /// TDLib отправил SMS код и ожидает его через `checkAuthenticationCode`.
-    @Test("Декодирование AuthorizationStateUpdateResponse - waitCode")
-    func decodeAuthorizationStateWaitCode() throws {
-        // Given: JSON ответ от TDLib с состоянием waitCode
-        let json = """
-        {
-            "authorization_state": {
-                "@type": "authorizationStateWaitCode"
-            }
-        }
-        """
-        let data = Data(json.utf8)
+    @Test("Round-trip кодирование - waitCode")
+    func roundTripAuthorizationStateWaitCode() throws {
+        let stateInfo = AuthorizationStateInfo(type: "authorizationStateWaitCode")
+        let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
-        // When: декодируем JSON в модель
-        let response = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 
-        // Then: поле authorizationState.type должно содержать "authorizationStateWaitCode"
-        #expect(response.authorizationState.type == "authorizationStateWaitCode")
+        #expect(decoded.authorizationState.type == "authorizationStateWaitCode")
     }
 
-    /// Декодирование состояния "waitPassword".
+    /// Round-trip кодирование состояния "waitPassword".
     ///
     /// У пользователя включена 2FA. TDLib ожидает пароль через `checkAuthenticationPassword`.
-    @Test("Декодирование AuthorizationStateUpdateResponse - waitPassword")
-    func decodeAuthorizationStateWaitPassword() throws {
-        // Given: JSON ответ от TDLib с состоянием waitPassword
-        let json = """
-        {
-            "authorization_state": {
-                "@type": "authorizationStateWaitPassword"
-            }
-        }
-        """
-        let data = Data(json.utf8)
+    @Test("Round-trip кодирование - waitPassword")
+    func roundTripAuthorizationStateWaitPassword() throws {
+        let stateInfo = AuthorizationStateInfo(type: "authorizationStateWaitPassword")
+        let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
-        // When: декодируем JSON в модель
-        let response = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 
-        // Then: поле authorizationState.type должно содержать "authorizationStateWaitPassword"
-        #expect(response.authorizationState.type == "authorizationStateWaitPassword")
+        #expect(decoded.authorizationState.type == "authorizationStateWaitPassword")
     }
 
-    /// Декодирование состояния "ready".
+    /// Round-trip кодирование состояния "ready".
     ///
     /// Авторизация завершена успешно. TDLib готов к работе.
-    @Test("Декодирование AuthorizationStateUpdateResponse - ready")
-    func decodeAuthorizationStateReady() throws {
-        // Given: JSON ответ от TDLib с состоянием ready
-        let json = """
-        {
-            "authorization_state": {
-                "@type": "authorizationStateReady"
-            }
-        }
-        """
-        let data = Data(json.utf8)
+    @Test("Round-trip кодирование - ready")
+    func roundTripAuthorizationStateReady() throws {
+        let stateInfo = AuthorizationStateInfo(type: "authorizationStateReady")
+        let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
-        // When: декодируем JSON в модель
-        let response = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 
-        // Then: поле authorizationState.type должно содержать "authorizationStateReady"
-        #expect(response.authorizationState.type == "authorizationStateReady")
+        #expect(decoded.authorizationState.type == "authorizationStateReady")
     }
 
     /// Обработка невалидного JSON.

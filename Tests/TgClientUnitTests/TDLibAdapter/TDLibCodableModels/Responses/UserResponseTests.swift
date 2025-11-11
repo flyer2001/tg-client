@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FoundationExtensions
+import TestHelpers
 @testable import TDLibAdapter
 
 /// Тесты для модели UserResponse.
@@ -12,65 +13,48 @@ import FoundationExtensions
 @Suite("Декодирование модели UserResponse")
 struct UserResponseTests {
 
-    /// Тест декодирования пользователя с полными данными.
+    /// Тест round-trip кодирования пользователя с полными данными.
     ///
-    /// **Пример реального ответа TDLib на `getMe`:**
-    ///
-    /// ```json
-    /// {
-    ///   "@type": "user",
-    ///   "id": 123456789,
-    ///   "first_name": "John",
-    ///   "last_name": "Doe",
-    ///   "username": "johndoe"
-    /// }
-    /// ```
+    /// Проверяет что модель корректно encode/decode через TDLib encoder/decoder.
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
-    @Test("Декодирование пользователя с полными данными")
-    func decodeUserWithFullData() throws {
-        let json = """
-        {
-            "@type": "user",
-            "id": 123456789,
-            "first_name": "John",
-            "last_name": "Doe",
-            "username": "johndoe"
-        }
-        """
+    @Test("Round-trip кодирование пользователя с полными данными")
+    func roundTripUserWithFullData() throws {
+        let original = UserResponse(
+            id: 123456789,
+            firstName: "John",
+            lastName: "Doe",
+            username: "johndoe"
+        )
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let user = try decoder.decode(UserResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(UserResponse.self, from: data)
 
-        #expect(user.id == 123456789)
-        #expect(user.firstName == "John")  // snake_case → camelCase
-        #expect(user.lastName == "Doe")
-        #expect(user.username == "johndoe")
+        #expect(decoded.id == 123456789)
+        #expect(decoded.firstName == "John")
+        #expect(decoded.lastName == "Doe")
+        #expect(decoded.username == "johndoe")
     }
 
-    /// Тест декодирования пользователя без username.
+    /// Тест round-trip кодирования пользователя без username.
     ///
-    /// Некоторые пользователи могут не иметь username.
-    @Test("Декодирование пользователя без username")
-    func decodeUserWithoutUsername() throws {
-        let json = """
-        {
-            "@type": "user",
-            "id": 987654321,
-            "first_name": "Jane",
-            "last_name": "Smith"
-        }
-        """
+    /// Проверяет корректную обработку опциональных полей.
+    @Test("Round-trip кодирование пользователя без username")
+    func roundTripUserWithoutUsername() throws {
+        let original = UserResponse(
+            id: 987654321,
+            firstName: "Jane",
+            lastName: "Smith",
+            username: nil
+        )
 
-        let data = Data(json.utf8)
-        let decoder = JSONDecoder.tdlib()
-        let user = try decoder.decode(UserResponse.self, from: data)
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(UserResponse.self, from: data)
 
-        #expect(user.id == 987654321)
-        #expect(user.firstName == "Jane")
-        #expect(user.lastName == "Smith")
-        #expect(user.username == nil)
+        #expect(decoded.id == 987654321)
+        #expect(decoded.firstName == "Jane")
+        #expect(decoded.lastName == "Smith")
+        #expect(decoded.username == nil)
     }
 
     /// Тест создания UserResponse программно (для тестов).
