@@ -7,8 +7,10 @@
 ### Установка зависимостей
 
 ```bash
-brew install tdlib pkg-config
+brew install tdlib pkg-config swiftlint
 ```
+
+**SwiftLint** — линтер для проверки качества кода и соблюдения coding style проекта.
 
 ## Настройка переменных окружения
 
@@ -46,6 +48,45 @@ source ~/.zshrc
    ⚠️ **Важно:** НЕ используйте `export` в .env файле - только формат `KEY=value`
 
 См. также [CREDENTIALS.md](CREDENTIALS.md) для деталей.
+
+### Проверка качества кода (SwiftLint)
+
+Проект использует SwiftLint для автоматической проверки coding style и best practices.
+
+**Запуск линтера:**
+```bash
+# Через Swift Package Manager (рекомендуется)
+swift package plugin --allow-writing-to-package-directory swiftlint
+
+# Или через локально установленный SwiftLint (быстрее)
+swiftlint lint
+```
+
+**Автоматическое исправление проблем:**
+```bash
+swiftlint --fix
+```
+
+**Установка Git pre-commit hook (рекомендуется):**
+
+Чтобы автоматически проверять код перед каждым коммитом:
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+После установки SwiftLint будет запускаться перед каждым `git commit`. Чтобы пропустить проверку:
+
+```bash
+git commit --no-verify
+```
+
+**Важные правила проекта:**
+- ❌ Запрещён `import XCTest` — используй `import Testing` (Swift Testing framework)
+- ❌ Запрещён `JSONEncoder()` / `JSONDecoder()` напрямую — используй `.tdlib()` методы
+- ⚠️ Force unwrap (`!`) требует обоснования — предпочитай `guard`, `if let`, или `#require` в тестах
+
+Конфигурация линтера находится в `.swiftlint.yml` в корне проекта.
 
 ---
 

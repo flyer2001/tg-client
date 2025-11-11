@@ -971,6 +971,40 @@ struct Chat: Codable, Sendable, Equatable {
 | OpenAISummaryGenerator | OpenAI API | HTTP responses | `SummaryGeneratorProtocol` |
 | TelegramBotNotifier | Telegram Bot API | API examples | `BotNotifierProtocol` |
 
+## Test Helpers
+
+### Encodable Extension для Round-Trip тестов
+
+Для упрощения тестирования моделей используется extension `Encodable.toTDLibData()`.
+
+**Расположение:** `Tests/TestHelpers/EncodableExtensions.swift`
+
+#### Использование
+
+```swift
+import TestHelpers
+
+// Создаём модель программно
+let original = UserResponse(userId: 123, firstName: "Test")
+
+// Encode через TDLib encoder (snake_case)
+let data = try original.toTDLibData()
+
+// Decode обратно
+let decoded = try JSONDecoder.tdlib().decode(UserResponse.self, from: data)
+
+// Проверяем round-trip
+#expect(decoded.userId == 123)
+#expect(decoded.firstName == "Test")
+```
+
+#### Почему `TDLibResponse: Codable`
+
+Response модели conformят к `Codable` (вместо просто `Decodable`) для поддержки round-trip тестов.
+В production коде encode не используется — только для тестов.
+
+**Документация:** См. `TDLibResponse.swift`
+
 ## Coverage Requirements
 
 Минимальный coverage для PR: **TODO**

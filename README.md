@@ -43,6 +43,7 @@ swift run tg-client
 - Swift 6.0+
 - TDLib 1.8.6+
 - macOS 14+ или Linux (Ubuntu 24.04+)
+- SwiftLint (опционально, для проверки качества кода)
 
 ## 📦 Установка TDLib
 
@@ -53,7 +54,7 @@ swift run tg-client
 
 ```bash
 # Установка через Homebrew
-brew install tdlib pkg-config
+brew install tdlib pkg-config swiftlint
 
 # Настройка PKG_CONFIG_PATH (добавь в ~/.zshrc для постоянной настройки)
 export PKG_CONFIG_PATH="/opt/homebrew/opt/tdlib/lib/pkgconfig:$PKG_CONFIG_PATH"

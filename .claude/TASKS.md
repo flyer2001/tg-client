@@ -657,7 +657,7 @@ class TelegramBotNotifier: BotNotifierProtocol {
 
 ---
 
-**Последнее обновление:** 2025-11-08
+**Последнее обновление:** 2025-11-11
 **Архив завершенных задач:** См. [CHANGELOG.md](.claude/CHANGELOG.md) (2025-11-06 | Архивация завершенных задач)
 
 ---
@@ -759,39 +759,19 @@ class TelegramBotNotifier: BotNotifierProtocol {
 - [x] Создать unit-тесты для `.tdlib()` методов (16 тестов): базовые + краевые + round-trip
 - [x] Прогнать тесты: 88 тестов проходят ✅
 
-**Фаза 2: SwiftLint правила (~1 час)**
-- [ ] Установить SwiftLint: `brew install swiftlint`
-- [ ] Создать `.swiftlint.yml` в корне проекта:
-  ```yaml
-  included:
-    - Sources
-    - Tests
+**Фаза 2: SwiftLint правила** ✅ (~1 час) **[ЗАВЕРШЕНО 2025-11-11]**
+- [x] Добавить SwiftLint как dependency в Package.swift (Swift Package Plugin)
+- [x] Создать `.swiftlint.yml` в корне проекта с custom rules:
+  - `no_xctest_import` — блокирует `import XCTest`
+  - `no_direct_json_encoder` — блокирует `JSONEncoder()`
+  - `no_direct_json_decoder` — блокирует `JSONDecoder()`
+- [x] Создать Git pre-commit hook (`scripts/install-git-hooks.sh`)
+- [x] Добавить в `.github/workflows/linux-build.yml` проверку SwiftLint (через `norio-nomura/action-swiftlint@3.2.1`)
+- [x] Обновить SETUP.md и DEPLOY.md с инструкциями по установке
+- [x] Проверка кода: 0 нарушений (исключён `JSONCoding.swift` из проверки)
+- [ ] **TODO для следующей сессии:** Проверить сборку на Linux машине после изменений
 
-  disabled_rules:
-    - line_length
-    - type_body_length
-
-  custom_rules:
-    no_xctest_import:
-      name: "No XCTest Import"
-      message: "Use 'import Testing' instead of 'import XCTest'"
-      regex: "^\\s*import XCTest"
-      severity: error
-
-    no_direct_json_encoder:
-      name: "No Direct JSONEncoder"
-      message: "Use 'JSONEncoder.tdlib()' instead of 'JSONEncoder()'"
-      regex: "JSONEncoder\\(\\)"
-      severity: error
-
-    no_direct_json_decoder:
-      name: "No Direct JSONDecoder"
-      message: "Use 'JSONDecoder.tdlib()' instead of 'JSONDecoder()'"
-      regex: "JSONDecoder\\(\\)"
-      severity: error
-  ```
-- [ ] Добавить в `.github/workflows/ci.yml` проверку SwiftLint
-- [ ] Прогнать `swiftlint` локально, убедиться что нарушений нет
+**Результат:** SwiftLint полностью интегрирован (GitHub Actions CI + Git pre-commit hook). Проект собирается, 91 тест проходит.
 
 **Фаза 3: Test Builders (~2 часа)**
 - [ ] Создать `Tests/TestHelpers/TDLibTestBuilders.swift`:
@@ -849,7 +829,7 @@ class TelegramBotNotifier: BotNotifierProtocol {
 
 ---
 
-### TD-7: Test Builders + убрать raw JSON из ResponseTests ⚠️ IMPORTANT
+### TD-7: Test Builders + убрать raw JSON из ResponseTests ✅ **[ЗАВЕРШЕНО 2025-11-11]**
 
 **Проблема:**
 - ResponseTests используют сырые JSON строки для декодирования
@@ -857,32 +837,29 @@ class TelegramBotNotifier: BotNotifierProtocol {
 - Нет переиспользуемых билдеров для создания тестовых данных
 
 **Цель:**
-1. Создать Test Builders для упрощения создания тестовых моделей
+1. Создать Test Helpers для упрощения создания тестовых моделей
 2. Убрать raw JSON из ResponseTests там, где это возможно
 3. Оставить raw JSON только для тестов самих encoder/decoder стратегий
 
 **Решение:**
 
-**Часть 1: Создать Test Builders (~1 час)**
-- [ ] Создать `Tests/TestHelpers/TDLibTestBuilders.swift` с билдерами для Request/Response
-- [ ] Добавить `#if DEBUG` init в Response модели (если ещё нет)
-- [ ] Обновить TESTING.md: добавить раздел "Test Builders"
+**Реализованный подход:**
+- [x] Создан `Tests/TestHelpers/EncodableExtensions.swift` с extension `Encodable.toTDLibData()`
+- [x] `TDLibResponse` изменён на `Codable` (вместо `Decodable`) для поддержки round-trip тестов
+- [x] Убран raw JSON из всех Response тестов:
+  - UserResponseTests → round-trip тесты
+  - ChatsResponseTests → round-trip тесты
+  - AuthorizationStateUpdateResponseTests → round-trip тесты
+- [x] Обновлён TESTING.md: добавлен раздел "Test Helpers" с примерами
+- [x] Все тесты проходят: 91 unit-тест ✅
 
-**Часть 2: Рефакторинг ResponseTests (~1 час)**
-- [ ] Определить где можно убрать raw JSON:
-  - ✅ Оставить в JSONCodingTests (тесты самих стратегий)
-  - ✅ Оставить в TDLibRequestEncoderTests (проверка формата для TDLib)
-  - ❌ Убрать из UserResponseTests (использовать builder + encode)
-  - ❌ Убрать из ChatsResponseTests (использовать builder + encode)
-- [ ] Рефакторить тесты: UserResponseTests, ChatsResponseTests, AuthorizationStateUpdateResponseTests
-- [ ] Прогнать все тесты, убедиться что ничего не сломалось
+**Архитектурное решение:**
+- TestHelpers как отдельный target (не testTarget)
+- Extension без `#if DEBUG` (тестовый код не попадает в production)
+- `TDLibResponse: Codable` документирован (encode только для тестов)
 
-**Приоритет:** IMPORTANT (улучшает maintainability тестов)
-
-**Оценка времени:** ~1.5-2 часа
+**Результат:** 91 тест проходят (было 92, один тест удалён при рефакторинге)
 
 **Зависимости:** TD-5 Phase 1 (завершена)
-
-**Примечание:** Оставляем raw JSON в тестах encoder/decoder стратегий (JSONCodingTests, TDLibRequestEncoderTests), т.к. там важно проверить конкретный формат JSON.
 
 ---

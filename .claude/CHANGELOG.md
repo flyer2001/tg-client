@@ -1,3 +1,41 @@
+## [2025-11-11] - TD-5 Phase 2: SwiftLint Integration + TD-7: Test Helpers
+
+**Основные изменения:**
+- ✅ **SwiftLint интеграция**: добавлен линтер для проверки качества кода
+  - Custom rules: блокировка `import XCTest`, `JSONEncoder()`, `JSONDecoder()`
+  - Git pre-commit hook (`scripts/install-git-hooks.sh`)
+  - GitHub Actions CI интеграция (automatic caching)
+- ✅ **TD-7 завершён**: Test Helpers для упрощения тестов
+  - `TestHelpers` target с `EncodableExtensions.swift`
+  - `TDLibResponse` изменён на `Codable` для round-trip тестов
+  - Убран raw JSON из всех Response тестов
+- ✅ **Документация**: обновлены SETUP.md, DEPLOY.md, README.md с инструкциями по SwiftLint
+
+**Статистика:**
+- 91 unit-тест проходит ✅
+- 0 нарушений SwiftLint в коде
+- Проект собирается на macOS (проверка на Linux — в TODO)
+
+**TODO для следующей сессии:**
+- Проверить сборку на Linux машине
+- TD-5 Phase 3: Test Builders (опционально)
+
+## [2025-11-11] - TD-7: Test Helpers для round-trip тестов
+
+**Реализовано:**
+- Создан TestHelpers модуль с extension `Encodable.toTDLibData()` для упрощения тестов
+- Убран raw JSON из Response тестов (UserResponse, ChatsResponse, AuthorizationStateUpdate)
+- `TDLibResponse` изменён на `Codable` (вместо `Decodable`) для поддержки round-trip проверок
+- Обновлён TESTING.md с разделом "Test Helpers" и примерами использования
+
+**Архитектурные решения:**
+- TestHelpers как отдельный target (используется всеми тестовыми модулями)
+- Без `#if DEBUG` в тестах (тестовый код не попадает в production сборку)
+- Централизованное решение через протокол TDLibResponse
+
+**Результат:** 91 unit-тест проходят ✅
+
+---
 ## [2025-11-10] - Unit-тесты для encoder/decoder
 - ✅ TD-6 завершена: TDLibRequestEncoderTests + TDLibResponseDecoderTests (9 новых тестов)
 - Покрытие TDLibRequestEncoder: проверка snake_case кодирования, @type поля, round-trip

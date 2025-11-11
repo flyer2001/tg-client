@@ -163,6 +163,29 @@ ssh ufohosting 'pkg-config --modversion tdjson'
 sudo apt install -y build-essential libssl-dev libreadline-dev
 ```
 
+### 4. Установка SwiftLint (опционально, для проверки качества кода)
+
+SwiftLint доступен через Swift Package Manager, но для ускорения можно установить бинарник:
+
+```bash
+# Скачать последнюю версию SwiftLint для Linux
+wget https://github.com/realm/SwiftLint/releases/download/0.57.0/swiftlint_linux.zip
+unzip swiftlint_linux.zip
+sudo mv swiftlint /usr/local/bin/
+sudo chmod +x /usr/local/bin/swiftlint
+
+# Проверка
+swiftlint version
+```
+
+**Запуск линтера:**
+```bash
+cd ~/tg-client
+swiftlint lint
+```
+
+> **Примечание:** SwiftLint не обязателен для сборки проекта, но рекомендуется для проверки кода перед коммитом.
+
 ## Клонирование репозитория
 
 ```bash
