@@ -100,6 +100,16 @@ actor MockTDLibClient: TDLibClientProtocol {
         return try getMockResponse(for: request)
     }
 
+    func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse {
+        let request = LoadChatsRequest(chatList: chatList, limit: limit)
+        return try getMockResponse(for: request)
+    }
+
+    func getChat(chatId: Int64) async throws -> ChatResponse {
+        let request = GetChatRequest(chatId: chatId)
+        return try getMockResponse(for: request)
+    }
+
     // MARK: - Helper Methods
 
     /// Получает mock ответ для указанного запроса.
