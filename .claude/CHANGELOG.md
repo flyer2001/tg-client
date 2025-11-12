@@ -1,3 +1,93 @@
+## 2025-11-12 | MVP-1.6: Усвоенный урок про overengineering
+
+**Контекст:** Работа над ChannelMessageSource для получения непрочитанных сообщений.
+
+### Что сделали неправильно
+
+**Overengineering без реального теста:**
+- ❌ Предположили что ChannelMessageSource будет сложным (БЕЗ попытки написать Component Test!)
+- ❌ Создали UpdatesHandler как отдельный компонент (3 строки кода = `for await` loop)
+- ❌ Создали ChannelCache для realtime мониторинга (НЕ нужен для MVP use case)
+- ❌ Нарушили правило **TESTING.md:328** "Декомпозиция ТОЛЬКО после реальной попытки"
+
+**Корневая причина:**
+Декомпозиция на основе предположений "это будет сложно" вместо реального опыта с тестом.
+
+### Усвоенный урок
+
+**Золотое правило:** YAGNI (You Ain't Gonna Need It) + TDD
+
+**Правильный flow:**
+1. ✅ Попытаться написать Component Test
+2. ✅ РЕАЛЬНО увидеть сложность (> 50 строк, много аспектов)
+3. ✅ ТОГДА декомпозиция
+
+**НЕ делать:**
+- ❌ "Это будет сложно" (предположение без теста)
+- ❌ "На будущее лучше разбить" (YAGNI)
+- ❌ Создание подкомпонентов до Component Test
+
+### Правильное архитектурное решение
+
+**MVP Use Case:** Cron раз в N часов (stateless)
+- Загружаем актуальное состояние чатов через `loadChats()` + updates
+- Формируем дайджест
+- Завершаем работу (без realtime кеша)
+
+**ЗАЧЕМ updates для MVP:**
+НЕ для realtime мониторинга, а для **первоначальной загрузки** чатов!
+
+**TDLib behavior:**
+- `loadChats()` → возвращает `Ok` (не список!)
+- TDLib посылает `updateNewChat` через AsyncStream
+- `updateNewChat` содержит **полный Chat объект**
+- Слушаем updates + делаем `loadChats()` в цикле до 404
+
+**Упрощенная архитектура:**
+- ✅ ChannelMessageSource (единственный компонент)
+- ✅ MessageFetcher (helper для getChatHistory)
+- ❌ UpdatesHandler - НЕ НУЖЕН (просто `for await` внутри)
+- ❌ ChannelCache - НЕ НУЖЕН (stateless)
+
+### Усиленные правила
+
+**TESTING.md:328** - Декомпозиция ТОЛЬКО после реальной попытки:
+```
+❌ ЗАПРЕЩЕНО: Overengineering на основе предположений
+
+Декомпозиция ТОЛЬКО когда:
+1. ✅ Попытался написать Component Test
+2. ✅ РЕАЛЬНО увидел сложность (> 50 строк, много аспектов)
+3. ✅ ТОГДА декомпозиция
+```
+
+**DEVELOPMENT.md:58** - Memory Safety и Retain Cycles:
+- Правило 1: Task и closures ВСЕГДА с `[weak self]`
+- Правило 2: Actor + Task = тоже нужен `[weak self]`
+- Правило 3: Захват локальных переменных НЕ помогает
+- Code Review Checklist для обнаружения утечек
+
+**TESTING.md:630** - Task.sleep() запрещен (редкие исключения):
+- ❌ Не использовать для "ожидания события"
+- ✅ Используй `confirmation()` вместо Task.sleep()
+- Редкие исключения: cancellation testing, timeout simulation
+
+**TESTING.md:529** - Правила оформления Component тестов:
+- ✅ Минимальная документация (что тестируем + TDLib docs)
+- ❌ НЕТ ссылок на .claude/* (внутренние инструкции)
+- ❌ НЕТ описания архитектуры (это в ARCHITECTURE.md)
+
+### Следующие шаги
+
+1. Актуализация Component тестов (объединить LoadChatsAndGetChatTests → ChannelMessageSourceTests)
+2. Реализация Update enum для updateNewChat
+3. TDLibClient.updates: AsyncStream<Update>
+4. ChannelMessageSource implementation
+
+**Realtime updates → BACKLOG** для будущих фич.
+
+---
+
 ## [2025-11-12] - Async Testing Documentation & Architecture Discussion
 
 **Основное:**

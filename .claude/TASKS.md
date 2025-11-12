@@ -210,55 +210,112 @@
 - ChannelCache полностью реализован (actor-based, thread-safe)
 - Следующий шаг: MVP-1.7 — TDLib модели для loadChats/getChat/updates
 
-**1.6 UpdatesHandler: Фоновая обработка TDLib updates** (~3 часа) ⚠️ **[В РАБОТЕ 2025-11-12]**
+**1.6 ChannelMessageSource: Получение непрочитанных** (~4 часа) ⚠️ **[В РАБОТЕ 2025-11-12]**
 
-**Архитектурное решение (Senior Architect review):**
+**⚠️ КРИТИЧНО: Усвоенный урок (2025-11-12)**
 
-*Consumer:* ChannelMessageSource нужен фоновый updates handler
+Сделали overengineering - создали UpdatesHandler и ChannelCache БЕЗ реальной попытки написать Component Test.
+Нарушили правило TESTING.md:328 "Декомпозиция ТОЛЬКО после реальной попытки".
 
-*Проверка рисков:*
-1. **Библиотеки:** TDLib streaming updates → TDLibClient предоставит `updates: AsyncStream<Update>`
-2. **Память:** UpdatesHandler НЕ накапливает, только фильтрует + callback → минимально
-3. **Отказоустойчивость:** graceful shutdown при ошибках, изоляция callback ошибок
-4. **Логирование:** start/stop/errors → INFO/ERROR
+**Что было не так:**
+- ❌ Предположили что ChannelMessageSource будет сложным (без теста!)
+- ❌ Создали UpdatesHandler (3 строки кода = `for await` loop) - overengineering
+- ❌ Создали ChannelCache для realtime мониторинга - НЕ нужен для MVP
 
-*Решение:*
+**MVP Use Case:**
+- Cron запускается раз в N часов (stateless)
+- Загружаем актуальное состояние чатов
+- Формируем дайджест
+- Завершаем работу (без realtime кеша)
+
+**Архитектурное решение (Senior Architect review - исправленное):**
+
+**ЗАЧЕМ нужны updates для MVP:**
+НЕ для realtime мониторинга, а для **первоначальной загрузки** чатов!
+
+**TDLib behavior:**
+1. `loadChats()` → возвращает `Ok` (не список чатов!)
+2. TDLib посылает `updateNewChat` для каждого загруженного чата через AsyncStream
+3. `updateNewChat` содержит **полный Chat объект** (id, type, title, unreadCount, etc)
+4. Повторяем `loadChats()` пока не получим 404 (все чаты загружены)
+
+**Упрощенная архитектура:**
+- ✅ ChannelMessageSource (coordinator) - единственный компонент
+- ✅ MessageFetcher (helper) - получение сообщений
+- ❌ UpdatesHandler - НЕ НУЖЕН (просто `for await` внутри ChannelMessageSource)
+- ❌ ChannelCache - НЕ НУЖЕН (stateless для MVP)
+
 ```swift
-actor UpdatesHandler {
-    private let tdlib: TDLibClientProtocol  // DI через constructor
-    private var task: Task<Void, Never>?
+actor ChannelMessageSource: MessageSourceProtocol {
+    private let tdlib: TDLibClientProtocol
+    private let messageFetcher: MessageFetcher
 
-    init(tdlib: TDLibClientProtocol)
-    func start(onUpdate: @escaping (Update) async -> Void) async
-    func stop()
+    func fetchUnreadMessages() async throws -> [SourceMessage] {
+        var allChats: [Chat] = []
+
+        // 1. Подписываемся на updates + загружаем чаты
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            // Task 1: Слушаем updateNewChat
+            group.addTask { [weak self] in
+                guard let self else { return }
+                for await update in await self.tdlib.updates {
+                    if case .updateNewChat(let chat) = update {
+                        allChats.append(chat)
+                    }
+                }
+            }
+
+            // Task 2: Загружаем все чаты через pagination
+            group.addTask { [weak self] in
+                guard let self else { return }
+                while true {
+                    do {
+                        try await self.tdlib.loadChats(chatList: .main, limit: 100)
+                    } catch let error as TDLibErrorResponse where error.isAllChatsLoaded {
+                        break  // 404 - все чаты загружены
+                    }
+                }
+            }
+
+            try await group.waitForAll()
+        }
+
+        // 2. Фильтруем каналы с непрочитанными
+        let unreadChannels = allChats.filter { chat in
+            guard case .supergroup(_, isChannel: true) = chat.chatType else {
+                return false
+            }
+            return chat.unreadCount > 0
+        }
+
+        // 3. Получаем сообщения
+        return try await messageFetcher.fetch(from: unreadChannels)
+    }
 }
 ```
 
 **Прогресс:**
-- [x] ✅ **Документация async testing best practices** (2025-11-12)
-  - Добавлен раздел "Тестирование асинхронного кода" в [TESTING.md](TESTING.md)
-  - 5 паттернов: `confirmation()`, `withMainSerialExecutor`, actor isolation, cancellation, timeout
-  - Антипаттерны: Task.sleep(), shared mutable state, тестирование деталей реализации
-  - Обновлена роль Testing Architect в [PROMPTS.md](PROMPTS.md)
-  - Ресурсы: SwiftLee, Swift by Sundell, Point-Free, swift-concurrency-extras
+- [x] ✅ **Документация усилена** (2025-11-12)
+  - TESTING.md: правило "Декомпозиция ТОЛЬКО после реальной попытки"
+  - DEVELOPMENT.md: правила про retain cycles и [weak self]
+  - TESTING.md: правила про Task.sleep() (редкие исключения)
+  - TESTING.md: правила оформления Component тестов
 
-**Следующая задача (TDD с async best practices):**
-- [ ] 📝 **Component Test (RED)** - написать с использованием async testing patterns:
-  - ✅ `confirmation()` для проверки получения updates из AsyncStream
-  - ✅ Dependency Injection через `init(tdlib:)` (не в start())
-  - ✅ Проверка graceful shutdown при `stop()`
-  - ✅ Проверка actor isolation (thread-safe concurrent calls)
-  - ❌ БЕЗ `Task.sleep()` — только реальная асинхронность
-  - **Образец:** См. [TESTING.md](TESTING.md) → Паттерн 1: Swift Testing confirmation()
+**Следующие задачи:**
+- [ ] 📝 **Актуализация Component тестов** (~1.5 часа):
+  - Объединить LoadChatsAndGetChatTests логику в ChannelMessageSourceTests
+  - Описать green path: loadChats() loop + updateNewChat → фильтрация → fetchMessages
+  - Описать edge cases: пустой список, все чаты прочитаны, ошибки loadChats
+  - Убрать упоминания UpdatesHandler и ChannelCache из тестов
 - [ ] Unit Tests для Update enum (RED)
 - [ ] Models: Update enum implementation (GREEN)
-- [ ] Real implementation: UpdatesHandler (GREEN)
 - [ ] Real implementation: TDLibClient.updates AsyncStream (GREEN)
-- [ ] Mock implementation: MockTDLibClient updates support (GREEN)
+- [ ] Mock implementation: MockTDLibClient.updates support (GREEN)
+- [ ] Real implementation: ChannelMessageSource (GREEN)
 - [ ] Component Test (GREEN)
-- [ ] E2E validation на реальном TDLib
+- [ ] E2E validation
 
-**Post-MVP:** См. BACKLOG.md → OPT-2 (batch callbacks, приоритизация)
+**Realtime updates → BACKLOG** для будущих фич (например, бот может ответить "какие сейчас непрочитанные")
 
 **1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-11]**
 - [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)
