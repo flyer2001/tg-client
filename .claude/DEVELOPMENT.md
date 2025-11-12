@@ -55,6 +55,144 @@ git push -u origin feature/task-name
 - Все сетевые вызовы оборачиваем в `do-catch`
 - Используем кастомные enum-ошибки: `enum ChatFetcherError: Error`
 
+## Memory Safety и Retain Cycles
+
+### КРИТИЧНО: Проверка циклических ссылок
+
+**Retain cycle** возникает когда два объекта держат сильные ссылки друг на друга → memory leak.
+
+#### Правило 1: Task и closures ВСЕГДА с [weak self]
+
+**❌ НЕПРАВИЛЬНО:**
+```swift
+class MyService {
+    var task: Task<Void, Never>?
+
+    func start() {
+        task = Task {
+            await self.doWork()  // ❌ Task держит сильную ссылку на self
+        }
+    }
+}
+```
+
+**✅ ПРАВИЛЬНО:**
+```swift
+class MyService {
+    var task: Task<Void, Never>?
+
+    func start() {
+        task = Task { [weak self] in
+            guard let self else { return }
+            await self.doWork()
+        }
+    }
+}
+```
+
+#### Правило 2: Actor + Task = тоже нужен [weak self]
+
+**Миф:** "Actor автоматически безопасен от retain cycles"
+**Правда:** Actor защищает от data races, НО retain cycles возможны!
+
+**❌ НЕПРАВИЛЬНО:**
+```swift
+actor ChannelMessageSource {
+    private var updatesTask: Task<Void, Never>?
+
+    func startWatching() {
+        updatesTask = Task {
+            for await update in self.tdlib.updates {  // ❌ Цикл!
+                await self.cache.update(from: update)
+            }
+        }
+    }
+}
+```
+
+**✅ ПРАВИЛЬНО:**
+```swift
+actor ChannelMessageSource {
+    private var updatesTask: Task<Void, Never>?
+
+    func startWatching() {
+        updatesTask = Task { [weak self] in
+            guard let self else { return }
+
+            for await update in await self.tdlib.updates {
+                guard let self else { break }  // Проверка на каждой итерации
+                await self.cache.update(from: update)
+            }
+        }
+    }
+}
+```
+
+#### Правило 3: Захват локальных переменных НЕ помогает
+
+**❌ НЕПРАВИЛЬНО (псевдобезопасность):**
+```swift
+func start() {
+    let cache = self.cache  // ❌ Всё равно сильная ссылка!
+    let tdlib = self.tdlib
+
+    task = Task {
+        // Task держит cache и tdlib → если они ссылаются на self → цикл!
+        await cache.update(...)
+    }
+}
+```
+
+**✅ ПРАВИЛЬНО:**
+```swift
+func start() {
+    task = Task { [weak self] in
+        guard let self else { return }
+        await self.cache.update(...)
+    }
+}
+```
+
+#### Правило 4: Delegate и callback patterns
+
+**❌ НЕПРАВИЛЬНО:**
+```swift
+protocol UpdateListener {
+    func onUpdate(_ update: Update)
+}
+
+class Handler {
+    var listener: UpdateListener?  // ❌ Сильная ссылка
+}
+```
+
+**✅ ПРАВИЛЬНО:**
+```swift
+protocol UpdateListener: AnyObject {  // AnyObject для weak
+    func onUpdate(_ update: Update)
+}
+
+class Handler {
+    weak var listener: UpdateListener?  // ✅ Слабая ссылка
+}
+```
+
+#### Code Review Checklist
+
+При review кода проверяй:
+- ☐ Все Task/closure используют `[weak self]`
+- ☐ Все delegate/listener свойства помечены `weak`
+- ☐ Нет "копирования" self.property в локальные переменные перед Task
+- ☐ Actor тоже использует `[weak self]` в Task
+
+#### Инструменты для обнаружения
+
+```bash
+# Поиск потенциальных проблем
+grep -r "Task {" Sources/ | grep -v "\[weak self\]"
+grep -r "Task<" Sources/ | grep -v "\[weak self\]"
+```
+
 ## Стиль кода
 
 - **Отступы**: 4 пробела

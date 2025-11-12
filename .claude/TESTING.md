@@ -325,6 +325,34 @@ swift run tg-client [команда]
    }
    ```
 
+#### ⚠️ КРИТИЧНО: Декомпозиция ТОЛЬКО после реальной попытки
+
+**❌ ЗАПРЕЩЕНО: Overengineering на основе предположений**
+
+Декомпозиция делается ТОЛЬКО когда:
+1. ✅ Попытался написать Component Test
+2. ✅ РЕАЛЬНО увидел сложность (> 50 строк, много аспектов)
+3. ✅ ТОГДА декомпозиция
+
+**НЕ делай:**
+- ❌ "Это будет сложно" (предположение без теста)
+- ❌ "На будущее лучше разбить" (YAGNI principle)
+- ❌ Создание подкомпонентов до Component Test
+
+**Пример ошибки:**
+```
+❌ Решили что ChannelMessageSource сложный БЕЗ теста
+❌ Создали UpdatesHandler (3 строки кода = for await loop)
+❌ Overengineering вместо простого решения
+```
+
+**Правильно:**
+```
+✅ Написали Component Test для ChannelMessageSource
+✅ Увидели что тест > 50 строк, проверяет 5 аспектов
+✅ ТОГДА декомпозиция на Cache, Fetcher
+```
+
 #### Процесс декомпозиции (расширенный Outside-In TDD)
 
 ```
@@ -332,10 +360,10 @@ swift run tg-client [команда]
    └─> User Story: "Получить непрочитанные сообщения из каналов"
    └─> Игнорируем детали реализации
 
-2. Component Test (MEDIUM-LEVEL) → ОБНАРУЖИВАЕМ СЛОЖНОСТЬ
-   └─> Пытаемся написать тест с MockTDLibClient
-   └─> Видим: нужен updates handler, cache, фильтрация
-   └─> ⚠️ СТОП! Компонент слишком сложный
+2. Component Test (MEDIUM-LEVEL) → ПЫТАЕМСЯ НАПИСАТЬ ТЕСТ
+   └─> Пишем тест с MockTDLibClient
+   └─> РЕАЛЬНО видим сложность (> 50 строк, много аспектов)
+   └─> ⚠️ СТОП! Компонент действительно сложный
 
 3. Декомпозиция (ARCHITECTURE DECISION)
    └─> Выделяем подкомпоненты по зонам ответственности:
@@ -526,6 +554,36 @@ ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/AuthorizationStateUpdateRespo
 
 ---
 
+#### Правила оформления Component тестов
+
+**Документация в @Suite:**
+- ✅ Одно предложение: что тестирует компонент
+- ✅ Scope: 2-3 пункта (основные сценарии)
+- ✅ Ссылка на TDLib docs (если applicable)
+- ❌ НЕТ ссылок на .claude/* (это внутренние инструкции для Claude Code)
+- ❌ НЕТ описания архитектурных решений (это в ARCHITECTURE.md)
+- ❌ НЕТ описания async patterns (это в TESTING.md)
+- ❌ НЕТ секции "Related" с ссылками на unit-тесты (они автоматически в DoCC)
+
+**Пример правильной документации:**
+```swift
+/// Component-тесты для loadChats и getChat через TDLibClient.
+///
+/// **Scope:**
+/// - `loadChats()` - загрузка чатов в TDLib cache (успех + 404 pagination)
+/// - `getChat(chatId:)` - получение полной информации о чате (успех + ошибки)
+///
+/// **TDLib docs:**
+/// - loadChats: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
+@Suite("TDLibAdapter: loadChats + getChat")
+struct LoadChatsAndGetChatTests { ... }
+```
+
+**Комментарии в тестах:**
+- ✅ Явно упоминай Request/Response модели (для DoCC автогенерации)
+- ✅ Ссылка на TDLib docs конкретного метода (в docstring теста)
+- ❌ НЕТ дублирования того что уже написано в коде теста
+
 #### Ключевые правила
 
 1. **RED = не компилируется** — настоящий RED тест пишется как будто метод уже существует:
@@ -597,7 +655,33 @@ ls Sources/TgClient/TgClient.docc/Tests/Unit-Tests/AuthorizationStateUpdateRespo
 
 5. **Итеративность** — если на шаге 6 находим новые требования, возвращаемся к шагу 3-4
 
-6. **ЗАПРЕЩЕНО использовать force unwrap в тестах** (`!`, `as!`, `try!`)
+6. **ЗАПРЕЩЕНО использовать Task.sleep() в async тестах (за редкими исключениями)**
+
+   **Проблема:** Task.sleep() не проверяет асинхронность, только добавляет задержку.
+
+   **❌ Антипаттерн:**
+   ```swift
+   await handler.start { update in /* ... */ }
+   try await Task.sleep(for: .milliseconds(100))  // ❌ Ждём что update придёт
+   #expect(receivedCount > 0)  // ❌ Может fail если async медленнее
+   ```
+
+   **✅ Правильно:**
+   ```swift
+   // Используй confirmation() для проверки получения событий
+   await confirmation(expectedCount: 3) { confirm in
+       await handler.start { update in
+           confirm()  // ✅ Явное подтверждение
+       }
+   }
+   ```
+
+   **Редкие исключения когда Task.sleep() допустим:**
+   - Cancellation testing: небольшая задержка перед task.cancel()
+   - Симуляция timeout в withThrowingTaskGroup (см. TESTING.md:1245)
+   - НЕ для "ожидания события" - используй confirmation()
+
+7. **ЗАПРЕЩЕНО использовать force unwrap в тестах** (`!`, `as!`, `try!`)
 
    **Проблема:** Force unwrap крашит тест с неинформативной ошибкой вместо понятного сообщения.
 
