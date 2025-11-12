@@ -1,3 +1,31 @@
+## [2025-11-12] - Async Testing Documentation & Architecture Discussion
+
+**Основное:**
+- ✅ Документация async testing best practices в TESTING.md (5 паттернов)
+- ✅ Обновление роли Testing Architect в PROMPTS.md
+- ✅ Применение DRY принципа к документации (PROMPTS.md как source of truth)
+- ✅ Уточнение Outside-In TDD (работает на КАЖДОМ уровне абстракции)
+
+**Ключевые изменения:**
+- Добавлен раздел "Тестирование асинхронного кода" в TESTING.md (~330 строк)
+  - Паттерны: `confirmation()`, `withMainSerialExecutor`, actor isolation, cancellation, timeout
+  - Антипаттерны: Task.sleep(), shared mutable state
+  - Ресурсы: SwiftLee, Swift by Sundell, Point-Free
+- Обновлены роли в PROMPTS.md: Senior Architect (4-block checks), Testing Architect (async best practices)
+- ARCHITECTURE.md: добавлена ссылка на Senior Architect checks
+- BACKLOG.md: добавлена задача OPT-2 (UpdatesHandler batch processing)
+- CLAUDE.md: усилены правила определения новых E2E vs существующих компонентов
+
+**Архитектурные решения:**
+- UpdatesHandler: AsyncStream<Update> для будущего, но MVP собирает в массив
+- Dependency Injection: TDLibClient через init(), не через start()
+- Золотое правило: "Проектируй для будущего, реализуй для MVP"
+
+**Следующая сессия:**
+- MVP-1.6 UpdatesHandler: Component Test (RED) с async testing patterns
+- Следовать TESTING.md → Паттерн 1: Swift Testing confirmation()
+
+
 ## [2025-11-12] - MVP-1.7 Phase 3: loadChats + getChat реализация
 
 **Реализовано:**

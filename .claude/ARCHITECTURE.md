@@ -223,6 +223,7 @@ actor ChannelMessageSource {
 
 **См. также:**
 - `.claude/TESTING.md` → Декомпозиция при обнаружении сложности
+- `.claude/TESTING.md` → Senior Architect: Проверка на архитектурные риски
 
 ---
 

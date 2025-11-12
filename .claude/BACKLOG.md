@@ -384,3 +384,30 @@ extension TDLibErrorResponse {
 **Примечание:** Этот документ живой — добавляй идеи по мере возникновения. Периодически пересматривай приоритеты.
 
 **Последнее обновление:** 2025-10-28
+
+## Post-MVP оптимизации
+
+### OPT-2: UpdatesHandler - Batch processing и приоритизация
+
+**Цель:** Оптимизировать обработку большого потока updates от TDLib.
+
+**Контекст:** MVP обрабатывает updates по одному через callback. При большом количестве updates (100+ чатов загружаются) может быть overhead на каждый callback.
+
+**Решение:**
+- Batch callbacks: группировать updates по 10-50 и вызывать callback с массивом
+- Приоритизация: критичные updates (updateChatReadInbox) обрабатывать сразу, остальные - в batch
+- Metrics: count updates per type, latency обработки
+
+**API изменение:**
+```swift
+// MVP
+func start(tdlib: TDLibClientProtocol, onUpdate: @escaping (Update) async -> Void)
+
+// Post-MVP
+func start(tdlib: TDLibClientProtocol, onBatch: @escaping ([Update]) async -> Void, batchSize: Int = 20)
+```
+
+**Приоритет:** Low (только при реальных проблемах с производительностью)
+
+**Связано:** MVP-1.6 UpdatesHandler
+

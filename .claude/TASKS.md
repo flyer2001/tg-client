@@ -19,7 +19,7 @@
 > 🎯 **MVP (цели и scope):** [MVP.md](.claude/MVP.md) — читать по требованию (большой файл)
 > 💡 **Будущие фичи:** [BACKLOG.md](.claude/BACKLOG.md) — бэклог для версий после MVP
 > 📝 **История изменений:** [CHANGELOG.md](.claude/CHANGELOG.md) — логи завершенных сессий, читать только по требованию (большой файл)
-> 📋 **Последнее обновление:** 2025-11-11
+> 📋 **Последнее обновление:** 2025-11-12
 
 ---
 
@@ -39,7 +39,11 @@
 
 **Контекст текущей сессии (2025-11-12):**
 - ✅ **MVP-1.7 Phase 3 ЗАВЕРШЕНА:** loadChats + getChat реализация (112 тестов)
-- **Следующий шаг:** MVP-1.7 Phase 4 (AsyncStream для updates от TDLib)
+- ✅ **Async Testing Documentation:** Добавлена документация best practices в TESTING.md + PROMPTS.md
+  - 5 паттернов: confirmation(), withMainSerialExecutor, actor isolation, cancellation, timeout
+  - Антипаттерны: Task.sleep(), shared mutable state
+  - Ресурсы: SwiftLee, Swift by Sundell, Point-Free
+- **Следующий шаг:** MVP-1.6 UpdatesHandler - Component Test (RED) с async testing patterns
 
 **Приоритеты:**
 
@@ -206,16 +210,55 @@
 - ChannelCache полностью реализован (actor-based, thread-safe)
 - Следующий шаг: MVP-1.7 — TDLib модели для loadChats/getChat/updates
 
-**1.6 Unit Tests для UpdatesHandler** (~1.5 часа)
-- [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/UpdatesHandlerTests.swift`
-- [ ] Тесты:
-  - `start(tdlib:onUpdate:)` — запуск фонового процесса
-  - `stop()` — остановка
-  - Обработка `updateNewChat` → вызов callback
-  - Обработка `updateChatReadInbox` → вызов callback
-  - Edge cases: множественные starts, stop без start
-- [ ] **GREEN:** Реализация `UpdatesHandler`
-- [ ] Использовать `AsyncStream<Update>` от TDLibClient
+**1.6 UpdatesHandler: Фоновая обработка TDLib updates** (~3 часа) ⚠️ **[В РАБОТЕ 2025-11-12]**
+
+**Архитектурное решение (Senior Architect review):**
+
+*Consumer:* ChannelMessageSource нужен фоновый updates handler
+
+*Проверка рисков:*
+1. **Библиотеки:** TDLib streaming updates → TDLibClient предоставит `updates: AsyncStream<Update>`
+2. **Память:** UpdatesHandler НЕ накапливает, только фильтрует + callback → минимально
+3. **Отказоустойчивость:** graceful shutdown при ошибках, изоляция callback ошибок
+4. **Логирование:** start/stop/errors → INFO/ERROR
+
+*Решение:*
+```swift
+actor UpdatesHandler {
+    private let tdlib: TDLibClientProtocol  // DI через constructor
+    private var task: Task<Void, Never>?
+
+    init(tdlib: TDLibClientProtocol)
+    func start(onUpdate: @escaping (Update) async -> Void) async
+    func stop()
+}
+```
+
+**Прогресс:**
+- [x] ✅ **Документация async testing best practices** (2025-11-12)
+  - Добавлен раздел "Тестирование асинхронного кода" в [TESTING.md](TESTING.md)
+  - 5 паттернов: `confirmation()`, `withMainSerialExecutor`, actor isolation, cancellation, timeout
+  - Антипаттерны: Task.sleep(), shared mutable state, тестирование деталей реализации
+  - Обновлена роль Testing Architect в [PROMPTS.md](PROMPTS.md)
+  - Ресурсы: SwiftLee, Swift by Sundell, Point-Free, swift-concurrency-extras
+
+**Следующая задача (TDD с async best practices):**
+- [ ] 📝 **Component Test (RED)** - написать с использованием async testing patterns:
+  - ✅ `confirmation()` для проверки получения updates из AsyncStream
+  - ✅ Dependency Injection через `init(tdlib:)` (не в start())
+  - ✅ Проверка graceful shutdown при `stop()`
+  - ✅ Проверка actor isolation (thread-safe concurrent calls)
+  - ❌ БЕЗ `Task.sleep()` — только реальная асинхронность
+  - **Образец:** См. [TESTING.md](TESTING.md) → Паттерн 1: Swift Testing confirmation()
+- [ ] Unit Tests для Update enum (RED)
+- [ ] Models: Update enum implementation (GREEN)
+- [ ] Real implementation: UpdatesHandler (GREEN)
+- [ ] Real implementation: TDLibClient.updates AsyncStream (GREEN)
+- [ ] Mock implementation: MockTDLibClient updates support (GREEN)
+- [ ] Component Test (GREEN)
+- [ ] E2E validation на реальном TDLib
+
+**Post-MVP:** См. BACKLOG.md → OPT-2 (batch callbacks, приоритизация)
 
 **1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-11]**
 - [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)

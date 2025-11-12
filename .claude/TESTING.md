@@ -150,6 +150,53 @@ swift run tg-client [команда]
 
 ---
 
+## Критерии: Новый E2E vs Часть существующего
+
+**Перед началом разработки ОБЯЗАТЕЛЬНО определи природу задачи.**
+
+### Это НОВЫЙ E2E сценарий если:
+
+- Пользователь **явно формулирует цель**: "Я хочу получить список каналов"
+- Это **самостоятельное действие**, не зависящее от других сценариев
+- Пользователь **не думает о деталях реализации**: ему важен результат, не процесс
+
+**Примеры:**
+- ✅ "Авторизоваться в Telegram" → новый E2E
+- ✅ "Получить непрочитанные сообщения" → новый E2E
+- ✅ "Отправить дайджест через бота" → новый E2E
+
+### Это ЧАСТЬ существующего E2E если:
+
+- Это **техническая деталь** реализации другой user story
+- Пользователь **не думает об этом** как об отдельной цели
+- Это **HOW** (как делаем), а не **WHAT** (что хочет пользователь)
+
+**Примеры:**
+- ❌ "AsyncStream для updates" → Component Test (техническая деталь "Получить непрочитанные")
+- ❌ "Кэширование каналов" → Unit Test (оптимизация, пользователю без разницы)
+- ❌ "Pagination через loadChats" → Component Test (детали реализации "Получить непрочитанные")
+
+### Это ЧИСТО техническое (БЕЗ E2E) если:
+
+- Рефакторинг существующего кода
+- Оптимизация производительности
+- Внутренние абстракции (протоколы, helpers)
+
+**Примеры:**
+- ❌ "Централизованные Encoder/Decoder" → Unit Test
+- ❌ "SwiftLint rules" → нет тестов, просто конфигурация
+- ❌ "ChannelCache actor" → Unit Test (внутренний компонент)
+
+### 🚨 Правило: При сомнении СПРОСИ
+
+**Если не уверен на 100% - задай вопрос пользователю:**
+
+> "Задача '[название]' — это новая user story (отдельный E2E сценарий) или часть существующего '[название E2E]'?"
+
+**НЕ начинай писать код до получения ответа.**
+
+---
+
 ### Outside-In TDD для TDLib интеграции
 
 **Принцип:** начинаем с пользовательского сценария (E2E), спускаемся к деталям реализации.
@@ -818,18 +865,44 @@ public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
 
 ---
 
-### Chicago School TDD для Core логики
+### Outside-In vs Inside-Out: Правильное понимание
 
-**Принцип:** начинаем с моделей данных и бизнес-логики (Inside-Out), двигаемся к API.
+**ЗАБЛУЖДЕНИЕ:** Outside-In = только E2E → Component → Unit
 
-#### Когда использовать Chicago (Inside-Out)
+**ПРАВДА:** Outside-In = начинаем с требований consumer на ЛЮБОМ уровне
 
-- ✅ **Core бизнес-логика** (DigestOrchestrator, StateManager)
-- ✅ **Наши протоколы** (MessageSourceProtocol, SummaryGeneratorProtocol)
-- ✅ **Модели домена** (SourceMessage, DigestSummary)
-- ✅ **Когда мы контролируем дизайн** (не зависим от внешних структур)
+#### Outside-In применяется когда:
 
-#### Порядок разработки (Inside-Out)
+- Есть **явный consumer** (вызывающий код)
+- Мы проектируем **поведение** под требования consumer
+- Мы **не знаем точный интерфейс** до начала проектирования
+
+**Примеры:**
+- ✅ **E2E → TDLibClient.getChats()** (consumer = пользователь "получить непрочитанные")
+- ✅ **Component → UpdatesHandler** (consumer = ChannelMessageSource нужен фоновый updates)
+- ✅ **Component → MessageFetcher** (consumer = ChannelMessageSource нужны сообщения)
+
+**Процесс:**
+1. ✅ Определи требования consumer
+2. ✅ Component Test (RED) - описываешь контракт как будто метод существует
+3. ✅ Protocol/Models/Implementation (GREEN)
+
+**Ключевое:** Outside-In работает на **каждом уровне абстракции** (E2E, Component, Unit)!
+
+---
+
+#### Inside-Out применяется когда:
+
+- **НЕТ явного consumer** на момент проектирования
+- Проектируем **модели данных** (data structures)
+- Контракт очевиден из бизнес-логики
+
+**Примеры:**
+- ✅ **SourceMessage** (просто модель для передачи данных)
+- ✅ **DigestSummary** (просто модель результата)
+- ✅ **ChannelInfo** (просто модель для кэша)
+
+**Процесс:**
 
 ```
 1. Unit Tests для моделей (RED)
@@ -880,6 +953,22 @@ DigestOrchestrator (Chicago — наша логика)
 1. Сначала: `TDLibClient.getChats()` — **London** (адаптируемся к TDLib)
 2. Потом: `ChannelMessageSource.fetchUnreadMessages()` — **Chicago** (наш дизайн, использует готовый TDLibClient через моки)
 3. Наконец: `DigestOrchestrator.run()` — **Chicago** (оркестрация, использует готовые MessageSource/SummaryGenerator)
+
+---
+
+### Senior Architect: Проверка на архитектурные риски
+
+**КРИТИЧНО:** Перед началом реализации Component/Unit тестов для новой фичи используй роль **Senior Swift Architect**.
+
+**Детали проверки:** См. [PROMPTS.md](PROMPTS.md) → Senior Swift Architect → Проверка архитектурных рисков
+
+**Кратко:**
+1. Ограничения внешних библиотек (как работает? rate limits? блокирующие вызовы?)
+2. Память/производительность (сколько данных? batch processing? блокировка пользователя?)
+3. Отказоустойчивость (timeout? потеря сети? частичные ошибки?)
+4. Логирование (критичные операции? уровень детализации? метрики?)
+
+**Золотое правило:** Проектируй для будущего, реализуй для MVP
 
 ---
 
@@ -970,6 +1059,334 @@ struct Chat: Codable, Sendable, Equatable {
 | TDLibAdapter | TDLib C API | Примеры JSON ответов | `TDLibClientProtocol` |
 | OpenAISummaryGenerator | OpenAI API | HTTP responses | `SummaryGeneratorProtocol` |
 | TelegramBotNotifier | Telegram Bot API | API examples | `BotNotifierProtocol` |
+
+---
+
+## Тестирование асинхронного кода
+
+### Основные принципы
+
+**КРИТИЧНО:** Async тесты должны проверять РЕАЛЬНОЕ поведение, а не эмулировать задержки.
+
+**❌ Антипаттерны:**
+- `Task.sleep()` — не проверяет асинхронность, только добавляет задержку
+- `Thread.sleep()` — блокирует поток, не подходит для async/await
+- Произвольные timeouts без причины
+
+**✅ Best practices:**
+- Используй `confirmation()` для подсчёта событий
+- Используй `withMainSerialExecutor` для детерминированного тестирования
+- Проверяй actor isolation и Sendable conformance
+- Тестируй concurrent behavior (несколько параллельных вызовов)
+
+### Паттерн 1: Swift Testing `confirmation()`
+
+**Применение:** Тестирование AsyncSequence/AsyncStream, подсчёт количества событий.
+
+**Пример: Тестирование AsyncStream updates**
+
+```swift
+import Testing
+
+@Suite("UpdatesHandler: Async updates processing")
+struct UpdatesHandlerTests {
+    @Test("Receives multiple updates from stream")
+    func receivesMultipleUpdates() async throws {
+        // Given: Mock TDLib client с AsyncStream updates
+        let mockClient = MockTDLibClient()
+        let updates: [Update] = [
+            .updateChatReadInbox(chatId: 1, unreadCount: 5),
+            .updateChatReadInbox(chatId: 2, unreadCount: 3),
+            .updateChatReadInbox(chatId: 3, unreadCount: 10)
+        ]
+        await mockClient.setUpdatesStream(updates)
+
+        let handler = UpdatesHandler(tdlib: mockClient)
+        var receivedUpdates: [Update] = []
+
+        // When: Start handler and collect updates
+        await confirmation(expectedCount: 3) { confirm in
+            await handler.start { update in
+                receivedUpdates.append(update)
+                confirm()  // Подтверждаем каждое получение
+            }
+        }
+
+        // Then: Проверяем все updates получены
+        #expect(receivedUpdates.count == 3)
+        #expect(receivedUpdates[0].chatId == 1)
+        #expect(receivedUpdates[2].unreadCount == 10)
+    }
+}
+```
+
+**Преимущества:**
+- ✅ Проверяет реальное получение событий
+- ✅ Fail если получено меньше/больше ожидаемых событий
+- ✅ Timeout автоматически (не нужен Task.sleep)
+
+**Документация:** https://developer.apple.com/documentation/testing/confirmation
+
+### Паттерн 2: Point-Free `withMainSerialExecutor`
+
+**Применение:** Детерминированное тестирование async кода без race conditions.
+
+**Проблема:** Async код может выполняться в произвольном порядке → flaky tests.
+
+**Решение:** Сериализация выполнения на main executor.
+
+**Пример:**
+
+```swift
+import PointFreeTestSupport  // https://github.com/pointfreeco/swift-concurrency-extras
+
+@Test("Handler processes updates sequentially")
+func processesUpdatesSequentially() async throws {
+    await withMainSerialExecutor {
+        let handler = UpdatesHandler(tdlib: mockClient)
+        var order: [Int] = []
+
+        await handler.start { update in
+            order.append(update.chatId)
+        }
+
+        // В детерминированном executor порядок гарантирован
+        #expect(order == [1, 2, 3])
+    }
+}
+```
+
+**Когда использовать:**
+- Проверка порядка выполнения async операций
+- Тесты с race conditions
+- Нужна предсказуемость (не flaky tests)
+
+**Документация:** https://www.pointfree.co/blog/posts/110-reliably-testing-async-code-in-swift
+
+### Паттерн 3: Actor isolation testing
+
+**Применение:** Проверка thread-safety и Sendable conformance.
+
+**Пример:**
+
+```swift
+@Test("UpdatesHandler is thread-safe (actor isolation)")
+func actorIsolation() async throws {
+    let handler = UpdatesHandler(tdlib: mockClient)
+
+    // Concurrent вызовы должны работать без data races
+    await withTaskGroup(of: Void.self) { group in
+        for i in 1...10 {
+            group.addTask {
+                await handler.start { update in
+                    // Обработка в изолированном контексте
+                }
+            }
+        }
+    }
+
+    // Если есть data race → Swift 6 compilation error
+    // Если actor isolation нарушена → runtime warning
+}
+```
+
+**Проверка Sendable:**
+```swift
+@Test("Update is Sendable (can cross actor boundaries)")
+func updateIsSendable() {
+    let update = Update.updateChatReadInbox(chatId: 1, unreadCount: 5)
+
+    Task {
+        // Update пересекает границу actor (должен быть Sendable)
+        await someActor.process(update)
+    }
+
+    // Если Update не Sendable → compilation error
+}
+```
+
+### Паттерн 4: Cancellation testing
+
+**Применение:** Проверка graceful shutdown при отмене Task.
+
+**Пример:**
+
+```swift
+@Test("UpdatesHandler stops gracefully on cancellation")
+func stopsOnCancellation() async throws {
+    let handler = UpdatesHandler(tdlib: mockClient)
+
+    let task = Task {
+        await handler.start { update in
+            // Processing...
+        }
+    }
+
+    // Cancel после небольшой задержки
+    try await Task.sleep(for: .milliseconds(10))
+    task.cancel()
+
+    // Проверяем что handler остановился
+    await confirmation { confirm in
+        try await Task.sleep(for: .milliseconds(50))
+        // Проверяем что новые updates не обрабатываются
+        confirm()
+    }
+}
+```
+
+### Паттерн 5: Timeout testing
+
+**Применение:** Проверка поведения при медленных операциях.
+
+**Правильный способ (без Task.sleep):**
+
+```swift
+@Test("Operation completes within timeout")
+func operationTimeout() async throws {
+    let start = ContinuousClock.now
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        group.addTask {
+            // Операция которая может зависнуть
+            try await handler.longRunningOperation()
+        }
+
+        group.addTask {
+            // Таймаут task
+            try await Task.sleep(for: .seconds(5))
+            throw TimeoutError()
+        }
+
+        // Первая завершённая задача
+        try await group.next()
+        group.cancelAll()
+    }
+
+    let duration = start.duration(to: .now)
+    #expect(duration < .seconds(5), "Operation должна завершиться до timeout")
+}
+```
+
+### Антипаттерны и как их избежать
+
+#### ❌ Антипаттерн 1: Task.sleep() для "ожидания" async операции
+
+**Плохо:**
+```swift
+@Test("Wait for updates")
+func waitForUpdates() async throws {
+    await handler.start { update in
+        // Process...
+    }
+
+    try await Task.sleep(for: .milliseconds(100))  // ❌ Что мы ожидаем?
+    #expect(receivedCount > 0)  // ❌ Может fail если async медленнее
+}
+```
+
+**Хорошо:**
+```swift
+@Test("Wait for updates")
+func waitForUpdates() async throws {
+    await confirmation(expectedCount: 1) { confirm in
+        await handler.start { update in
+            confirm()  // ✅ Явное подтверждение получения
+        }
+    }
+}
+```
+
+#### ❌ Антипаттерн 2: Shared mutable state без синхронизации
+
+**Плохо:**
+```swift
+@Test("Concurrent updates")
+func concurrentUpdates() async throws {
+    var count = 0  // ❌ Data race!
+
+    await withTaskGroup(of: Void.self) { group in
+        for _ in 1...10 {
+            group.addTask {
+                count += 1  // ❌ Concurrent modification
+            }
+        }
+    }
+}
+```
+
+**Хорошо:**
+```swift
+@Test("Concurrent updates")
+func concurrentUpdates() async throws {
+    actor Counter {
+        var count = 0
+        func increment() { count += 1 }
+    }
+
+    let counter = Counter()
+
+    await withTaskGroup(of: Void.self) { group in
+        for _ in 1...10 {
+            group.addTask {
+                await counter.increment()  // ✅ Thread-safe
+            }
+        }
+    }
+}
+```
+
+#### ❌ Антипаттерн 3: Тестирование деталей реализации (как) вместо поведения (что)
+
+**Плохо:**
+```swift
+@Test("Handler uses specific Task priority")
+func taskPriority() async throws {
+    // ❌ Проверяем детали реализации
+    #expect(handler.task?.priority == .medium)
+}
+```
+
+**Хорошо:**
+```swift
+@Test("Handler processes updates in order")
+func processesInOrder() async throws {
+    // ✅ Проверяем наблюдаемое поведение
+    var order: [Int] = []
+    await handler.start { update in
+        order.append(update.id)
+    }
+    #expect(order == [1, 2, 3])
+}
+```
+
+### Полезные ресурсы
+
+**Официальная документация:**
+- [Swift Testing Confirmation API](https://developer.apple.com/documentation/testing/confirmation)
+- [Swift Concurrency Best Practices](https://developer.apple.com/documentation/swift/concurrency)
+
+**Community resources:**
+- [SwiftLee: Unit testing async/await](https://www.avanderlee.com/concurrency/unit-testing-async-await/)
+- [Swift by Sundell: Testing async code](https://www.swiftbysundell.com/articles/unit-testing-code-that-uses-async-await/)
+- [Hacking with Swift: Testing AsyncSequence](https://www.hackingwithswift.com/swift/5.5/test-async-sequences)
+- [Point-Free: Reliably testing async code](https://www.pointfree.co/blog/posts/110-reliably-testing-async-code-in-swift)
+
+**Инструменты:**
+- [swift-concurrency-extras](https://github.com/pointfreeco/swift-concurrency-extras) — утилиты для детерминированного тестирования
+
+### Применение в проекте
+
+| Компонент | Async паттерн | Testing стратегия |
+|-----------|---------------|-------------------|
+| UpdatesHandler | AsyncStream<Update> | confirmation() для подсчёта events |
+| TDLibClient | async методы | Actor isolation, timeout testing |
+| ChannelMessageSource | async/await | Concurrent calls testing |
+| DigestOrchestrator | Task coordination | Cancellation, graceful shutdown |
+
+**См. также:** [PROMPTS.md](PROMPTS.md) → Senior Testing Architect → Async testing best practices
+
+---
 
 ## Test Helpers
 
