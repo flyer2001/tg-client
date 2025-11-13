@@ -3,93 +3,105 @@ import Testing
 @testable import TDLibAdapter
 @testable import DigestCore
 
-/// Component тест для ChannelMessageSource.
+/// Component тесты для ChannelMessageSource - Outside-In TDD.
 ///
-/// **Цель:** Протестировать интеграцию ChannelMessageSource с TDLibClient.
+/// **Процесс разработки (итеративный):**
+/// 1. Написали высокоуровневый тест → НЕ КОМПИЛИРУЕТСЯ
+/// 2. Создаём заглушки → компилируется, падает
+/// 3. Пытаемся реализовать → СТОП, не хватает функционала → пишем тест для недостающего
+/// 4. Реализуем недостающее → возвращаемся на шаг выше
+/// 5. Повторяем пока высокоуровневый тест не станет GREEN
 ///
-/// **Что тестируется:**
-/// - ChannelMessageSource вызывает TDLib методы в правильной последовательности
-/// - Корректная фильтрация (только каналы с unreadCount > 0)
-/// - Формирование SourceMessage с ссылками
-///
-/// **TDLib методы (нужно добавить в TDLibClientProtocol):**
-///
-/// 1. **loadChats(chatList:limit:)** - загрузка списка чатов
-///    - TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
-///    - Возвращает Ok, данные приходят через updates
-///
-/// 2. **getChat(id:)** - получение информации о чате
-///    - TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat.html
-///    - Возвращает Chat (id, type, title, unreadCount, lastReadInboxMessageId, username)
-///
-/// 3. **getChatHistory(chatId:fromMessageId:offset:limit:)** - получение сообщений
-///    - TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat_history.html
-///    - Возвращает Messages (массив Message)
-///
-/// **Необходимые модели:**
-/// - Chat (Response) - id, type (ChatType), title, unreadCount, lastReadInboxMessageId, username
-/// - Message (Response) - id, chatId, content
-/// - MessageContent (enum) - для MVP только messageText
-/// - SourceMessage (DigestCore) - chatId, messageId, content, link, channelTitle
+/// **Текущее состояние:** УРОВЕНЬ 1 - высокоуровневый тест (не компилируется)
 ///
 /// **Связанная документация:**
 /// - E2E сценарий: <doc:FetchUnreadMessages>
-@Suite("Component: ChannelMessageSource")
+@Suite("Component: ChannelMessageSource - Outside-In TDD")
 struct ChannelMessageSourceTests {
 
-    /// Component тест: получение непрочитанных сообщений из каналов.
+    /// Получение непрочитанных сообщений из каналов.
     ///
-    /// **Сценарий:**
-    /// 1. MockTDLibClient настроен возвращать 3 чата:
-    ///    - Канал с непрочитанными (должен попасть в результат)
-    ///    - Канал без непрочитанных (НЕ должен попасть)
-    ///    - Группа с непрочитанными (НЕ должна попасть - не канал)
+    /// **Outside-In TDD - стартовая точка (высокий уровень).**
     ///
-    /// 2. ChannelMessageSource.fetchUnreadMessages() внутри:
-    ///    - Вызывает loadChats() для загрузки списка
-    ///    - Вызывает getChat(id) для каждого чата
-    ///    - Фильтрует: type=.supergroup(isChannel: true) && unreadCount > 0
-    ///    - Вызывает getChatHistory() для каждого канала
-    ///    - Формирует SourceMessage[]
+    /// **Given:** MockTDLibClient возвращает 3 чата через updates:
+    /// - Канал "Tech News" (unreadCount=2)
+    /// - Канал "Dev Updates" (unreadCount=0) - прочитан
+    /// - Группа "Random" (unreadCount=5) - НЕ канал
     ///
-    /// 3. Проверяем результат:
-    ///    - Только сообщения из канала с непрочитанными
-    ///    - Корректные ссылки (https://t.me/{username}/{messageId})
-    @Test("Получение непрочитанных сообщений из каналов", .disabled("RED фаза: ChannelMessageSource не реализован"))
+    /// **When:** Вызываем `messageSource.fetchUnreadMessages()`
+    ///
+    /// **Then:** Получаем 2 сообщения только из "Tech News" (канал с unreadCount > 0)
+    ///
+    /// **Процесс:**
+    /// 1. ✅ Тест написан → НЕ КОМПИЛИРУЕТСЯ (RED)
+    /// 2. ⏭️ Создать заглушки (ChannelMessageSource, SourceMessage)
+    /// 3. ⏭️ Попытаться реализовать fetchUnreadMessages() → обнаружим недостающий функционал
+    /// 4. ⏭️ Добавить тесты для недостающего функционала (здесь же, ниже)
+    @Test("fetchUnreadMessages: получение непрочитанных из каналов")
     func fetchUnreadMessagesFromChannels() async throws {
-        // TODO: RED фаза - Component Test временно отключён
-        // Код закомментирован чтобы не блокировать прогон других тестов
-        // Раскомментировать при реализации ChannelMessageSource
-
-        /*
-        // 1. Setup MockTDLibClient
-        // TODO: MockTDLibClient не имеет методов для настройки данных - добавим после реализации TDLibClient
+        // Given: MockTDLibClient
         let mockClient = MockTDLibClient()
 
-        // 2. Создание ChannelMessageSource
-        // TODO: ChannelMessageSource НЕ СУЩЕСТВУЕТ - Component Test НЕ КОМПИЛИРУЕТСЯ (это RED)
+        // When: Вызываем fetchUnreadMessages()
+        // ⚠️ НЕ КОМПИЛИРУЕТСЯ: ChannelMessageSource не существует (это RED)
         let messageSource = ChannelMessageSource(tdlib: mockClient)
-
-        // 3. Вызов fetchUnreadMessages() - ВСЯ логика внутри ChannelMessageSource
-        // TODO: fetchUnreadMessages() НЕ СУЩЕСТВУЕТ
         let messages = try await messageSource.fetchUnreadMessages()
 
-        // 4. Проверка результата
-        // TODO: SourceMessage модель НЕ СУЩЕСТВУЕТ
-        #expect(messages.count == 2)  // 2 сообщения из канала с непрочитанными
+        // Then: Проверяем результат
+        #expect(messages.count == 2)
 
-        let firstMessage = messages[0]
-        #expect(firstMessage.chatId == 123)
-        #expect(firstMessage.messageId == 101)
-        #expect(firstMessage.content == "Breaking news today")
-        #expect(firstMessage.channelTitle == "Tech News")
-        #expect(firstMessage.link == "https://t.me/technews/101")
+        let first = messages[0]
+        #expect(first.chatId == 123)
+        #expect(first.messageId == 101)
+        #expect(first.content == "Breaking news today")
+        #expect(first.channelTitle == "Tech News")
+        #expect(first.link == "https://t.me/technews/101")  // Публичный канал
 
-        let secondMessage = messages[1]
-        #expect(secondMessage.chatId == 123)
-        #expect(secondMessage.messageId == 102)
-        #expect(secondMessage.content == "Another update")
-        #expect(secondMessage.link == "https://t.me/technews/102")
-        */
+        let second = messages[1]
+        #expect(second.chatId == 123)
+        #expect(second.messageId == 102)
+        #expect(second.content == "Another update")
+        #expect(second.link == "https://t.me/technews/102")
+    }
+
+    // MARK: - Тесты для недостающего функционала
+    // (Добавляются по мере обнаружения при попытке реализации fetchUnreadMessages)
+
+    /// loadChats отправляет updateNewChat через updates stream.
+    ///
+    /// **Контекст:** При попытке реализовать `fetchUnreadMessages()` обнаружили,
+    /// что `loadChats()` возвращает `Ok`, а Chat приходят через `updates` AsyncStream.
+    ///
+    /// **TDLib behavior:**
+    /// 1. `loadChats()` возвращает `Ok` (не список чатов!)
+    /// 2. TDLib посылает `updateNewChat` для каждого загруженного чата через AsyncStream
+    ///
+    /// **Given:** MockTDLibClient настроен эмитить 3 updateNewChat
+    /// **When:** Вызываем loadChats() и слушаем updates stream
+    /// **Then:** Получаем 3 Chat объекта через updateNewChat
+    ///
+    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
+    @Test("loadChats + updates stream → updateNewChat")
+    func loadChatsEmitsUpdateNewChat() async throws {
+        // Given: MockTDLibClient
+        let mockClient = MockTDLibClient()
+
+        // When: Загружаем чаты
+        // ⚠️ НЕ КОМПИЛИРУЕТСЯ: нет loadChats() метода
+        try await mockClient.loadChats(chatList: .main, limit: 100)
+
+        // Then: Получаем updateNewChat через updates stream
+        // ⚠️ НЕ КОМПИЛИРУЕТСЯ: нет updates: AsyncStream<Update>
+        var receivedChats: [Chat] = []
+        for await update in mockClient.updates {
+            if case .newChat(let chat) = update {
+                receivedChats.append(chat)
+            }
+            if receivedChats.count >= 3 { break }
+        }
+
+        #expect(receivedChats.count == 3)
+        #expect(receivedChats[0].id == 123)
+        #expect(receivedChats[0].title == "Tech News")
     }
 }
