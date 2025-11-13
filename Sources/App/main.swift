@@ -62,30 +62,83 @@ struct TGClient {
             exit(1)
         }
 
-        // Manual test: loadChats + getChat
-        do {
-            print("\n📋 Manual test: loadChats")
-            _ = try await td.loadChats(chatList: .main, limit: 100)
-            print("✅ loadChats: Ok")
+        // 🧪 Experiment: loadChats pagination with updates stream
+        print("\n🧪 Starting loadChats pagination experiment...")
+        print("   Strategy: loadChats() + 2 sec timeout")
+        print("   Goal: Load ALL chats and measure timing\n")
 
-            print("\n📋 Manual test: getChats (first 3 IDs)")
-            let chats = try await td.getChats(chatList: .main, limit: 3)
-            print("✅ getChats: \(chats.chatIds.count) chat IDs")
+        let startTime = Date()
+        var allChats: [ChatResponse] = []
+        var loadChatsCallCount = 0
+        var lastBatchSize = 0
 
-            if let firstChatId = chats.chatIds.first {
-                print("\n📋 Manual test: getChat(chatId: \(firstChatId))")
-                let chat = try await td.getChat(chatId: firstChatId)
-                print("✅ getChat:")
-                print("   Title: \(chat.title)")
-                print("   Type: \(chat.chatType)")
-                print("   Unread: \(chat.unreadCount)")
-                print("   LastRead: \(chat.lastReadInboxMessageId)")
+        // Task 1: Listen to updates stream (background)
+        let updatesTask = Task {
+            var updateCount = 0
+            for await update in td.updates {
+                if case .newChat(let chat) = update {
+                    allChats.append(chat)
+                    updateCount += 1
+                    lastBatchSize += 1
+
+                    // Логируем каждый 50-й чат для прогресса
+                    if updateCount % 50 == 0 {
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        print("   📥 Updates: \(updateCount) chats received (elapsed: \(String(format: "%.1f", elapsed))s)")
+                    }
+                }
             }
+        }
 
-            print("\n✅ All manual tests passed!")
+        // Task 2: Call loadChats() in loop with 2 sec timeout
+        do {
+            while true {
+                loadChatsCallCount += 1
+                let callStartTime = Date()
+
+                print("🔄 loadChats() call #\(loadChatsCallCount) (total chats: \(allChats.count))...")
+
+                do {
+                    _ = try await td.loadChats(chatList: .main, limit: 100)
+                    let callElapsed = Date().timeIntervalSince(callStartTime)
+                    print("   ✅ Ok (took \(String(format: "%.3f", callElapsed))s)")
+
+                    // Wait 2 seconds for updates to arrive
+                    print("   ⏳ Waiting 2 sec for updates...")
+                    try await Task.sleep(for: .seconds(2))
+                    print("   ✅ Batch: +\(lastBatchSize) chats (total: \(allChats.count))")
+                    lastBatchSize = 0
+
+                } catch let error as TDLibErrorResponse where error.isAllChatsLoaded {
+                    let totalElapsed = Date().timeIntervalSince(startTime)
+                    print("\n✅ All chats loaded!")
+                    print("\n📊 Statistics:")
+                    print("   Total chats: \(allChats.count)")
+                    print("   loadChats() calls: \(loadChatsCallCount)")
+                    print("   Total time: \(String(format: "%.1f", totalElapsed))s")
+                    print("   Avg per call: \(String(format: "%.2f", totalElapsed / Double(loadChatsCallCount)))s")
+
+                    // Wait for remaining updates (if any)
+                    print("\n⏳ Waiting 3 sec for remaining updates...")
+                    try await Task.sleep(for: .seconds(3))
+                    print("   Final count: \(allChats.count) chats")
+
+                    // Show sample chats
+                    print("\n📋 Sample chats (first 5):")
+                    for (idx, chat) in allChats.prefix(5).enumerated() {
+                        print("   \(idx + 1). \(chat.title) (type: \(chat.chatType), unread: \(chat.unreadCount))")
+                    }
+
+                    updatesTask.cancel()
+                    break
+                }
+            }
         } catch {
-            print("⚠️ Manual test failed: \(error)")
+            print("⚠️ Experiment failed: \(error)")
+            updatesTask.cancel()
             exit(1)
         }
+
+        print("\n✅ Experiment completed successfully!")
     }
 }

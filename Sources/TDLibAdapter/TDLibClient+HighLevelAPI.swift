@@ -68,6 +68,28 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForResponse(ofType: ChatResponse.self)
     }
 
+    // MARK: - Updates
+
+    /// AsyncStream для получения updates от TDLib.
+    ///
+    /// При первом обращении запускает фоновый receive loop.
+    public var updates: AsyncStream<Update> {
+        // Создаём stream только один раз
+        if updatesContinuation == nil {
+            let (stream, continuation) = AsyncStream<Update>.makeStream()
+            updatesContinuation = continuation
+            startUpdatesLoop()
+            return stream
+        }
+
+        // Повторное обращение - создаём новый stream с тем же continuation
+        return AsyncStream<Update> { continuation in
+            // FIXME: Это не правильно - нужно хранить массив continuation'ов
+            // Для MVP работает т.к. у нас один подписчик
+            continuation.onTermination = { @Sendable _ in }
+        }
+    }
+
     // MARK: - Helper Methods
 
     /// Ожидает следующего обновления состояния авторизации от TDLib.

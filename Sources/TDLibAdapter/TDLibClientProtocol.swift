@@ -106,4 +106,28 @@ public protocol TDLibClientProtocol: Sendable {
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat.html
     func getChat(chatId: Int64) async throws -> ChatResponse
+
+    // MARK: - Updates
+
+    /// AsyncStream для получения updates от TDLib.
+    ///
+    /// **Использование:**
+    /// ```swift
+    /// for await update in client.updates {
+    ///     switch update {
+    ///     case .newChat(let chat):
+    ///         print("New chat: \(chat.title)")
+    ///     case .chatReadInbox(let chatId, let lastReadId, let unreadCount):
+    ///         print("Chat \(chatId) read: \(unreadCount) unread")
+    ///     case .unknown(let type):
+    ///         print("Unknown update: \(type)")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// **TDLib docs:**
+    /// - Update base class: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update.html
+    /// - updateNewChat: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_new_chat.html
+    /// - updateChatReadInbox: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1update_chat_read_inbox.html
+    var updates: AsyncStream<Update> { get }
 }

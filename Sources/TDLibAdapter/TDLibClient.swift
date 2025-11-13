@@ -13,6 +13,10 @@ public final class TDLibClient: @unchecked Sendable {
     private let maxAuthorizationAttempts: Int
     private let authorizationTimeout: TimeInterval
 
+    // AsyncStream для updates от TDLib
+    var updatesContinuation: AsyncStream<Update>.Continuation?
+    var updatesTask: Task<Void, Never>?
+
     /// Инициализирует TDLib клиент.
     ///
     /// - Parameters:
@@ -36,7 +40,11 @@ public final class TDLibClient: @unchecked Sendable {
         self.authorizationTimeout = authorizationTimeout
     }
 
-    deinit { if let c = client { td_json_client_destroy(c) } }
+    deinit {
+        updatesContinuation?.finish()
+        updatesTask?.cancel()
+        if let c = client { td_json_client_destroy(c) }
+    }
 
     /// Настраивает логирование TDLib библиотеки.
     ///
@@ -294,4 +302,52 @@ public final class TDLibClient: @unchecked Sendable {
             await Task.yield()
         }
     }
+
+    /// Запускает фоновый receive loop для обработки updates.
+    ///
+    /// Вызывается автоматически при первом обращении к `updates` property.
+    func startUpdatesLoop() {
+        updatesTask = Task { [weak self] in
+            guard let self else { return }
+
+            while !Task.isCancelled {
+                guard let obj = self.receive(timeout: 0.1) else {
+                    await Task.yield()
+                    continue
+                }
+
+                guard let type = obj["@type"] as? String else {
+                    await Task.yield()
+                    continue
+                }
+
+                // Пропускаем авторизационные события (обрабатываются в processAuthorizationStates)
+                if type.hasPrefix("authorizationState") || type == "updateAuthorizationState" {
+                    await Task.yield()
+                    continue
+                }
+
+                // Пропускаем ошибки (логируются отдельно)
+                if type == "error" {
+                    await Task.yield()
+                    continue
+                }
+
+                // Пытаемся декодировать Update
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: obj)
+                    let update = try JSONDecoder.tdlib().decode(Update.self, from: data)
+                    updatesContinuation?.yield(update)
+                } catch {
+                    // Не смогли декодировать - пропускаем
+                    appLogger.debug("Failed to decode update type '\(type)': \(error)")
+                }
+
+                await Task.yield()
+            }
+
+            appLogger.info("Updates loop stopped")
+        }
+    }
 }
+

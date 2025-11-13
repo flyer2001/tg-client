@@ -3,41 +3,29 @@ import TDLibAdapter
 
 /// Источник сообщений из Telegram каналов.
 ///
-/// **Архитектура:**
-/// - Coordinator pattern: координирует работу подкомпонентов
-/// - Декомпозиция по SRP: ChannelCache, UpdatesHandler, MessageFetcher
+/// **Реализация:** Stateless подход для MVP (без realtime кеша).
 ///
 /// **Алгоритм:**
-/// 1. Запускает UpdatesHandler для получения updates от TDLib
-/// 2. Вызывает loadChats() для загрузки списка чатов
-/// 3. Получает детали каждого чата через getChat()
-/// 4. Фильтрует: только каналы (type=.supergroup(isChannel: true)) с unreadCount > 0
-/// 5. Использует MessageFetcher для получения сообщений из каналов
-/// 6. Формирует SourceMessage[] с ссылками
+/// 1. loadChats() в цикле (pagination до 404)
+/// 2. Слушаем updates stream → получаем updateNewChat для каждого чата
+/// 3. Фильтруем: только каналы (type=.supergroup(isChannel: true)) с unreadCount > 0
+/// 4. getChatHistory() для каждого канала
+/// 5. Формируем SourceMessage[] с ссылками
 ///
 /// **Связанная документация:**
 /// - E2E сценарий: <doc:FetchUnreadMessages>
 /// - Component тест: `ChannelMessageSourceTests.swift`
-public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
-    private let tdlib: TDLibClient
+public actor ChannelMessageSource: MessageSourceProtocol {
+    private let tdlib: TDLibClientProtocol
 
-    // TODO: Добавить зависимости:
-    // private let cache: ChannelCache
-    // private let updatesHandler: UpdatesHandler
-    // private let messageFetcher: MessageFetcher
-
-    public init(tdlib: TDLibClient) {
+    public init(tdlib: TDLibClientProtocol) {
         self.tdlib = tdlib
     }
 
     public func fetchUnreadMessages() async throws -> [SourceMessage] {
-        // TODO: Реализовать через декомпозицию
-        // 1. updatesHandler.start()
-        // 2. loadChats loop (pagination)
-        // 3. getChat для каждого чата → cache.add()
-        // 4. cache.getUnreadChannels()
-        // 5. messageFetcher.fetch(from: channels)
-        fatalError("Not implemented yet - RED phase")
+        // TODO: Реализовать after MVP-1.7 Phase 3 (loadChats + updates + getChatHistory)
+        // Сейчас это заглушка для компиляции
+        fatalError("Not implemented yet - waiting for MVP-1.7 completion")
     }
 
     public func markAsRead(messages: [SourceMessage]) async throws {
