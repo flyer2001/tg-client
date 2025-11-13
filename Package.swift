@@ -11,8 +11,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
-        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3"),
-        .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
+        // SwiftLint отключен для ускорения сборки на Linux
+        // См. BACKLOG.md: "SwiftLint через pre-commit hook"
+        // .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
     ],
     targets: [
         .executableTarget(

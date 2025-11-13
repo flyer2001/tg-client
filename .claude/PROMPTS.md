@@ -60,7 +60,7 @@
    - Обнови E2E сценарий если нужно
 4. Начинай писать тесты с учётом рисков
 
-**Пример решения:** UpdatesHandler с AsyncStream - готов к batch processing, но MVP использует просто (собирает в массив)
+**Пример решения:** [Гипотетически] UpdatesHandler с AsyncStream - готов к batch processing, но в реальности MVP оказался достаточно простым (stateless подход, обработка updates внутри ChannelMessageSource без отдельного компонента)
 
 **Особенности для Swift CLI:**
 - Понимание специфики Linux deployment (нет Dispatch, только Swift Concurrency)
@@ -85,8 +85,8 @@ London School (mockist), Detroit School (classicist).
 
 **Outside-In TDD (когда есть явный consumer):**
 - ✅ E2E → TDLibClient.getChats() (consumer = пользователь "получить непрочитанные")
-- ✅ Component → UpdatesHandler (consumer = ChannelMessageSource нужен фоновый updates)
 - ✅ Component → MessageFetcher (consumer = ChannelMessageSource нужны сообщения)
+- [Пример] Component → UpdatesHandler (гипотетический пример, в MVP не потребовался)
 
 **Inside-Out TDD (когда нет явного consumer):**
 - ✅ Просто модели данных (SourceMessage, DigestSummary, ChannelInfo)

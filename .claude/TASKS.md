@@ -37,19 +37,36 @@
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
 
-**Контекст текущей сессии (2025-11-12):**
-- ✅ **MVP-1.7 Phase 3 ЗАВЕРШЕНА:** loadChats + getChat реализация (112 тестов)
-- ✅ **Async Testing Documentation:** Добавлена документация best practices в TESTING.md + PROMPTS.md
-  - 5 паттернов: confirmation(), withMainSerialExecutor, actor isolation, cancellation, timeout
-  - Антипаттерны: Task.sleep(), shared mutable state
-  - Ресурсы: SwiftLee, Swift by Sundell, Point-Free
-- **Следующий шаг:** MVP-1.6 UpdatesHandler - Component Test (RED) с async testing patterns
+**Контекст текущей сессии (2025-11-13):**
+- ✅ **Оптимизация сборки на Linux** (Session 2)
+  - Проблема: build-clean.sh удаляет .build (~40-50 сек), SwiftLint пересобирается
+  - Создан `scripts/build-incremental.sh` - инкрементальная сборка (~5-10 сек)
+  - Обновлена документация: CLAUDE.md, DEPLOY.md с выбором скрипта
+  - Ускорение сборки в 4-8 раз для разработки
+- ✅ **MVP-1.7 Phase 3: updates AsyncStream** (Session 2)
+  - Update enum и UpdateTests уже реализованы (5 unit-тестов)
+  - Добавлен `var updates: AsyncStream<Update>` в TDLibClientProtocol
+  - **Следующий шаг:** Component Test + реализация в TDLibClient + Mock
+
+**Контекст предыдущей сессии (2025-11-13 Session 1):**
+- ✅ **Итеративный Outside-In TDD:** Применили на практике для ChannelMessageSource
+  - Высокоуровневый тест `fetchUnreadMessages()` (компилируется, падает на fatalError)
+  - Попытка реализации → СТОП! Обнаружили нужен `loadChats() + updates` AsyncStream
+  - Добавлен тест `loadChatsEmitsUpdateNewChat()` для недостающего функционала
+  - Все тесты в одном файле — видна Outside-In декомпозиция
+- ✅ **Удалён overengineering:** ChannelCache, ChannelInfo (были созданы БЕЗ попытки реализации)
+- ✅ **Документация усилена:**
+  - CLAUDE.md: добавлен обязательный шаг чтения TESTING.md + PROMPTS.md перед тестами
+  - TESTING.md: добавлен "Итеративный алгоритм Outside-In" (реальный процесс работы)
+  - PROMPTS.md: примеры UpdatesHandler помечены как гипотетические
+  - BACKLOG.md: Realtime мониторинг (v0.2.0) с ссылками на коммиты
+- ✅ **Проверены unit-тесты:** LoadChatsRequestTests, UpdateTests, OkResponseTests (все корректны)
 
 **Приоритеты:**
 
-1. **[MVP-1.7] TDLib модели для loadChats/getChat** - Продолжить Phase 3 (Component Tests для loadChats/getChat)
-2. **[MVP-1.6] ChannelMessageSource** - Продолжить реализацию (UpdatesHandler, MessageFetcher)
-3. **[MVP-1.5] Типизация TDLib методов** - Завершить (Message модель, GetChatHistoryRequest)
+1. **[MVP-1.8] getChatHistory модели и реализация** - Message модель, GetChatHistoryRequest/Response, реализация в TDLibClient
+2. **[MVP-1.6] ChannelMessageSource реализация** - fetchUnreadMessages() с loadChats + updates + getChatHistory
+3. **[MVP-2] SummaryGenerator** - OpenAI Integration для генерации AI-саммари
 
 > **См. детали:**
 > - [MVP-1.6: ChannelMessageSource](#mvp-16-channelmessagesource-получение-непрочитанных-через-loadchats--updates-приоритет) — детальный план с декомпозицией
@@ -317,7 +334,7 @@ actor ChannelMessageSource: MessageSourceProtocol {
 
 **Realtime updates → BACKLOG** для будущих фич (например, бот может ответить "какие сейчас непрочитанные")
 
-**1.7 TDLib модели для loadChats/getChat** (~2 часа) ⚠️ **[ЧАСТИЧНО ЗАВЕРШЕНО 2025-11-11]**
+**1.7 TDLib модели для loadChats/getChat + updates AsyncStream** ✅ **[ЗАВЕРШЕНО 2025-11-13]**
 - [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)
   - `LoadChatsRequest` — параметры: chatList, limit ✅
   - `OkResponse` — универсальный успешный ответ TDLib ✅ (2 теста проходят)
@@ -328,10 +345,17 @@ actor ChannelMessageSource: MessageSourceProtocol {
 - [x] **GREEN:** Реализация `GetChatRequest` ✅
 - [x] **RED:** Unit-тесты для `ChatResponse` ✅ (8 тестов: 5 типов чатов + edge cases)
 - [x] **GREEN:** Реализация `ChatResponse` + `ChatType.Encodable` ✅
-- [ ] **TODO следующая сессия:**
-  - `Update` — enum для updates (updateNewChat, updateChatReadInbox)
-  - Component Test для TDLibClient: `loadChats()`, `getChat()`, `updates: AsyncStream<Update>`
-  - Mock должен эмулировать updates sequence
+- [x] **RED:** Unit-тесты для `Update` enum ✅ (5 тестов: updateNewChat, updateChatReadInbox, edge cases)
+- [x] **GREEN:** Реализация `Update` enum (Codable, Sendable, Equatable) ✅
+- [x] **GREEN:** Реализация `updates: AsyncStream<Update>` в TDLibClient ✅
+  - Фоновый receive loop для обработки updates
+  - AsyncStream.Continuation для yield updates
+  - Фильтрация авторизационных событий и ошибок
+- [x] **E2E тест на production сервере** ✅
+  - Загружено 758 чатов за 10.5 секунд
+  - 4 вызова loadChats() с pagination до 404
+  - Таймаут 2 секунды между вызовами - оптимальный для MVP
+  - Updates приходят асинхронно (не блокируют loadChats)
 
 **Важные изменения:**
 - Конвертация тестов из XCTest → Swift Testing
