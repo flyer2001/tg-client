@@ -33,6 +33,12 @@ actor MockTDLibClient: TDLibClientProtocol {
     /// Logger для записи событий (опционально, для тестов логирования)
     private let logger: Logger?
 
+    /// Continuation для эмиссии updates в тестах
+    private var updatesContinuation: AsyncStream<Update>.Continuation?
+
+    /// Сохранённый stream для многократного использования
+    private var updatesStream: AsyncStream<Update>?
+
     // MARK: - Initialization
 
     /// Инициализирует MockTDLibClient.
@@ -108,6 +114,32 @@ actor MockTDLibClient: TDLibClientProtocol {
     func getChat(chatId: Int64) async throws -> ChatResponse {
         let request = GetChatRequest(chatId: chatId)
         return try getMockResponse(for: request)
+    }
+
+    /// AsyncStream для получения updates.
+    ///
+    /// Создаётся при первом обращении.
+    var updates: AsyncStream<Update> {
+        if updatesStream == nil {
+            let (stream, continuation) = AsyncStream<Update>.makeStream()
+            updatesStream = stream
+            updatesContinuation = continuation
+        }
+        return updatesStream!
+    }
+
+    // MARK: - Helper Methods for Tests
+
+    /// Эмитит update в AsyncStream для тестирования.
+    ///
+    /// **Использование в тестах:**
+    /// ```swift
+    /// await mockClient.emitUpdate(.updateNewChat(chat))
+    /// ```
+    ///
+    /// - Parameter update: Update для эмиссии
+    func emitUpdate(_ update: Update) {
+        updatesContinuation?.yield(update)
     }
 
     // MARK: - Helper Methods

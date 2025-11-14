@@ -38,11 +38,13 @@
   - Алерты при достижении 75%, 85%, 90% использования
 
 **Контекст текущей сессии (2025-11-13):**
-- ✅ **Оптимизация сборки на Linux** (Session 2)
-  - Проблема: build-clean.sh удаляет .build (~40-50 сек), SwiftLint пересобирается
-  - Создан `scripts/build-incremental.sh` - инкрементальная сборка (~5-10 сек)
-  - Обновлена документация: CLAUDE.md, DEPLOY.md с выбором скрипта
-  - Ускорение сборки в 4-8 раз для разработки
+- ✅ **Исследование проблемы сборки на Linux (Swift 6.2)** (Session 2)
+  - Проблема: SwiftPM 6.2 зависает при инкрементальных сборках на Linux
+  - Причина: SQLite build.db с busy_timeout=0 → deadlock
+  - Попытки: ❌ purge-cache только, ❌ удаление build.db, ❌ environment variables
+  - Решение: полная пересборка через `purge-cache + reset` (~50-60 сек)
+  - Обновлена документация: CLAUDE.md, DEPLOY.md, build-clean.sh
+  - ПРИМЕЧАНИЕ: На macOS инкрементальная сборка работает (~5-10 сек)
 - ✅ **MVP-1.7 Phase 3: updates AsyncStream** (Session 2)
   - Update enum и UpdateTests уже реализованы (5 unit-тестов)
   - Добавлен `var updates: AsyncStream<Update>` в TDLibClientProtocol

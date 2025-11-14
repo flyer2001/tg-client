@@ -81,7 +81,7 @@
 **Выполнено:**
 
 1. **Оптимизация сборки на Linux** (~30 мин)
-   - ✅ Создан `scripts/build-incremental.sh` - инкрементальная сборка (~5-10 сек)
+   - ✅ Создан `scripts/build-incremental.sh (устаревший - удалён в пользу build-clean.sh)` - инкрементальная сборка (~5-10 сек)
      - Убивает зависшие Swift процессы
      - Сохраняет .build кэш (не пересобирает SwiftLint)
      - Пересобирает только изменённые модули
@@ -101,7 +101,7 @@
 - Обновление ChannelMessageSource для использования updates
 
 **Файлы изменены:**
-- `scripts/build-incremental.sh` (новый)
+- `scripts/build-incremental.sh (устаревший - удалён в пользу build-clean.sh)` (новый)
 - `scripts/build-clean.sh` (обновлён)
 - `CLAUDE.md` (секция "Быстрые команды")
 - `.claude/DEPLOY.md` (раздел "Сборка проекта")

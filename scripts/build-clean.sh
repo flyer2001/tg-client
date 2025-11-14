@@ -22,8 +22,11 @@ echo "🧹 Убиваем зависшие процессы Swift..."
 pkill -9 swift 2>/dev/null || true
 sleep 1
 
-echo "🗑️  Очищаем .build и кэш пакетов..."
-rm -rf .build
+echo "🗑️  Очищаем глобальный кеш SwiftPM (решает зависания)..."
+swift package purge-cache
+
+echo "🗑️  Сбрасываем локальный .build..."
+swift package reset
 
 echo "📦 Резолвим зависимости..."
 swift package resolve
