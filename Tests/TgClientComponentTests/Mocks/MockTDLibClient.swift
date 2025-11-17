@@ -121,6 +121,11 @@ final class MockTDLibClient: @unchecked Sendable, TDLibClientProtocol {
         return try getMockResponse(for: request)
     }
 
+    func getChatHistory(chatId: Int64, fromMessageId: Int64, offset: Int32, limit: Int32) async throws -> MessagesResponse {
+        let request = GetChatHistoryRequest(chatId: chatId, fromMessageId: fromMessageId, offset: offset, limit: limit, onlyLocal: false)
+        return try getMockResponse(for: request)
+    }
+
     /// AsyncStream для получения updates.
     ///
     /// Возвращает тот же stream при каждом обращении (через lazy var).
