@@ -53,8 +53,9 @@ struct TGClient {
         }
 
         // Верификация: запросим текущего пользователя через высокоуровневый API
+        let user: UserResponse
         do {
-            let user = try await td.getMe()
+            user = try await td.getMe()
             let name = (user.firstName + " " + user.lastName).trimmingCharacters(in: .whitespaces)
             print("✅ Authorized as: \(name) (id: \(user.id))")
         } catch {
@@ -62,83 +63,42 @@ struct TGClient {
             exit(1)
         }
 
-        // 🧪 Experiment: loadChats pagination with updates stream
-        print("\n🧪 Starting loadChats pagination experiment...")
-        print("   Strategy: loadChats() + 2 sec timeout")
-        print("   Goal: Load ALL chats and measure timing\n")
+        // 🧪 Test getChatHistory() - используем Saved Messages (chatId = userId)
+        print("\n🧪 Testing getChatHistory()...")
+        print("   Using Saved Messages (chatId = \(user.id))...")
 
-        let startTime = Date()
-        var allChats: [ChatResponse] = []
-        var loadChatsCallCount = 0
-        var lastBatchSize = 0
-
-        // Task 1: Listen to updates stream (background)
-        let updatesTask = Task {
-            var updateCount = 0
-            for await update in td.updates {
-                if case .newChat(let chat) = update {
-                    allChats.append(chat)
-                    updateCount += 1
-                    lastBatchSize += 1
-
-                    // Логируем каждый 50-й чат для прогресса
-                    if updateCount % 50 == 0 {
-                        let elapsed = Date().timeIntervalSince(startTime)
-                        print("   📥 Updates: \(updateCount) chats received (elapsed: \(String(format: "%.1f", elapsed))s)")
-                    }
-                }
-            }
-        }
-
-        // Task 2: Call loadChats() in loop with 2 sec timeout
         do {
-            while true {
-                loadChatsCallCount += 1
-                let callStartTime = Date()
+            // Получаем последние 10 сообщений из Saved Messages
+            let messages = try await td.getChatHistory(
+                chatId: user.id,
+                fromMessageId: 0,
+                offset: 0,
+                limit: 10
+            )
 
-                print("🔄 loadChats() call #\(loadChatsCallCount) (total chats: \(allChats.count))...")
+            print("   ✅ Received \(messages.messages.count) messages")
 
-                do {
-                    _ = try await td.loadChats(chatList: .main, limit: 100)
-                    let callElapsed = Date().timeIntervalSince(callStartTime)
-                    print("   ✅ Ok (took \(String(format: "%.3f", callElapsed))s)")
-
-                    // Wait 2 seconds for updates to arrive
-                    print("   ⏳ Waiting 2 sec for updates...")
-                    try await Task.sleep(for: .seconds(2))
-                    print("   ✅ Batch: +\(lastBatchSize) chats (total: \(allChats.count))")
-                    lastBatchSize = 0
-
-                } catch let error as TDLibErrorResponse where error.isAllChatsLoaded {
-                    let totalElapsed = Date().timeIntervalSince(startTime)
-                    print("\n✅ All chats loaded!")
-                    print("\n📊 Statistics:")
-                    print("   Total chats: \(allChats.count)")
-                    print("   loadChats() calls: \(loadChatsCallCount)")
-                    print("   Total time: \(String(format: "%.1f", totalElapsed))s")
-                    print("   Avg per call: \(String(format: "%.2f", totalElapsed / Double(loadChatsCallCount)))s")
-
-                    // Wait for remaining updates (if any)
-                    print("\n⏳ Waiting 3 sec for remaining updates...")
-                    try await Task.sleep(for: .seconds(3))
-                    print("   Final count: \(allChats.count) chats")
-
-                    // Show sample chats
-                    print("\n📋 Sample chats (first 5):")
-                    for (idx, chat) in allChats.prefix(5).enumerated() {
-                        print("   \(idx + 1). \(chat.title) (type: \(chat.chatType), unread: \(chat.unreadCount))")
+            // Показываем первые 3 сообщения
+            if messages.messages.isEmpty {
+                print("   ℹ️ No messages in Saved Messages")
+            } else {
+                print("\n   📋 Sample messages:")
+                for (idx, message) in messages.messages.prefix(3).enumerated() {
+                    let preview: String
+                    switch message.content {
+                    case .text(let text):
+                        preview = text.text.prefix(50).description
+                    case .unsupported:
+                        preview = "[unsupported]"
                     }
-
-                    updatesTask.cancel()
-                    break
+                    print("   \(idx + 1). Message \(message.id): \(preview)")
                 }
             }
         } catch {
-            print("⚠️ Experiment failed: \(error)")
-            updatesTask.cancel()
+            print("   ⚠️ Failed to get chat history: \(error)")
             exit(1)
         }
 
-        print("\n✅ Experiment completed successfully!")
+        print("\n✅ All tests completed successfully!")
     }
 }
