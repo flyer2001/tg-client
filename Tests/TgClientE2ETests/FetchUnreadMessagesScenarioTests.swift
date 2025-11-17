@@ -33,7 +33,8 @@ struct FetchUnreadMessagesScenarioTests {
         // TODO: start() с config - добавим позже, сейчас фокус на ChannelMessageSource
 
         // 2. Создание ChannelMessageSource
-        let messageSource = ChannelMessageSource(tdlib: tdlib)
+        let sourceLogger = Logger(label: "tg-client.e2e.message-source")
+        let messageSource = ChannelMessageSource(tdlib: tdlib, logger: sourceLogger)
 
         // 3. Получение непрочитанных сообщений
         let messages = try await messageSource.fetchUnreadMessages()

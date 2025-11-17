@@ -4,15 +4,14 @@ import Logging
 
 /// Mock реализация TDLibClientProtocol для component-тестов.
 ///
-/// Имитирует поведение реального TDLibClient: для каждого типа запроса возвращает настроенный response.
-/// Использует actor для thread-safety.
+/// Имитирует поведение реального TDLibClient (class с @unchecked Sendable).
 ///
 /// **Использование:**
 /// ```swift
 /// let mockClient = MockTDLibClient()
 ///
 /// // Настройка ответа для конкретного запроса
-/// await mockClient.setMockResponse(
+/// mockClient.setMockResponse(
 ///     for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
 ///     response: .success(.waitVerificationCode)
 /// )
@@ -20,7 +19,7 @@ import Logging
 /// // Вызов метода - mock вернёт настроенный ответ для этого типа запроса
 /// let state = try await mockClient.setAuthenticationPhoneNumber("+1234567890")
 /// ```
-actor MockTDLibClient: TDLibClientProtocol {
+final class MockTDLibClient: @unchecked Sendable, TDLibClientProtocol {
 
     // MARK: - Mock State
 
@@ -36,8 +35,14 @@ actor MockTDLibClient: TDLibClientProtocol {
     /// Continuation для эмиссии updates в тестах
     private var updatesContinuation: AsyncStream<Update>.Continuation?
 
-    /// Сохранённый stream для многократного использования
-    private var updatesStream: AsyncStream<Update>?
+    /// AsyncStream для получения updates (создаётся лениво при первом обращении).
+    ///
+    /// Имитирует поведение TDLibClient, но правильно (поддерживает одного подписчика через lazy var).
+    private lazy var _updates: AsyncStream<Update> = {
+        let (stream, continuation) = AsyncStream<Update>.makeStream()
+        self.updatesContinuation = continuation
+        return stream
+    }()
 
     // MARK: - Initialization
 
@@ -118,14 +123,9 @@ actor MockTDLibClient: TDLibClientProtocol {
 
     /// AsyncStream для получения updates.
     ///
-    /// Создаётся при первом обращении.
-    var updates: AsyncStream<Update> {
-        if updatesStream == nil {
-            let (stream, continuation) = AsyncStream<Update>.makeStream()
-            updatesStream = stream
-            updatesContinuation = continuation
-        }
-        return updatesStream!
+    /// Возвращает тот же stream при каждом обращении (через lazy var).
+    public var updates: AsyncStream<Update> {
+        return _updates
     }
 
     // MARK: - Helper Methods for Tests

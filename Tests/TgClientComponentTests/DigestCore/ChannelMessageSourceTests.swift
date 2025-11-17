@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import Testing
 @testable import TDLibAdapter
 @testable import DigestCore
@@ -39,12 +40,12 @@ struct ChannelMessageSourceTests {
     /// 4. ⏭️ Добавить тесты для недостающего функционала (здесь же, ниже)
     @Test("fetchUnreadMessages: получение непрочитанных из каналов")
     func fetchUnreadMessagesFromChannels() async throws {
-        // Given: MockTDLibClient
+        // Given: MockTDLibClient + no-op logger
         let mockClient = MockTDLibClient()
+        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
 
         // When: Вызываем fetchUnreadMessages()
-        // ⚠️ НЕ КОМПИЛИРУЕТСЯ: ChannelMessageSource не существует (это RED)
-        let messageSource = ChannelMessageSource(tdlib: mockClient)
+        let messageSource = ChannelMessageSource(tdlib: mockClient, logger: logger)
         let messages = try await messageSource.fetchUnreadMessages()
 
         // Then: Проверяем результат
@@ -91,9 +92,8 @@ struct ChannelMessageSourceTests {
         try await mockClient.loadChats(chatList: .main, limit: 100)
 
         // Then: Получаем updateNewChat через updates stream
-        // ⚠️ НЕ КОМПИЛИРУЕТСЯ: нет updates: AsyncStream<Update>
-        var receivedChats: [Chat] = []
-        for await update in mockClient.updates {
+        var receivedChats: [ChatResponse] = []
+        for await update in await mockClient.updates {
             if case .newChat(let chat) = update {
                 receivedChats.append(chat)
             }
