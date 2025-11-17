@@ -68,6 +68,14 @@ extension TDLibClient: TDLibClientProtocol {
         return try await waitForResponse(ofType: ChatResponse.self)
     }
 
+    public func getChatHistory(chatId: Int64, fromMessageId: Int64, offset: Int32, limit: Int32) async throws -> MessagesResponse {
+        // Отправляем запрос на получение истории сообщений
+        send(GetChatHistoryRequest(chatId: chatId, fromMessageId: fromMessageId, offset: offset, limit: limit, onlyLocal: false))
+
+        // Ожидаем ответа от TDLib
+        return try await waitForResponse(ofType: MessagesResponse.self)
+    }
+
     // MARK: - Updates
 
     /// AsyncStream для получения updates от TDLib.
