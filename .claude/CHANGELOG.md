@@ -1,3 +1,45 @@
+## 2025-11-17 (Сессия 2) — MVP-1.8: getChatHistory модели (RED → GREEN)
+
+**Scope:** Создание TDLib моделей Message, GetChatHistoryRequest, MessagesResponse для реализации getChatHistory(). Усиление архитектурного анализа в документации (PROMPTS.md Block 0, ARCHITECTURE.md ADR-001, TESTING.md Rule #7).
+
+**Результат:** 104 unit-теста (13 новых), Logger DI в ChannelMessageSource. Документация укреплена правилами архитектурного анализа ВСЛУХ перед реализацией.
+
+
+## [2025-11-17] - Архитектурные улучшения MockTDLibClient и TDD процесс
+
+**Контекст:** Продолжение работы над MVP-1.7 (updates AsyncStream). Обнаружены архитектурные проблемы при попытке сделать Component Test GREEN.
+
+**Изменения:**
+
+### Sources/
+- **TDLibClient+HighLevelAPI.swift**: Улучшены комментарии про ограничение "один подписчик"
+  - Добавлено объяснение когда проблема проявится (второй подписчик)
+  - Ссылка на решение (broadcast через массив continuations)
+  - Указано что тест на двух подписчиков пока рано писать
+
+### Tests/
+- **MockTDLibClient.swift**: Рефакторинг actor → class (@unchecked Sendable)
+  - Причина: Mock должен точно имитировать Real TDLibClient (class, не actor)
+  - updates property: реализован через lazy var (проще и понятнее)
+  - Убрана actor isolation (упростило код, нет await для setMockResponse)
+- **ChannelMessageSourceTests.swift**: Исправлен Component Test
+  - Chat → ChatResponse (правильное имя модели)
+  - Добавлен await для async updates property
+
+**Результат:**
+- ✅ Все тесты компилируются
+- ✅ Component Test в RED фазе (падает на fatalError в ChannelMessageSource)
+- ✅ Это правильный RED: тест запускается, но реализация не готова
+
+**Важные обсуждения:**
+- Почему MockTDLibClient был actor (ошибка: преждевременная оптимизация)
+- Почему updates через lazy var (читаемость и простота для одного подписчика)
+- Когда понадобится broadcast (второй подписчик, например NotificationManager)
+
+**Следующие шаги:**
+- Реализовать Mock поведение для loadChats() + updates emission
+- Сделать Component Test GREEN
+
 ## 2025-11-13 - Session 3: updates AsyncStream + E2E тест pagination
 
 **Ветка:** main  

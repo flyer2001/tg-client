@@ -142,6 +142,188 @@ actor CircuitBreaker {
 
 ---
 
+## Logging Strategy
+
+### Принципы логирования
+
+Проект использует **swift-log** для structured logging.
+
+**Цели:**
+- Debugging в development (понимание потока выполнения)
+- Observability в production (мониторинг, алерты)
+- Troubleshooting (анализ проблем через journald/logrotate)
+
+### Уровни логирования
+
+#### `.info` — Основные вехи операций
+
+**Когда использовать:**
+- Начало/завершение ключевых операций
+- Итоговые метрики (count, duration)
+- Успешное завершение внешних вызовов
+
+**Примеры:**
+```swift
+logger.info("fetchUnreadMessages() started")
+logger.info("Loaded \(count) chats from TDLib")
+logger.info("Completed", metadata: [
+    "messages": "\(messages.count)",
+    "channels": "\(unreadChannels.count)",
+    "duration": "\(duration)s"
+])
+```
+
+**Правило:** Один `.info()` на вход/выход операции + итог.
+
+#### `.error` — Ошибки и исключительные ситуации
+
+**Когда использовать:**
+- Любые `catch` блоки (особенно в partial failure)
+- Критичные ошибки (SESSION_REVOKED, network timeout)
+- Неожиданные состояния (404 не там где ожидали)
+
+**Примеры:**
+```swift
+logger.error("Failed to fetch from channel", metadata: [
+    "chatId": "\(chat.id)",
+    "title": "\(chat.title)",
+    "error": "\(error.localizedDescription)"
+])
+
+logger.error("SESSION_REVOKED: re-authorization required")
+```
+
+**Правило:** Всегда включать context (chatId, operationName) + error details.
+
+#### `.debug` — Детальная информация для разработки
+
+**Когда использовать:**
+- Промежуточные этапы операций (для debugging flow)
+- Детали внутренних состояний (actor state, cache hits/misses)
+- Входные/выходные параметры (только в development)
+
+**Примеры:**
+```swift
+logger.debug("Filtering channels", metadata: [
+    "totalChats": "\(allChats.count)",
+    "channels": "\(channelCount)",
+    "withUnread": "\(unreadCount)"
+])
+
+logger.debug("getChatHistory request", metadata: [
+    "chatId": "\(chatId)",
+    "limit": "\(limit)"
+])
+```
+
+**Правило:** Не логировать sensitive data (tokens, credentials). В production `.debug` обычно отключён.
+
+#### `.warning` — Нештатные, но не критичные ситуации
+
+**Когда использовать:**
+- Partial failure (один канал упал, остальные OK)
+- Retry попытки (перед exponential backoff)
+- Deprecated API usage
+
+**Примеры:**
+```swift
+logger.warning("Skipping channel due to error", metadata: [
+    "chatId": "\(chat.id)",
+    "error": "\(error)"
+])
+
+logger.warning("Retry attempt \(retryCount)/3 for loadChats")
+```
+
+**Правило:** Warning НЕ останавливает операцию, но требует внимания.
+
+### Dependency Injection для Logger
+
+**Правило:** Каждый компонент получает Logger через `init` (не создаёт внутри).
+
+```swift
+public actor ChannelMessageSource: MessageSourceProtocol {
+    private let tdlib: TDLibClientProtocol
+    private let logger: Logger  // DI
+
+    public init(tdlib: TDLibClientProtocol, logger: Logger) {
+        self.tdlib = tdlib
+        self.logger = logger
+    }
+}
+```
+
+**В production:**
+```swift
+let logger = Logger(label: "com.tg-client.ChannelMessageSource")
+let messageSource = ChannelMessageSource(tdlib: tdlibClient, logger: logger)
+```
+
+**В тестах (no-op logger):**
+```swift
+import Logging
+
+let logger = Logger(label: "test") { _ in
+    SwiftLogNoOpLogHandler()
+}
+let messageSource = ChannelMessageSource(tdlib: mockClient, logger: logger)
+```
+
+### Structured Logging (metadata)
+
+**Правило:** Используй `metadata` для key-value данных (для парсинга в будущем).
+
+```swift
+// ✅ Хорошо: structured metadata
+logger.info("Completed", metadata: [
+    "operation": "fetchUnreadMessages",
+    "messages": "\(count)",
+    "duration": "\(duration)"
+])
+
+// ❌ Плохо: всё в строке
+logger.info("Completed fetchUnreadMessages: \(count) messages in \(duration)s")
+```
+
+**Обоснование:**
+- Metadata можно фильтровать/парсить (например, в journald)
+- Post-MVP: экспорт логов в JSON для аналитики
+
+### Критичные точки логирования (по ADR-001)
+
+**Для `ChannelMessageSource.fetchUnreadMessages()`:**
+1. `.info` — Начало операции
+2. `.info` — После loadChats (count чатов)
+3. `.info` — После фильтрации (count каналов с непрочитанными)
+4. `.debug` — Начало параллельных getChatHistory
+5. `.error` — Ошибки getChatHistory (с chatId, title)
+6. `.info` — Завершение (итоговый count, duration)
+
+**Минимум для MVP:** Пункты 1, 2, 5, 6 (остальные — Post-MVP оптимизация).
+
+### Конфигурация в production
+
+**Уровень логирования настраивается через ENV:**
+```bash
+export LOG_LEVEL=info  # production default
+export LOG_LEVEL=debug  # для troubleshooting
+```
+
+**В коде:**
+```swift
+LoggingSystem.bootstrap { label in
+    var handler = StreamLogHandler.standardOutput(label: label)
+    handler.logLevel = ProcessInfo.processInfo.environment["LOG_LEVEL"].flatMap {
+        Logger.Level(rawValue: $0)
+    } ?? .info
+    return handler
+}
+```
+
+**См. также:**
+- ADR-001 (Блок 4: Логирование) — архитектурные решения для fetchUnreadMessages
+- `.claude/DEVELOPMENT.md` → Git Commit Rules (упоминание логирования в commit messages)
+
 ---
 
 ## Single Responsibility Principle (SRP)
@@ -224,6 +406,112 @@ actor ChannelMessageSource {
 **См. также:**
 - `.claude/TESTING.md` → Декомпозиция при обнаружении сложности
 - `.claude/TESTING.md` → Senior Architect: Проверка на архитектурные риски
+
+---
+
+## Architecture Decision Records (ADR)
+
+Этот раздел содержит архитектурные решения для ключевых компонентов системы.
+
+### ADR-001: ChannelMessageSource.fetchUnreadMessages() (2025-11-17)
+
+**Контекст:**
+Реализация получения непрочитанных сообщений из Telegram каналов для формирования дайджеста.
+
+**Решения (по 4 блокам анализа):**
+
+#### 1. Производительность
+
+**Проблема:**
+- Операция: `getChatHistory()` для каждого канала с непрочитанными
+- Типичное количество: 10-100 каналов
+- Последовательное выполнение: 50 каналов × 1 сек = **50 секунд** ⚠️
+
+**Решение:**
+- ✅ **TaskGroup для параллельного getChatHistory()**
+- Ожидаемое время: ~3-5 секунд (сетевой лимит + TDLib concurrency)
+
+**Реализация:**
+```swift
+try await withThrowingTaskGroup(of: [SourceMessage].self) { group in
+    for chat in unreadChannels {
+        group.addTask {
+            try await self.fetchMessagesFromChat(chat)
+        }
+    }
+}
+```
+
+**Обоснование:**
+- Критично для UX (пользователь ждёт дайджест)
+- Стандартный паттерн Swift Concurrency для сетевых запросов
+
+#### 2. Память
+
+**Анализ:**
+- Чаты: loadChats() может вернуть 1000+ (типично 100-300)
+- Каналы с непрочитанными: обычно 10-100 после фильтрации
+- Сообщения на канал: limit = 100 (ограничение TDLib getChatHistory)
+- Размер: 100 каналов × 10 сообщений × 5 KB = **5 MB** (приемлемо)
+
+**Решение для MVP:**
+- ✅ **НЕ нужна пагинация getChatHistory** (TDLib ограничивает max=100)
+- ✅ **Пагинация loadChats УЖЕ РЕАЛИЗОВАНА** (цикл до 404)
+
+**Post-MVP:**
+- Если нужно >100 сообщений на канал → добавить пагинацию getChatHistory
+
+#### 3. Отказоустойчивость
+
+**Проблема:**
+- getChatHistory() может упасть для отдельного канала (удалён, нет доступа)
+- Вопрос: падает ли вся операция?
+
+**Решение:**
+- ✅ **Partial success с логированием**
+- Если 1 из 50 каналов упал → логируем ошибку, пропускаем канал, продолжаем
+
+**Реализация:**
+```swift
+group.addTask {
+    do {
+        return try await self.fetchMessagesFromChat(chat)
+    } catch {
+        // TODO: Logger.error(...)
+        print("Failed to fetch from channel \(chat.title): \(error)")
+        return []  // Пропускаем канал
+    }
+}
+```
+
+**Обоснование:**
+- Частичный дайджест лучше чем полный провал
+- Пользователь получает результат из доступных каналов
+
+**Post-MVP:**
+- Собирать статистику ошибок
+- Алерт если >50% каналов упали (проблема с TDLib)
+
+#### 4. Логирование
+
+**Критичные точки:**
+1. Начало: `fetchUnreadMessages() started`
+2. После loadChats: `Loaded X chats from TDLib`
+3. Фильтрация: `Found Y unread channels (out of X)`
+4. Начало getChatHistory: `Fetching messages from Y channels (parallel)`
+5. Ошибка getChatHistory: `Failed to fetch from channel {title} (chatId={id}): {error}`
+6. Завершение: `Completed: Z messages from Y channels (duration={time})`
+
+**Решение для MVP:**
+- ✅ Использовать `print()` для логов (простота)
+- Post-MVP: Интеграция swift-log для structured logging
+
+**Статус:** ✅ Архитектурные решения приняты, готовы к реализации
+
+**Тесты для проверки решений:**
+- Component Test: `ChannelMessageSourceTests.fetchUnreadMessages()` (happy path)
+- Component Test: `ChannelMessageSourceTests.fetchUnreadMessages_partialFailure()` (один канал упал)
+- Component Test: `ChannelMessageSourceTests.fetchUnreadMessages_parallelism()` (проверка параллельности)
 
 ---
 

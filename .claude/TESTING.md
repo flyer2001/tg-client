@@ -18,6 +18,58 @@
 - Быстрые, детерминированные
 - Примеры: TDLibRequestEncoder, TDLibUpdate, модели
 
+#### Правила написания Unit-тестов
+
+**Rule #7: НЕ используй raw JSON в тестах**
+
+⚠️ **КРИТИЧНО:** В проекте используются **модельные конструкторы** вместо raw JSON строк.
+
+**❌ Неправильно:**
+```swift
+let json = """
+{
+    "@type": "message",
+    "id": 123,
+    "chat_id": 456
+}
+"""
+let data = json.data(using: .utf8)!
+let message = try JSONDecoder.tdlib().decode(Message.self, from: data)
+```
+
+**✅ Правильно:**
+```swift
+let original = Message(
+    id: 123,
+    chatId: 456,
+    date: 1699564800,
+    content: .text(FormattedText(text: "Hello", entities: nil))
+)
+
+// Round-trip test
+let data = try original.toTDLibData()  // Helper из TestHelpers module
+let decoded = try JSONDecoder.tdlib().decode(Message.self, from: data)
+#expect(decoded.id == 123)
+```
+
+**Обоснование:**
+- ✅ Compile-time проверка (если модель изменилась → тесты не скомпилируются)
+- ✅ Меньше дублирования (нет нужды писать JSON вручную)
+- ✅ Читаемость (Swift код vs JSON строки)
+- ✅ Рефакторинг (IDE поможет переименовать поля)
+
+**Где находится helper:**
+- `Tests/TestHelpers/EncodableExtensions.swift` → `.toTDLibData()`
+- Автоматически использует `JSONEncoder.tdlib()` с правильными настройками
+
+**Когда НЕ нарушать правило:**
+- Тесты декодирования **некорректного JSON** (проверка error handling)
+- Примеры: missing fields, wrong types, invalid @type
+
+**Ссылки:**
+- Завершённая задача: `.claude/TASKS.md` → TD-7 (убрать raw JSON из ResponseTests)
+- Примеры тестов: `Tests/TgClientUnitTests/.../ChatResponseTests.swift`
+
 ### Component-тесты
 - Тестирование модулей с реальными зависимостями
 - Без внешней сети

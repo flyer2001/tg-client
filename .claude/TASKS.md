@@ -37,18 +37,22 @@
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
 
-**Контекст текущей сессии (2025-11-13):**
-- ✅ **Исследование проблемы сборки на Linux (Swift 6.2)** (Session 2)
-  - Проблема: SwiftPM 6.2 зависает при инкрементальных сборках на Linux
-  - Причина: SQLite build.db с busy_timeout=0 → deadlock
-  - Попытки: ❌ purge-cache только, ❌ удаление build.db, ❌ environment variables
-  - Решение: полная пересборка через `purge-cache + reset` (~50-60 сек)
-  - Обновлена документация: CLAUDE.md, DEPLOY.md, build-clean.sh
-  - ПРИМЕЧАНИЕ: На macOS инкрементальная сборка работает (~5-10 сек)
-- ✅ **MVP-1.7 Phase 3: updates AsyncStream** (Session 2)
-  - Update enum и UpdateTests уже реализованы (5 unit-тестов)
-  - Добавлен `var updates: AsyncStream<Update>` в TDLibClientProtocol
-  - **Следующий шаг:** Component Test + реализация в TDLibClient + Mock
+**Контекст текущей сессии (2025-11-17):**
+- ✅ **Усиление документации для архитектурного проектирования**
+  - CLAUDE.md: добавлен Шаг 6.1 "Проговори архитектурные решения ВСЛУХ" с 4 блоками анализа
+  - PROMPTS.md: усилена роль Senior Swift Architect — добавлен Блок 0 (предварительный анализ)
+  - ARCHITECTURE.md: новый раздел "Logging Strategy" с уровнями логирования (info, error, debug, warning)
+  - ARCHITECTURE.md: добавлен ADR-001 для fetchUnreadMessages() (производительность, память, отказоустойчивость)
+  - TESTING.md: добавлено Rule #7 "НЕ используй raw JSON в тестах" (используй модельные конструкторы)
+- ✅ **MVP-1.8: getChatHistory модели** (частично завершено)
+  - Message модель + FormattedText + MessageContent (text/unsupported) — 4 unit-теста GREEN
+  - GetChatHistoryRequest модель — 3 unit-теста GREEN
+  - MessagesResponse модель — 3 unit-теста GREEN
+  - **Итого:** 104 unit-теста проходят (было 91, добавили 13 новых)
+- ✅ **Logger интегрирован в ChannelMessageSource**
+  - Добавлен через DI (Dependency Injection)
+  - Обновлены Component и E2E тесты (передают no-op logger)
+- ⏭️ **Следующий шаг:** TDLibClient.getChatHistory() реализация + Mock
 
 **Контекст предыдущей сессии (2025-11-13 Session 1):**
 - ✅ **Итеративный Outside-In TDD:** Применили на практике для ChannelMessageSource
@@ -102,11 +106,12 @@
 - [x] **Файлы:** `Sources/TDLibAdapter/TDLibCodableModels/Responses/ChatType.swift`, `Tests/TgClientUnitTests/.../ChatTests.swift`
 - [x] **Тесты:** 6 unit-тестов проходят ✔
 
-**1.3 Модель Message** (~45 мин)
-- [ ] **RED:** Тест декодирования `Message` из JSON
-- [ ] **GREEN:** Создать модель `Message`
-- [ ] **REFACTOR:** Добавить `MessageContent` (для MVP только text)
-- [ ] Поля: id, chatId, date, content (MessageContent)
+**1.3 Модель Message** ✅ (~45 мин) **[ЗАВЕРШЕНО 2025-11-17]**
+- [x] **RED:** Тест round-trip для `Message` (используя конструкторы, БЕЗ raw JSON)
+- [x] **GREEN:** Создать модель `Message` + `FormattedText` + `MessageContent` enum
+- [x] **REFACTOR:** MessageContent (text/unsupported), все init под `#if DEBUG`
+- [x] Поля: id, chatId, date, content (MessageContent)
+- [x] **Тесты:** 4 unit-теста проходят ✔
 
 **1.4 Request: GetChatsRequest** ✅ (~20 мин) **[ЗАВЕРШЕНО 2025-11-07]**
 - [x] **RED:** Тест кодирования `GetChatsRequest`
@@ -336,7 +341,7 @@ actor ChannelMessageSource: MessageSourceProtocol {
 
 **Realtime updates → BACKLOG** для будущих фич (например, бот может ответить "какие сейчас непрочитанные")
 
-**1.7 TDLib модели для loadChats/getChat + updates AsyncStream** ✅ **[ЗАВЕРШЕНО 2025-11-13]**
+**1.7 TDLib модели для loadChats/getChat + updates AsyncStream** ✅ **[ЗАВЕРШЕНО 2025-11-17]**
 - [x] **RED:** Unit-тесты для `LoadChatsRequest` ✅ (4 теста проходят)
   - `LoadChatsRequest` — параметры: chatList, limit ✅
   - `OkResponse` — универсальный успешный ответ TDLib ✅ (2 теста проходят)
@@ -358,12 +363,22 @@ actor ChannelMessageSource: MessageSourceProtocol {
   - 4 вызова loadChats() с pagination до 404
   - Таймаут 2 секунды между вызовами - оптимальный для MVP
   - Updates приходят асинхронно (не блокируют loadChats)
+- [x] **Архитектурные улучшения** ✅ (2025-11-17)
+  - MockTDLibClient: actor → class (точно имитирует Real TDLibClient)
+  - MockTDLibClient.updates: реализован через lazy var (проще и понятнее)
+  - Component Test исправлен: Chat → ChatResponse
+  - Добавлены комментарии про ограничение "один подписчик" в TDLibClient
 
 **Важные изменения:**
 - Конвертация тестов из XCTest → Swift Testing
 - Убрана избыточная документация "используется в"
 - Добавлено правило: запрет force unwrap в тестах (Rule #6 в TESTING.md)
 - Все `as!` заменены на `#require` (0 instances в проекте)
+
+**Known Issues (Technical Debt):**
+- ⚠️ TDLibClient.updates поддерживает только одного подписчика (FIXME в коде)
+- Решение: broadcast через массив continuations (когда понадобится второй подписчик)
+- Тест: unit-тест на двух подписчиков (пока рано писать)
 
 **1.8 Unit Tests для MessageFetcher** (~1 час)
 - [ ] **RED:** `Tests/TgClientUnitTests/DigestCore/MessageFetcherTests.swift`
