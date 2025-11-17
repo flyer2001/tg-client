@@ -84,8 +84,13 @@ extension TDLibClient: TDLibClientProtocol {
 
         // Повторное обращение - создаём новый stream с тем же continuation
         return AsyncStream<Update> { continuation in
-            // FIXME: Это не правильно - нужно хранить массив continuation'ов
-            // Для MVP работает т.к. у нас один подписчик
+            // FIXME: Это не правильно - нужно хранить массив continuation'ов для broadcast
+            // Для MVP работает т.к. у нас один подписчик (ChannelMessageSource)
+            //
+            // Когда появится второй подписчик (например, NotificationManager):
+            // - ⚠️ ПРОБЛЕМА ПРОЯВИТСЯ: второй подписчик получит пустой stream
+            // - ✅ РЕШЕНИЕ: broadcast через массив continuations (см. TASKS.md → Technical Debt)
+            // - ✅ ТЕСТ: unit-тест на двух подписчиков (пока рано писать)
             continuation.onTermination = { @Sendable _ in }
         }
     }
