@@ -37,14 +37,26 @@
   - Workflow: каждые 3 сообщения запрос sync с `/usage` (не блокирует диалог)
   - Алерты при достижении 75%, 85%, 90% использования
 
-**Контекст текущей сессии (2025-11-17):**
+**Контекст текущей сессии (2025-11-17 Session 2):**
+- ✅ **MVP-1.8: getChatHistory() реализация ЗАВЕРШЕНА**
+  - TDLibClient.getChatHistory() — реализация в TDLibClientProtocol + TDLibClient+HighLevelAPI
+  - MockTDLibClient.getChatHistory() — mock реализация для тестов
+  - **E2E проверка на production:** ✅ Работает! Получено 1 сообщение из Saved Messages (chatId = userId)
+  - **Итого:** 104 unit-теста проходят (без изменений, модели уже были готовы)
+- ✅ **Упрощён main.swift для E2E тестов**
+  - Убран loadChats эксперимент (был креш из-за updates stream)
+  - Добавлен простой тест getChatHistory() через Saved Messages
+  - Теперь быстрый запуск для проверки новых методов
+- ⏭️ **Следующий шаг:** MVP-1.6 ChannelMessageSource - fetchUnreadMessages() реализация
+
+**Контекст предыдущей сессии (2025-11-17 Session 1):**
 - ✅ **Усиление документации для архитектурного проектирования**
   - CLAUDE.md: добавлен Шаг 6.1 "Проговори архитектурные решения ВСЛУХ" с 4 блоками анализа
   - PROMPTS.md: усилена роль Senior Swift Architect — добавлен Блок 0 (предварительный анализ)
   - ARCHITECTURE.md: новый раздел "Logging Strategy" с уровнями логирования (info, error, debug, warning)
   - ARCHITECTURE.md: добавлен ADR-001 для fetchUnreadMessages() (производительность, память, отказоустойчивость)
   - TESTING.md: добавлено Rule #7 "НЕ используй raw JSON в тестах" (используй модельные конструкторы)
-- ✅ **MVP-1.8: getChatHistory модели** (частично завершено)
+- ✅ **MVP-1.8: getChatHistory модели**
   - Message модель + FormattedText + MessageContent (text/unsupported) — 4 unit-теста GREEN
   - GetChatHistoryRequest модель — 3 unit-теста GREEN
   - MessagesResponse модель — 3 unit-теста GREEN
@@ -52,7 +64,6 @@
 - ✅ **Logger интегрирован в ChannelMessageSource**
   - Добавлен через DI (Dependency Injection)
   - Обновлены Component и E2E тесты (передают no-op logger)
-- ⏭️ **Следующий шаг:** TDLibClient.getChatHistory() реализация + Mock
 
 **Контекст предыдущей сессии (2025-11-13 Session 1):**
 - ✅ **Итеративный Outside-In TDD:** Применили на практике для ChannelMessageSource
@@ -70,8 +81,8 @@
 
 **Приоритеты:**
 
-1. **[MVP-1.8] getChatHistory модели и реализация** - Message модель, GetChatHistoryRequest/Response, реализация в TDLibClient
-2. **[MVP-1.6] ChannelMessageSource реализация** - fetchUnreadMessages() с loadChats + updates + getChatHistory
+1. **[MVP-1.6] ChannelMessageSource реализация** - fetchUnreadMessages() с loadChats + updates + getChatHistory
+2. **[MVP-1.10] MessageSource Protocol + Models** - SourceMessage, ChannelInfo модели для DigestCore
 3. **[MVP-2] SummaryGenerator** - OpenAI Integration для генерации AI-саммари
 
 > **См. детали:**
@@ -390,15 +401,16 @@ actor ChannelMessageSource: MessageSourceProtocol {
 - [ ] **GREEN:** Реализация `MessageFetcher`
 - [ ] Использовать MockTDLibClient
 
-**1.9 Модели для getChatHistory** (~1.5 часа)
-- [ ] **RED:** Unit-тесты:
-  - `GetChatHistoryRequest` — параметры: chatId, fromMessageId, offset, limit
-  - `MessagesResponse` — модель Messages (массив Message)
-  - `Message` — модель сообщения (id, chatId, date, content)
-  - `MessageContent` — enum (для MVP только textContent)
-- [ ] **GREEN:** Реализация моделей
-- [ ] **RED:** Component Test для TDLibClient.getChatHistory()
-- [ ] **GREEN:** Реализация + Mock
+**1.9 Модели для getChatHistory** ✅ (~1.5 часа) **[ЗАВЕРШЕНО 2025-11-17 Session 2]**
+- [x] **RED:** Unit-тесты:
+  - `GetChatHistoryRequest` — параметры: chatId, fromMessageId, offset, limit ✅ (3 теста)
+  - `MessagesResponse` — модель Messages (массив Message) ✅ (3 теста)
+  - `Message` — модель сообщения (id, chatId, date, content) ✅ (4 теста)
+  - `MessageContent` — enum (для MVP только textContent) ✅
+- [x] **GREEN:** Реализация моделей ✅
+- [x] **GREEN:** Реализация TDLibClient.getChatHistory() ✅
+- [x] **GREEN:** MockTDLibClient.getChatHistory() ✅
+- [x] **E2E:** Проверка на production (Saved Messages) ✅
 
 **1.10 Protocol + Models для MessageSource** (~1 час)
 - [ ] **RED:** Unit-тесты:

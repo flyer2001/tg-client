@@ -1,3 +1,16 @@
+## [2025-11-17 Session 2] - getChatHistory() реализация
+
+- **feat(TDLibAdapter):** реализован метод `getChatHistory()` для получения истории сообщений
+  - Добавлен в TDLibClientProtocol + TDLibClient+HighLevelAPI
+  - MockTDLibClient.getChatHistory() для тестирования
+  - E2E проверка на production: ✅ работает (получено сообщение из Saved Messages)
+- **refactor(App):** упрощён main.swift для E2E тестов
+  - Убран loadChats эксперимент (был креш из-за updates stream)
+  - Добавлен простой тест getChatHistory() через Saved Messages
+- **Тесты:** 104 unit-теста проходят (без изменений, модели были готовы в Session 1)
+
+**Следующий шаг:** MVP-1.6 ChannelMessageSource - fetchUnreadMessages() реализация
+
 ## 2025-11-17 (Сессия 2) — MVP-1.8: getChatHistory модели (RED → GREEN)
 
 **Scope:** Создание TDLib моделей Message, GetChatHistoryRequest, MessagesResponse для реализации getChatHistory(). Усиление архитектурного анализа в документации (PROMPTS.md Block 0, ARCHITECTURE.md ADR-001, TESTING.md Rule #7).
