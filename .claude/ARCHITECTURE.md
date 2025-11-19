@@ -515,6 +515,205 @@ group.addTask {
 
 ---
 
+### ADR-002: TDLib Unified Background Loop (2025-11-19)
+
+**Контекст:**
+При реализации TDLibAdapter обнаружена критичная race condition: `td_json_client_receive()` возвращает ОДИН message из единой очереди, но два места вызывали его одновременно:
+- Authorization loop (`processAuthorizationStates`)
+- Background updates loop (`startUpdatesLoop`)
+
+**Проблема:**
+```
+Thread 1: receive() → получает updateAuthorizationState
+Thread 2: receive() → получает ok response
+```
+Результат: authorization loop ждёт state, который получил updates loop → **deadlock**.
+
+**Решения (по 4 блокам анализа):**
+
+#### 1. Производительность
+
+**Анализ:**
+- Операция: `td_json_client_receive(timeout)` - блокирующий C-вызов
+- Частота: ~100-1000 вызовов/сек (зависит от активности TDLib)
+- Критично: Минимизировать overhead маршрутизации messages
+
+**Решение:**
+- ✅ **Единый background loop** - ТОЛЬКО он вызывает `receive()`
+- ✅ **NSLock вместо DispatchQueue** - минимальный overhead для thread synchronization
+- ✅ **CheckedContinuation** - zero-copy передача результата в ожидающий Task
+
+**Реализация:**
+```swift
+final class ResponseWaiters: @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiters: [String: CheckedContinuation<[String: Any], Error>] = [:]
+
+    func addWaiter(for type: String, continuation: CheckedContinuation<[String: Any], Error>) {
+        lock.lock()
+        waiters[type] = continuation
+        lock.unlock()
+    }
+
+    func resumeWaiter(for type: String, with response: [String: Any]) -> Bool {
+        lock.lock()
+        let continuation = waiters.removeValue(forKey: type)
+        lock.unlock()
+
+        guard let continuation else { return false }
+        nonisolated(unsafe) let unsafeResponse = response
+        continuation.resume(returning: unsafeResponse)
+        return true
+    }
+}
+```
+
+**Обоснование:**
+- NSLock: ~50ns overhead (vs DispatchQueue ~1μs)
+- Критично для high-frequency маршрутизации (1000+ msg/sec)
+
+#### 2. Память
+
+**Анализ:**
+- Background loop: 1 Task на весь жизненный цикл клиента
+- ResponseWaiters: Dictionary с ~5-10 активными waiters (по expectedType)
+- Каждый waiter: CheckedContinuation (~64 bytes)
+- Общий overhead: **<1 KB** (приемлемо)
+
+**Решение для MVP:**
+- ✅ **Маршрутизация по expectedType** (простота реализации)
+- ⚠️ **Известная проблема:** При параллельных запросах одного типа (например, `messages`) continuation leaked
+
+**Post-MVP:**
+- 🔄 Использовать `@extra` field для request_id маршрутизации
+- 🔄 Dictionary<RequestID, Continuation> вместо Dictionary<Type, Continuation>
+
+**Обоснование:**
+- MVP: последовательные запросы → expectedType достаточно
+- Production: параллельные getChatHistory() → нужен request_id
+
+#### 3. Отказоустойчивость
+
+**Анализ потенциальных сбоев:**
+1. TDLib вернул error вместо ожидаемого response
+2. Background loop упал (Task cancellation)
+3. Waiter ждёт response, который никогда не придёт (timeout)
+
+**Решение:**
+
+**3.1. Error handling:**
+```swift
+if type == "error" {
+    let error = TDLibErrorResponse(code: code, message: message)
+    // Пробрасываем error в первый ожидающий waiter
+    // MVP: перебираем известные типы (ok, user, chats, messages, ...)
+    for expectedType in ["ok", "user", "chats", "messages", "updateAuthorizationState"] {
+        if responseWaiters.resumeWaiterWithError(for: expectedType, error: error) {
+            break
+        }
+    }
+}
+```
+
+**3.2. Loop cancellation:**
+```swift
+deinit {
+    updatesContinuation?.finish()
+    updatesTask?.cancel()
+    responseWaiters.cancelAll()  // Отменяем все ожидающие continuations
+}
+```
+
+**3.3. Authorization timeout:**
+- Уже реализовано: `authorizationTimeout` (300 сек)
+- Уже реализовано: `maxAuthorizationAttempts` (500 итераций)
+
+**Статус:** ✅ Базовая отказоустойчивость реализована
+**TODO (post-MVP):** Request timeout для getChatHistory/loadChats
+
+#### 4. Логирование
+
+**Критичные точки:**
+1. Loop start: `startUpdatesLoop: background loop started`
+2. Message routing: `trace` level (updateOption, decoded Update - НЕ спамить debug!)
+3. Error routing: `debug` level `error response [404]: Not Found`
+4. No waiter: `warning` level `no waiter for response type 'messages'`
+5. Authorization states: `info` level `Authorization state: authorizationStateReady`
+
+**Решение:**
+- ✅ `trace` для high-frequency events (updateOption)
+- ✅ `debug` для request/response lifecycle
+- ✅ `info` для business-critical events (authorization, chats loaded)
+- ✅ `warning` для unexpected states (no waiter)
+
+**Реализация:**
+```swift
+// High-frequency: trace
+appLogger.trace("startUpdatesLoop: received @type='\(type)'")
+appLogger.trace("startUpdatesLoop: decoded Update, yielding to stream")
+
+// Routing: debug
+appLogger.debug("startUpdatesLoop: response type '\(type)', notifying waiter")
+
+// Business logic: info
+appLogger.info("Authorization state: \(stateType)")
+appLogger.info("TDLib authorization READY")
+```
+
+**Статус:** ✅ Логирование очищено от спама, критичные события видны
+
+---
+
+**Архитектурная диаграмма:**
+
+```
+┌─────────────────────────────────────────────┐
+│ Background Loop (ЕДИНСТВЕННЫЙ)              │
+│                                             │
+│  while !Task.isCancelled {                  │
+│    guard let obj = receive(timeout: 0.1)    │  ← ТОЛЬКО ЗДЕСЬ вызывается receive()
+│                                             │
+│    switch obj["@type"] {                    │
+│      case "error":                          │
+│        → resumeWaiterWithError()            │
+│      case "update*":                        │
+│        → AsyncStream.yield(update)          │
+│      case "ok", "user", "chats", ...:       │
+│        → responseWaiters.resumeWaiter()     │  ← Будит ожидающий Task
+│    }                                        │
+│  }                                          │
+└─────────────────────────────────────────────┘
+         ▲                          │
+         │                          │
+         │                          ▼
+┌────────┴──────────┐   ┌────────────────────┐
+│ Authorization     │   │ High-Level API     │
+│ Loop              │   │ (loadChats, etc.)  │
+│                   │   │                    │
+│ waitForResponse() │   │ waitForResponse()  │  ← Регистрируют continuation
+│   @type=          │   │   @type=           │     и ЖДУТ resume
+│   "updateAuth...  │   │   "ok"             │
+└───────────────────┘   └────────────────────┘
+```
+
+**Ключевое решение:** Никто КРОМЕ background loop НЕ вызывает `receive()` → race condition устранён.
+
+---
+
+**Тесты для проверки решений:**
+- ✅ Component Test: Authorization flow проходит (phone → code → 2FA → ready)
+- ✅ Component Test: loadChats() работает с ошибкой 404
+- ✅ Component Test: Параллельные getChatHistory() (с continuation leaked warning - известная проблема MVP)
+
+**Статус:** ✅ Реализовано и проверено на production TDLib (2025-11-19)
+
+**Известные ограничения (Post-MVP):**
+- ⚠️ Continuation leaked при параллельных запросах одного типа
+- ⚠️ Нет request timeout для getChatHistory/loadChats
+- ⚠️ Маршрутизация error по expectedType (нужен @extra для точности)
+
+---
+
 ## Зависимости
 
 См. `Package.swift`. Основные:

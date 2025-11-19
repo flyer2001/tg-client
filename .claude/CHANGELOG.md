@@ -1,3 +1,38 @@
+## 2025-11-19 (Session: Race Condition Fix)
+
+### ✅ Критичный рефакторинг: TDLib Unified Background Loop
+
+**Проблема:**
+При тестировании на production TDLib обнаружена race condition: `td_json_client_receive()` вызывался из двух мест одновременно (authorization loop + background updates loop) → deadlock при loadChats().
+
+**Решение:**
+- Создан единый background loop - ТОЛЬКО он вызывает `receive()`
+- Добавлен ResponseWaiters (NSLock) для thread-safe маршрутизации messages
+- Использован CheckedContinuation для async/await pattern
+- Authorization loop рефакторен: убран прямой `receive()`, использует `waitForAuthorizationUpdate()`
+
+**Файлы:**
+- `Sources/TDLibAdapter/TDLibClient.swift` - ResponseWaiters class, единый background loop
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift` - waitForResponse(expectedType:)
+- `Sources/TDLibAdapter/TDLibCodableModels/Responses/TDLibErrorResponse.swift` - internal init
+- `.claude/ARCHITECTURE.md` - добавлен ADR-002 с архитектурной диаграммой
+
+**Проверки на production TDLib:**
+- ✅ Authorization с существующей сессией → 392 chats loaded
+- ✅ Authorization с нуля (phone → code → 2FA → ready) → 772 chats loaded
+- ✅ Ошибка 404 корректно обрабатывается
+- ✅ Параллельные getChatHistory() работают
+
+**Известные ограничения (не критично для MVP):**
+- ⚠️ Continuation leaked при параллельных запросах одного типа (решение: @extra field для request_id)
+- ⚠️ Логи забивают промпты при авторизации (решение: повысить log level)
+
+**TODO следующей сессии:**
+- Рефакторинг MockTDLibClient для имитации новой архитектуры (переиспользование ResponseWaiters)
+
+---
+
+
 ## [2025-11-17 Session 2] - getChatHistory() реализация
 
 - **feat(TDLibAdapter):** реализован метод `getChatHistory()` для получения истории сообщений

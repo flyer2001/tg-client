@@ -68,6 +68,11 @@
 
 **Пример:** TDLib отправляет updates streaming → используем AsyncStream (не массив)
 
+**⚠️ КРИТИЧНО для AsyncStream:**
+- **Завершается ли stream?** Если НЕТ (TDLib updates, WebSocket) → ОБЯЗАТЕЛЬНО timeout через TaskGroup
+- **Как остановить сбор?** `for await` висит в ожидании → нужен `group.cancelAll()` из timeout Task
+- См. паттерн в **Senior Swift Developer → AsyncStream с timeout**
+
 #### 2. Ограничения памяти/производительности
 - Сколько данных загружаем в память? (1000 чатов × история = ?)
 - Нужен ли batch processing? (обрабатывать порциями)
@@ -204,6 +209,37 @@ London School (mockist), Detroit School (classicist).
 - Async/await: не путать с GCD (нет контроля над threads)
 - Linux: нет Objective-C runtime, некоторые Foundation API отличаются
 - TDLib: thread-safety (нужен один клиент на thread)
+
+**Критичные паттерны Structured Concurrency:**
+
+**AsyncStream с timeout — ОБЯЗАТЕЛЬНО через TaskGroup:**
+```swift
+// ❌ НЕ РАБОТАЕТ: for await висит бесконечно (ждёт следующего элемента)
+for await item in stream {
+    if ContinuousClock.now >= deadline { break }  // ⚠️ НЕ СРАБАТЫВАЕТ - цикл висит на await!
+}
+
+// ✅ ПРАВИЛЬНО: Race между updates listener и timeout
+await withTaskGroup(of: Void.self) { group in
+    group.addTask {
+        for await item in stream { /* обработка */ }
+    }
+    group.addTask {
+        try? await Task.sleep(for: timeout)
+        group.cancelAll()  // Останавливаем Task 1
+    }
+    await group.waitForAll()
+}
+```
+
+**Почему проверка времени внутри цикла НЕ работает:**
+- `for await` **блокируется** на `await` в ожидании следующего элемента
+- Проверка `if deadline` выполняется **только после получения** элемента
+- Если элементов больше нет → цикл висит навсегда
+
+**Когда применять:**
+- Сбор данных из бесконечного AsyncStream с таймаутом
+- Updates listeners (TDLib updates, WebSocket streams, file watchers)
 
 **Когда применять:**
 - Реализация нового функционала
