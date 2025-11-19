@@ -17,6 +17,67 @@ public final class TDLibClient: @unchecked Sendable {
     var updatesContinuation: AsyncStream<Update>.Continuation?
     var updatesTask: Task<Void, Never>?
 
+    // Response handling через единый background loop
+    //
+    // **АРХИТЕКТУРНОЕ РЕШЕНИЕ: C interop с TDLib**
+    // TDLib — C библиотека с блокирующим `td_json_client_receive()`.
+    // Swift Concurrency (actor) не подходит для C interop — используем NSLock.
+    //
+    // **Thread-safety:** NSLock защищает mutable state (waiters dictionary).
+    // **@unchecked Sendable:** Класс содержит mutable state, но защищён NSLock.
+    final class ResponseWaiters: @unchecked Sendable {
+        private let lock = NSLock()
+        private var waiters: [String: CheckedContinuation<[String: Any], Error>] = [:]
+
+        func addWaiter(for type: String, continuation: CheckedContinuation<[String: Any], Error>) {
+            lock.lock()
+            waiters[type] = continuation
+            lock.unlock()
+        }
+
+        func resumeWaiter(for type: String, with response: [String: Any]) -> Bool {
+            lock.lock()
+            let continuation = waiters.removeValue(forKey: type)
+            lock.unlock()
+
+            guard let continuation else {
+                return false
+            }
+            // SAFETY: Dictionary [String: Any] не Sendable, но:
+            // - TDLib возвращает immutable JSON dictionary
+            // - NSLock гарантирует что continuation извлечён thread-safe
+            // - Копия dictionary передаётся через continuation один раз
+            nonisolated(unsafe) let unsafeResponse = response
+            continuation.resume(returning: unsafeResponse)
+            return true
+        }
+
+        func resumeWaiterWithError(for type: String, error: Error) -> Bool {
+            lock.lock()
+            let continuation = waiters.removeValue(forKey: type)
+            lock.unlock()
+
+            guard let continuation else {
+                return false
+            }
+            continuation.resume(throwing: error)
+            return true
+        }
+
+        func cancelAll() {
+            lock.lock()
+            let allWaiters = waiters
+            waiters.removeAll()
+            lock.unlock()
+
+            for (_, continuation) in allWaiters {
+                continuation.resume(throwing: CancellationError())
+            }
+        }
+    }
+
+    let responseWaiters = ResponseWaiters()
+
     /// Инициализирует TDLib клиент.
     ///
     /// - Parameters:
@@ -81,6 +142,11 @@ public final class TDLibClient: @unchecked Sendable {
                       promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String) async {
         client = td_json_client_create()
 
+        // КРИТИЧНО: Запускаем background loop ДО authorization
+        // Иначе processAuthorizationStates() будет конкурировать за receive()
+        startUpdatesLoop()
+        appLogger.info("Background updates loop started before authorization")
+
         // run receive loop in background Task
         await withCheckedContinuation { continuation in
             Task {
@@ -117,8 +183,19 @@ public final class TDLibClient: @unchecked Sendable {
     /// - Parameter timeout: Максимальное время ожидания в секундах
     /// - Returns: JSON-объект с полем `@type` или `nil`
     func receive(timeout: Double) -> [String: Any]? {
-        guard let client, let cstr = td_json_client_receive(client, timeout) else { return nil }
+        guard let client, let cstr = td_json_client_receive(client, timeout) else {
+            // Нет данных - это нормально при timeout
+            return nil
+        }
         let json = String(cString: cstr)
+
+        // Логируем только @type для краткости
+        if let parsed = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any],
+           let type = parsed["@type"] as? String {
+            appLogger.trace("receive: got @type='\(type)'")
+            return parsed
+        }
+
         return (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
     }
 
@@ -172,63 +249,39 @@ public final class TDLibClient: @unchecked Sendable {
     private func processAuthorizationStates(config: TDConfig,
                                             promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String,
                                             onReady: @escaping @Sendable () -> Void) async {
-        // Kickstart: request current auth state
-        send(GetAuthorizationStateRequest())
+        // TDLib автоматически присылает updateAuthorizationState при запуске
+        // НЕ нужно вызывать GetAuthorizationStateRequest() - это создаёт race condition
 
         var attemptCount = 0
-        var lastActivity: AuthorizationLoopActivity?
         let startTime = Date()
 
         while true {
             // Проверка превышения лимита попыток
             attemptCount += 1
             if attemptCount > maxAuthorizationAttempts {
-                appLogger.error("Authorization loop exceeded max attempts (\(maxAuthorizationAttempts)). Last activity: \(lastActivity?.description ?? "none")")
+                appLogger.error("Authorization loop exceeded max attempts (\(maxAuthorizationAttempts)).")
                 return
             }
 
             // Проверка таймаута
             let elapsed = Date().timeIntervalSince(startTime)
             if elapsed > authorizationTimeout {
-                appLogger.error("Authorization timeout (\(authorizationTimeout)s). Last activity: \(lastActivity?.description ?? "none")")
+                appLogger.error("Authorization timeout (\(authorizationTimeout)s).")
                 return
             }
 
-            guard let obj = receive(timeout: authorizationPollTimeout) else {
-                lastActivity = .emptyReceive
-                await Task.yield()
-                continue
-            }
-            guard let type = obj["@type"] as? String else {
-                lastActivity = .missingType
-                appLogger.warning("Received object without @type")
-                await Task.yield()
+            // Ждём следующего updateAuthorizationState через единый background loop
+            let authUpdate: AuthorizationStateUpdateResponse
+            do {
+                authUpdate = try await waitForAuthorizationUpdate()
+            } catch {
+                appLogger.error("Failed to wait for authorization update: \(error)")
                 continue
             }
 
-            // Не логируем обычные обновления (только ошибки)
-
-            // Логируем ошибки от TDLib
-            if type == "error" {
-                let code = obj["code"] as? Int ?? 0
-                let message = obj["message"] as? String ?? "unknown"
-                lastActivity = .tdlibError(code: code, message: message)
-                appLogger.error("TDLib error [\(code)]: \(message)")
-                continue
-            }
-
-            // Парсим состояние авторизации
-            guard let (state, originalType) = parseAuthorizationState(from: obj) else {
-                // Не авторизационное событие - логируем и пропускаем
-                lastActivity = .nonAuthorizationEvent(type: type)
-                appLogger.debug("Received non-authorization event: \(type)")
-                await Task.yield()
-                continue
-            }
-
-            // Отслеживаем текущее состояние авторизации
-            lastActivity = .authorizationState(state, originalType: originalType)
-            appLogger.info("Authorization state: \(originalType)")
+            let stateType = authUpdate.authorizationState.type
+            let state = AuthorizationState(fromTDLibType: stateType)
+            appLogger.info("Authorization state: \(stateType)")
 
             switch state {
             case .waitTdlibParameters:
@@ -295,7 +348,7 @@ public final class TDLibClient: @unchecked Sendable {
                 return
 
             case .unknown:
-                appLogger.warning("Unknown authorization state: \(originalType)")
+                appLogger.warning("Unknown authorization state: \(stateType)")
             }
 
             // Позволяем другим Task выполняться
@@ -303,50 +356,95 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
-    /// Запускает фоновый receive loop для обработки updates.
+    /// Запускает фоновый receive loop для обработки ВСЕХ сообщений от TDLib.
+    ///
+    /// **АРХИТЕКТУРНОЕ РЕШЕНИЕ:**
+    /// TDLib имеет ЕДИНУЮ очередь сообщений через `td_json_client_receive()`.
+    /// Если несколько мест вызывают `receive()` одновременно → race condition!
+    ///
+    /// **Решение:** ТОЛЬКО этот background loop вызывает `receive()`.
+    /// Все остальные части кода получают данные через:
+    /// - AsyncStream<Update> для updates (updateNewChat, updateUser и т.д.)
+    /// - ResponseWaiters для request/response (ok, user, chats и т.д.)
     ///
     /// Вызывается автоматически при первом обращении к `updates` property.
     func startUpdatesLoop() {
+        appLogger.info("startUpdatesLoop: background loop started")
         updatesTask = Task { [weak self] in
             guard let self else { return }
 
+            var loopCount = 0
             while !Task.isCancelled {
+                loopCount += 1
+                if loopCount % 500 == 0 {
+                    appLogger.debug("startUpdatesLoop: iteration \(loopCount)")
+                }
+
                 guard let obj = self.receive(timeout: 0.1) else {
                     await Task.yield()
                     continue
                 }
 
                 guard let type = obj["@type"] as? String else {
+                    appLogger.trace("startUpdatesLoop: received object without @type")
                     await Task.yield()
                     continue
                 }
 
-                // Пропускаем авторизационные события (обрабатываются в processAuthorizationStates)
-                if type.hasPrefix("authorizationState") || type == "updateAuthorizationState" {
-                    await Task.yield()
-                    continue
-                }
+                appLogger.trace("startUpdatesLoop: received @type='\(type)'")
 
-                // Пропускаем ошибки (логируются отдельно)
+                // 1. Ошибки — пробрасываем в первый ожидающий waiter
+                //    TODO (post-MVP): использовать @extra для маршрутизации по request_id
                 if type == "error" {
+                    if let code = obj["code"] as? Int, let message = obj["message"] as? String {
+                        appLogger.debug("startUpdatesLoop: error response [\(code)]: \(message)")
+                        let error = TDLibErrorResponse(code: code, message: message)
+                        // Пытаемся resume любой ожидающий waiter с ошибкой
+                        // На MVP мы делаем запросы последовательно, поэтому это безопасно
+                        // Проходим по всем зарегистрированным типам и пытаемся resume
+                        // FIXME: Это упрощение! Нужен @extra для точной маршрутизации
+                        var resumed = false
+                        for expectedType in ["ok", "user", "chats", "chat", "messages", "updateAuthorizationState"] {
+                            if self.responseWaiters.resumeWaiterWithError(for: expectedType, error: error) {
+                                resumed = true
+                                break
+                            }
+                        }
+                        if !resumed {
+                            appLogger.warning("startUpdatesLoop: no waiter for error [\(code)]: \(message)")
+                        }
+                    }
                     await Task.yield()
                     continue
                 }
 
-                // Пытаемся декодировать Update
-                do {
-                    let data = try JSONSerialization.data(withJSONObject: obj)
-                    let update = try JSONDecoder.tdlib().decode(Update.self, from: data)
-                    updatesContinuation?.yield(update)
-                } catch {
-                    // Не смогли декодировать - пропускаем
-                    appLogger.debug("Failed to decode update type '\(type)': \(error)")
+                // 2. Updates (updateNewChat, updateUser и т.д.) — отправляем в AsyncStream
+                // ИСКЛЮЧЕНИЕ: updateAuthorizationState идёт в responseWaiters (обрабатывается waitForAuthorizationUpdate)
+                if type.hasPrefix("update") && type != "updateAuthorizationState" {
+                    do {
+                        let data = try JSONSerialization.data(withJSONObject: obj)
+                        let update = try JSONDecoder.tdlib().decode(Update.self, from: data)
+                        appLogger.trace("startUpdatesLoop: decoded Update, yielding to stream")
+                        updatesContinuation?.yield(update)
+                    } catch {
+                        appLogger.warning("startUpdatesLoop: failed to decode update type '\(type)': \(error)")
+                    }
+                    await Task.yield()
+                    continue
+                }
+
+                // 3. Responses (ok, user, chats, authorizationState* и т.д.) — отправляем в responseWaiters
+                appLogger.debug("startUpdatesLoop: response type '\(type)', notifying waiter")
+                let resumed = self.responseWaiters.resumeWaiter(for: type, with: obj)
+                if !resumed {
+                    appLogger.warning("startUpdatesLoop: no waiter for response type '\(type)'")
                 }
 
                 await Task.yield()
             }
 
             appLogger.info("Updates loop stopped")
+            self.responseWaiters.cancelAll()
         }
     }
 }

@@ -10,12 +10,17 @@ public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
         case message
     }
 
-    #if DEBUG
-    public init(code: Int, message: String) {
+    /// Создаёт ошибку TDLib программно.
+    ///
+    /// Используется:
+    /// - В background loop для resume waiter с ошибкой
+    /// - В тестах для создания mock ошибок
+    init(code: Int, message: String) {
         self.code = code
         self.message = message
     }
 
+    #if DEBUG
     /// Helper для тестов: создать ошибку 404 (все чаты загружены)
     public static func allChatsLoaded() -> TDLibErrorResponse {
         TDLibErrorResponse(code: 404, message: "Not Found")

@@ -33,22 +33,83 @@ struct ChannelMessageSourceTests {
     ///
     /// **Then:** Получаем 2 сообщения только из "Tech News" (канал с unreadCount > 0)
     ///
-    /// **Процесс:**
-    /// 1. ✅ Тест написан → НЕ КОМПИЛИРУЕТСЯ (RED)
-    /// 2. ⏭️ Создать заглушки (ChannelMessageSource, SourceMessage)
-    /// 3. ⏭️ Попытаться реализовать fetchUnreadMessages() → обнаружим недостающий функционал
-    /// 4. ⏭️ Добавить тесты для недостающего функционала (здесь же, ниже)
+    /// **Алгоритм:**
+    /// 1. loadChats() → OkResponse + эмитит 3x updateNewChat
+    /// 2. Фильтрация: только .supergroup(isChannel=true) + unreadCount > 0 → 1 канал
+    /// 3. getChatHistory() для отфильтрованного канала → 2 сообщения
     @Test("fetchUnreadMessages: получение непрочитанных из каналов")
     func fetchUnreadMessagesFromChannels() async throws {
-        // Given: MockTDLibClient + no-op logger
+        // Given: MockTDLibClient с настроенными ответами
         let mockClient = MockTDLibClient()
         let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
 
-        // When: Вызываем fetchUnreadMessages()
-        let messageSource = ChannelMessageSource(tdlib: mockClient, logger: logger)
+        // 1. Настраиваем loadChats() → Ok
+        mockClient.setMockResponse(
+            for: LoadChatsRequest(chatList: .main, limit: 100),
+            response: .success(OkResponse())
+        )
+
+        // 2. Буферизуем updates (будут эмитированы при loadChats)
+        // Канал с непрочитанными (должен попасть в результат)
+        let techNews = ChatResponse(
+            id: 123,
+            type: .supergroup(supergroupId: 1, isChannel: true),
+            title: "Tech News",
+            unreadCount: 2,
+            lastReadInboxMessageId: 100
+        )
+        mockClient.emitUpdate(.newChat(chat: techNews))
+
+        // Канал БЕЗ непрочитанных (фильтруется)
+        let devUpdates = ChatResponse(
+            id: 456,
+            type: .supergroup(supergroupId: 2, isChannel: true),
+            title: "Dev Updates",
+            unreadCount: 0,
+            lastReadInboxMessageId: 200
+        )
+        mockClient.emitUpdate(.newChat(chat: devUpdates))
+
+        // Группа с непрочитанными (НЕ канал, фильтруется)
+        let randomGroup = ChatResponse(
+            id: 789,
+            type: .supergroup(supergroupId: 3, isChannel: false),
+            title: "Random",
+            unreadCount: 5,
+            lastReadInboxMessageId: 300
+        )
+        mockClient.emitUpdate(.newChat(chat: randomGroup))
+
+        // 3. Настраиваем getChatHistory() для канала "Tech News"
+        let message1 = Message(
+            id: 101,
+            chatId: 123,
+            date: 1234567890,
+            content: .text(FormattedText(text: "Breaking news today", entities: nil))
+        )
+        let message2 = Message(
+            id: 102,
+            chatId: 123,
+            date: 1234567891,
+            content: .text(FormattedText(text: "Another update", entities: nil))
+        )
+        mockClient.setMockResponse(
+            for: GetChatHistoryRequest(chatId: 123, fromMessageId: 0, offset: 0, limit: 100, onlyLocal: false),
+            response: .success(MessagesResponse(totalCount: 2, messages: [message1, message2]))
+        )
+
+        // When: Вызываем fetchUnreadMessages() с быстрыми таймаутами для тестов
+        let messageSource = ChannelMessageSource(
+            tdlib: mockClient,
+            logger: logger,
+            loadChatsPaginationDelay: .milliseconds(50),      // Быстро для тестов
+            updatesCollectionTimeout: .milliseconds(100),     // Быстро для тестов
+            maxParallelHistoryRequests: 5,
+            maxLoadChatsBatches: 5                             // Лимит для тестов
+        )
         let messages = try await messageSource.fetchUnreadMessages()
 
-        // Then: Проверяем результат
+        // Then: Проверяем результат — только 2 сообщения из "Tech News"
         #expect(messages.count == 2)
 
         let first = messages[0]
@@ -56,13 +117,13 @@ struct ChannelMessageSourceTests {
         #expect(first.messageId == 101)
         #expect(first.content == "Breaking news today")
         #expect(first.channelTitle == "Tech News")
-        #expect(first.link == "https://t.me/technews/101")  // Публичный канал
+        #expect(first.link == nil)  // Нет username → nil (приватный канал)
 
         let second = messages[1]
         #expect(second.chatId == 123)
         #expect(second.messageId == 102)
         #expect(second.content == "Another update")
-        #expect(second.link == "https://t.me/technews/102")
+        #expect(second.link == nil)
     }
 
     // MARK: - Тесты для недостающего функционала

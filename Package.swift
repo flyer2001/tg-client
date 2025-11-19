@@ -21,7 +21,8 @@ let package = Package(
             name: "App",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
-                "TDLibAdapter"
+                "TDLibAdapter",
+                "DigestCore"
             ],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])

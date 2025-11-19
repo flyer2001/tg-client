@@ -35,11 +35,18 @@ final class MockTDLibClient: @unchecked Sendable, TDLibClientProtocol {
     /// Continuation для эмиссии updates в тестах
     private var updatesContinuation: AsyncStream<Update>.Continuation?
 
+    /// Буфер для updates, которые были эмитированы до подписки на stream
+    private var bufferedUpdates: [Update] = []
+
     /// AsyncStream для получения updates (создаётся лениво при первом обращении).
     ///
-    /// Имитирует поведение TDLibClient, но правильно (поддерживает одного подписчика через lazy var).
+    /// Имитирует поведение TDLibClient:
+    /// - Lazy initialization (как Real TDLibClient)
+    /// - Unbounded buffering (имитирует внутреннюю буферизацию TDLib C library)
     private lazy var _updates: AsyncStream<Update> = {
-        let (stream, continuation) = AsyncStream<Update>.makeStream()
+        let (stream, continuation) = AsyncStream<Update>.makeStream(
+            bufferingPolicy: .unbounded  // ← Буферизация как в Real TDLib
+        )
         self.updatesContinuation = continuation
         return stream
     }()
@@ -113,6 +120,15 @@ final class MockTDLibClient: @unchecked Sendable, TDLibClientProtocol {
 
     func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse {
         let request = LoadChatsRequest(chatList: chatList, limit: limit)
+
+        // Эмитим updates синхронно (имитация Real TDLib)
+        // Real TDLib: фоновый loop эмитит updates через continuation.yield()
+        // Continuation с .unbounded bufferingPolicy буферизует updates автоматически
+        for update in bufferedUpdates {
+            updatesContinuation?.yield(update)
+        }
+        bufferedUpdates.removeAll()
+
         return try getMockResponse(for: request)
     }
 
@@ -139,12 +155,22 @@ final class MockTDLibClient: @unchecked Sendable, TDLibClientProtocol {
     ///
     /// **Использование в тестах:**
     /// ```swift
-    /// await mockClient.emitUpdate(.updateNewChat(chat))
+    /// // Буферизуем update (будет эмитирован при вызове loadChats)
+    /// mockClient.emitUpdate(.newChat(chat))
     /// ```
+    ///
+    /// **Поведение:**
+    /// - Если есть подписчик на updates stream → отправляем сразу
+    /// - Если нет подписчика → буферизуем (будет эмитирован при loadChats())
     ///
     /// - Parameter update: Update для эмиссии
     func emitUpdate(_ update: Update) {
-        updatesContinuation?.yield(update)
+        if let continuation = updatesContinuation {
+            continuation.yield(update)
+        } else {
+            // Буферизуем до момента подписки на stream
+            bufferedUpdates.append(update)
+        }
     }
 
     // MARK: - Helper Methods

@@ -1,6 +1,7 @@
 import Foundation
 import Logging
 import TDLibAdapter
+import DigestCore
 
 @main
 struct TGClient {
@@ -11,9 +12,9 @@ struct TGClient {
     }
 
     static func main() async {
-        // Настройка логгера: только ошибки в stderr
+        // Настройка логгера: debug для отладки
         var logger = Logger(label: "tg-client")
-        logger.logLevel = .error
+        logger.logLevel = .debug
 
         let env = ProcessInfo.processInfo.environment
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
@@ -63,39 +64,42 @@ struct TGClient {
             exit(1)
         }
 
-        // 🧪 Test getChatHistory() - используем Saved Messages (chatId = userId)
-        print("\n🧪 Testing getChatHistory()...")
-        print("   Using Saved Messages (chatId = \(user.id))...")
+        // 🧪 Test ChannelMessageSource.fetchUnreadMessages()
+        print("\n🧪 Testing ChannelMessageSource.fetchUnreadMessages()...")
+
+        // Настраиваем logger для ChannelMessageSource (показываем всё)
+        var channelLogger = Logger(label: "ChannelMessageSource")
+        channelLogger.logLevel = .info
+
+        let messageSource = ChannelMessageSource(
+            tdlib: td,
+            logger: channelLogger,
+            loadChatsPaginationDelay: .seconds(2),
+            updatesCollectionTimeout: .seconds(5),
+            maxParallelHistoryRequests: 5,
+            maxLoadChatsBatches: 20
+        )
 
         do {
-            // Получаем последние 10 сообщений из Saved Messages
-            let messages = try await td.getChatHistory(
-                chatId: user.id,
-                fromMessageId: 0,
-                offset: 0,
-                limit: 10
-            )
+            let messages = try await messageSource.fetchUnreadMessages()
 
-            print("   ✅ Received \(messages.messages.count) messages")
+            print("\n✅ fetchUnreadMessages() completed!")
+            print("   Total messages: \(messages.count)")
 
-            // Показываем первые 3 сообщения
-            if messages.messages.isEmpty {
-                print("   ℹ️ No messages in Saved Messages")
-            } else {
-                print("\n   📋 Sample messages:")
-                for (idx, message) in messages.messages.prefix(3).enumerated() {
-                    let preview: String
-                    switch message.content {
-                    case .text(let text):
-                        preview = text.text.prefix(50).description
-                    case .unsupported:
-                        preview = "[unsupported]"
-                    }
-                    print("   \(idx + 1). Message \(message.id): \(preview)")
+            // Группируем по каналам
+            let messagesByChannel = Dictionary(grouping: messages) { $0.channelTitle }
+            print("   Channels with unread: \(messagesByChannel.count)")
+
+            // Показываем топ-3 канала
+            let top3 = messagesByChannel.sorted { $0.value.count > $1.value.count }.prefix(3)
+            if !top3.isEmpty {
+                print("\n   📊 Top 3 channels by unread count:")
+                for (idx, (title, msgs)) in top3.enumerated() {
+                    print("   \(idx + 1). \(title): \(msgs.count) messages")
                 }
             }
         } catch {
-            print("   ⚠️ Failed to get chat history: \(error)")
+            print("   ⚠️ Failed to fetch unread messages: \(error)")
             exit(1)
         }
 
