@@ -1,3 +1,54 @@
+## 2025-11-22 | Рефакторинг TDLibFFI Protocol - устранение дублирования Mock логики
+
+### Проблема
+MockTDLibClient дублировал логику Real TDLibClient (ResponseWaiters, updates loop) → при каждом рефакторинге Real клиента требовалась ручная синхронизация Mock. Анти-паттерн TDD.
+
+### Решение
+Создан протокол TDLibFFI для мокирования только C API boundary (td_json_client_*), вместо мокирования всего клиента.
+
+### Изменения
+
+**Новые файлы:**
+- `Sources/TDLibAdapter/TDLibFFI.swift` - протокол для C API абстракции
+- `Sources/TDLibAdapter/CTDLibFFI.swift` - real implementation (wrapper над CTDLib)
+- `Sources/TDLibAdapter/TDLibClientError.swift` - ошибки TDLib клиента
+- `Tests/TgClientUnitTests/TDLibAdapter/MockTDLibFFI.swift` - mock implementation (FIFO queue)
+- `Tests/TgClientUnitTests/TDLibAdapter/TDLibClientTests.swift` - unit-тесты Real TDLibClient
+
+**Рефакторинг:**
+- `TDLibClient.swift`:
+  - DispatchQueue для блокирующих receive() операций (thread pool safety)
+  - AsyncStream bridge между DispatchQueue и async/await Task
+  - Dependency Injection через два init метода (public + internal для тестов)
+  - Lifecycle: create() throws (runtime error), send/receive fatalError (programmer error)
+- `UserResponse.swift`, `ChatResponse.swift`:
+  - Добавлен `case type = "@type"` в CodingKeys для JSONEncoder
+- `main.swift`:
+  - Error handling для throwing start() метода
+
+**Документация:**
+- `.claude/RETROSPECTIVE.md` - Problem 13: documented "invented @extra requirement" anti-pattern
+
+### Результаты
+- ✅ Все 3 TDLibClientTests проходят успешно
+- ✅ Real TDLibClient логика (ResponseWaiters, JSON парсинг, error handling) тестируется напрямую
+- ✅ MockTDLibFFI предоставляет FIFO responses БЕЗ дублирования бизнес-логики
+- ✅ Блокирующие операции выведены на DispatchQueue (соответствие Swift Concurrency best practices 2025)
+
+### Усвоенные уроки
+1. **Invented requirement anti-pattern**: сделал архитектурное предположение (@extra field нужен для matching) без чтения исходного кода ResponseWaiters. Реальность: используется только FIFO по requestType.
+2. **Blocking operations in Task**: блокирующие вызовы в Swift Concurrency Task приводят к thread pool starvation. Решение: DispatchQueue + AsyncStream.
+3. **TDD order**: сначала фикс native component, потом mock (не наоборот).
+
+### Технические детали
+- **TDLibFFI Protocol**: create() throws, send/receive fatalError (programmer error)
+- **DispatchQueue**: serial queue (.userInitiated QoS) для td_json_client_receive()
+- **AsyncStream**: bridge для yield updates в async Task
+- **MockTDLibFFI**: FIFO queue без @extra, парсинг @type из JSON request
+- **Response Models**: CodingKeys с `case type = "@type"` обязательны для JSONEncoder
+
+---
+
 ## 2025-11-21: ResponseWaiters actor + TDLibJSON Sendable-safe wrapper
 
 **Цель:** Убрать все `@unchecked Sendable` и `nonisolated(unsafe)`, перейти на Swift 6 concurrency primitives.
