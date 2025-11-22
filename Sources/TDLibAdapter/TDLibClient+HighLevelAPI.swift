@@ -158,15 +158,17 @@ extension TDLibClient: TDLibClientProtocol {
     private func waitForResponse<T: TDLibResponse>(ofType: T.Type, expectedType: String) async throws -> T {
         appLogger.debug("waitForResponse: started waiting for \(T.self) (@type='\(expectedType)')")
 
-        // Регистрируем continuation в responseWaiters (NSLock внутри, безопасно)
-        let rawResponse: [String: Any] = try await withCheckedThrowingContinuation { continuation in
-            self.responseWaiters.addWaiter(for: expectedType, continuation: continuation)
+        // Регистрируем continuation в responseWaiters (actor изоляция внутри)
+        let tdlibJSON: TDLibJSON = try await withCheckedThrowingContinuation { continuation in
+            Task {
+                await self.responseWaiters.addWaiter(for: expectedType, continuation: continuation)
+            }
         }
 
         appLogger.debug("waitForResponse: received response for @type='\(expectedType)'")
 
         // Проверяем на ошибку
-        let update = TDLibUpdate(rawResponse)
+        let update = TDLibUpdate(tdlibJSON.data)
         if case .error(let error) = update {
             appLogger.error("TDLib error [\(error.code)]: \(error.message)")
             throw error
@@ -174,14 +176,14 @@ extension TDLibClient: TDLibClientProtocol {
 
         // Декодируем в нужный тип
         do {
-            let data = try JSONSerialization.data(withJSONObject: rawResponse)
+            let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
             let decoder = JSONDecoder.tdlib()
             let response = try decoder.decode(T.self, from: data)
             appLogger.debug("waitForResponse: successfully decoded \(T.self)")
             return response
         } catch {
             appLogger.error("waitForResponse: failed to decode @type='\(expectedType)' as \(T.self): \(error)")
-            throw TDLibErrorResponse(code: -1, message: "Failed to decode response: \(error)")
+            throw TDLibClientError.decodeFailed(expectedType: "\(T.self)", underlyingError: error)
         }
     }
 }

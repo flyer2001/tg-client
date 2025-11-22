@@ -44,7 +44,21 @@ extension ChatType: Codable {
 
         case "chatTypeSupergroup":
             let supergroupId = try container.decode(Int64.self, forKey: .supergroupId)
-            let isChannel = try container.decode(Bool.self, forKey: .isChannel)
+            // TDLib возвращает is_channel как Int (0/1), не Bool
+            let isChannel: Bool
+            if let boolValue = try? container.decode(Bool.self, forKey: .isChannel) {
+                isChannel = boolValue
+            } else if let intValue = try? container.decode(Int.self, forKey: .isChannel) {
+                isChannel = intValue != 0
+            } else {
+                throw DecodingError.typeMismatch(
+                    Bool.self,
+                    DecodingError.Context(
+                        codingPath: container.codingPath + [CodingKeys.isChannel],
+                        debugDescription: "isChannel must be Bool or Int"
+                    )
+                )
+            }
             self = .supergroup(supergroupId: supergroupId, isChannel: isChannel)
 
         case "chatTypeSecret":

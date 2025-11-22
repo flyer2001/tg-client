@@ -19,12 +19,13 @@ public struct UserResponse: TDLibResponse, Sendable {
     public let username: String?
 
     enum CodingKeys: String, CodingKey {
+        case type = "@type"
         case id
         case firstName
         case lastName
         case username
     }
-
+    #if DEBUG
     /// Инициализатор для создания пользователя программно (например, в тестах).
     ///
     /// - Parameters:
@@ -38,4 +39,5 @@ public struct UserResponse: TDLibResponse, Sendable {
         self.lastName = lastName
         self.username = username
     }
+    #endif
 }

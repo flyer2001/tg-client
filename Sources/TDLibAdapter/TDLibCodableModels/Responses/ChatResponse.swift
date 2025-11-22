@@ -22,6 +22,7 @@ public struct ChatResponse: TDLibResponse, Sendable, Equatable {
     public let lastReadInboxMessageId: Int64
 
     enum CodingKeys: String, CodingKey {
+        case type = "@type"
         case id
         case chatType = "type"
         case title

@@ -42,15 +42,20 @@ struct TGClient {
         let td = TDLibClient(appLogger: logger)
 
         // Запускаем авторизацию и ждём её завершения
-        await td.start(config: config) { promptType in
-            switch promptType {
-            case .phoneNumber:
-                return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
-            case .verificationCode:
-                return readLineSecure(message: "Code: ")
-            case .twoFactorPassword:
-                return readLineSecure(message: "2FA Password: ")
+        do {
+            try await td.start(config: config) { promptType in
+                switch promptType {
+                case .phoneNumber:
+                    return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
+                case .verificationCode:
+                    return readLineSecure(message: "Code: ")
+                case .twoFactorPassword:
+                    return readLineSecure(message: "2FA Password: ")
+                }
             }
+        } catch {
+            print("⚠️ Failed to start TDLib client: \(error)")
+            exit(1)
         }
 
         // Верификация: запросим текущего пользователя через высокоуровневый API

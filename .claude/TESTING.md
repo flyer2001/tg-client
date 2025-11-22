@@ -70,6 +70,51 @@ let decoded = try JSONDecoder.tdlib().decode(Message.self, from: data)
 - Завершённая задача: `.claude/TASKS.md` → TD-7 (убрать raw JSON из ResponseTests)
 - Примеры тестов: `Tests/TgClientUnitTests/.../ChatResponseTests.swift`
 
+#### Тестирование Actor кода: синхронизация в тестах
+
+**Проблема:** Actor методы асинхронные, но `withCheckedContinuation` требует синхронного closure.
+
+**❌ Неправильно (race condition):**
+```swift
+let task = Task {
+    try await withCheckedContinuation { continuation in
+        Task { await actor.method(continuation) }  // ⚠️ Не гарантирован порядок!
+    }
+}
+await Task.yield()  // ⚠️ НЕ гарантирует выполнение!
+await actor.resume()  // Может выполниться ДО method()
+```
+
+**✅ Правильно (используй test helper с callback):**
+```swift
+// Extension только для тестов
+extension MyActor {
+    nonisolated func methodWithCallback(
+        continuation: CheckedContinuation<Result, Error>,
+        onRegistered: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await self.method(continuation)
+            onRegistered()  // ✅ Сигнал: готово
+        }
+    }
+}
+
+// В тесте: AsyncStream для ожидания
+let (stream, streamCont) = AsyncStream.makeStream(of: Void.self)
+let task = Task {
+    try await withCheckedContinuation { continuation in
+        actor.methodWithCallback(continuation: continuation) {
+            streamCont.yield(())  // Сигнал: зарегистрирован
+        }
+    }
+}
+_ = await stream.first(where: { _ in true })  // Ждём подтверждения
+await actor.resume()  // Теперь безопасно!
+```
+
+**Пример из проекта:** `Tests/.../ResponseWaitersTests.swift` → `addWaiterWithCallback`
+
 ### Component-тесты
 - Тестирование модулей с реальными зависимостями
 - Без внешней сети
