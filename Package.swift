@@ -10,8 +10,10 @@ let package = Package(
         .executable(name: "tg-client", targets: ["App"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
-        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
+        .package(url: "https://github.com/apple/swift-log", from: "1.6.4")
+        // DocC plugin временно отключен для ускорения тестов
+        // Включить перед генерацией документации: swift package generate-documentation
+        // .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
         // SwiftLint отключен для ускорения сборки на Linux
         // См. BACKLOG.md: "SwiftLint через pre-commit hook"
         // .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
@@ -53,10 +55,11 @@ let package = Package(
         .target(
             name: "TgClient",
             dependencies: ["TDLibAdapter"],
-            path: "Sources/TgClient",
-            resources: [
-                .copy("TgClient.docc")
-            ]
+            path: "Sources/TgClient"
+            // DocC resources временно отключены для ускорения тестов
+            // resources: [
+            //     .copy("TgClient.docc")
+            // ]
         ),
         .target(
             name: "DigestCore",
@@ -76,7 +79,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers"],
+            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers", "TgClientUnitTests"],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(
