@@ -19,11 +19,84 @@
 > 🎯 **MVP (цели и scope):** [MVP.md](.claude/MVP.md) — читать по требованию (большой файл)
 > 💡 **Будущие фичи:** [BACKLOG.md](.claude/BACKLOG.md) — бэклог для версий после MVP
 > 📝 **История изменений:** [CHANGELOG.md](.claude/CHANGELOG.md) — логи завершенных сессий, читать только по требованию (большой файл)
-> 📋 **Последнее обновление:** 2025-11-21
+> 📋 **Последнее обновление:** 2025-11-23
 
 ---
 
 ## 🎯 Следующая сессия (топ-3 приоритета)
+
+### 🔥 ПРИОРИТЕТ 1: Исправить race condition в TDLibClient.updates (AsyncStream initialization)
+
+**Проблема:**
+- `TDLibClient.startUpdatesLoop()` начинает yield'ить updates в `updatesContinuation`
+- НО `updatesContinuation` создаётся ТОЛЬКО при первом обращении к `updates` property (TDLibClient+HighLevelAPI.swift:91-94)
+- Если никто не подписался на updates ДО вызова `startUpdatesLoop()` → updates теряются (continuation = nil)
+
+**Текущее поведение:**
+```swift
+// В тесте:
+let tdlibClient = TDLibClient(ffi: mockFFI, ...)
+tdlibClient.startUpdatesLoop()  // <-- continuation ещё nil!
+
+// В ChannelMessageSource.loadAllChats():
+for await update in tdlib.updates {  // <-- Только ЗДЕСЬ создаётся continuation (слишком поздно!)
+```
+
+**Правильное решение (без костылей):**
+Изменить `TDLibClient.startUpdatesLoop()` (Sources/TDLibAdapter/TDLibClient.swift:290):
+```swift
+func startUpdatesLoop() {
+    // Инициализируем updates stream ДО запуска loop
+    if updatesContinuation == nil {
+        let (stream, continuation) = AsyncStream<Update>.makeStream()
+        updatesContinuation = continuation
+        // stream будет получен через property updates
+    }
+
+    appLogger.info("startUpdatesLoop: background loop started")
+    // ... остальной код как есть
+}
+```
+
+**Что проверить после исправления:**
+1. ✅ Запустить Component тест: `swift test --filter ChannelMessageSourceTests`
+2. ✅ **КРИТИЧНО:** Проверить на БОЕВОМ API - запустить `swift run tg-client` и убедиться что получение чатов работает
+3. ✅ Проверить что все Unit тесты TDLibClient всё ещё проходят
+
+**Связанные файлы:**
+- `Sources/TDLibAdapter/TDLibClient.swift:290` (startUpdatesLoop)
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift:89` (updates property)
+- `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift`
+
+---
+
+### 🔥 ПРИОРИТЕТ 2: Восстановить AuthenticationFlowTests (закомментированы)
+
+**Статус:** Временно закомментированы в `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift`
+
+**Задача:**
+1. Переписать на TDLibClient + MockTDLibFFI (вместо удалённого MockTDLibClient)
+2. Использовать паттерн из ChannelMessageSourceTests как референс
+3. Проверить coverage авторизации:
+   - Phone + Code → Ready
+   - Phone + Code + 2FA Password → Ready
+   - Error handling (неверный код, неверный пароль)
+
+**Референс:** `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift` (как правильно использовать MockTDLibFFI)
+
+---
+
+### ✅ ЗАВЕРШЕНО: Отключить DocC plugin для ускорения разработки (2025-11-23)
+
+**Выполнено:**
+- ✅ Закомментирован DocC plugin в Package.swift dependencies
+- ✅ Закомментированы DocC resources в TgClient target
+- ✅ Добавлена зависимость TgClientUnitTests в TgClientComponentTests
+- ✅ Время сборки тестов: **1.15 секунды** (было >30 сек с DocC)
+
+**Важно:** Перед генерацией документации раскомментировать DocC plugin!
+
+---
 
 ### ✅ ЗАВЕРШЕНО: Рефакторинг TDLibFFI Protocol (2025-11-22)
 

@@ -226,6 +226,35 @@ rm -rf .build && swift build 2>&1 | tail -20
 
 **Подробности** см. в [DEPLOY.md](DEPLOY.md) → "Known Issue: SwiftPM Build Hangs"
 
+### Troubleshooting: Зависание swift test на macOS
+
+**Проблема:** `swift test` зависает при использовании pipe redirection (`| head`, `| tail`).
+
+**Симптомы:**
+- Команда `swift test --filter MyTest 2>&1 | head -100` зависает после "Build complete"
+- Нет вывода тестов, процесс не завершается
+- Требуется Ctrl+C для прерывания
+
+**Причина:** SIGPIPE signal когда pipe закрывается раньше, чем `swift test` завершил запись вывода.
+
+**Решение:**
+
+```bash
+# ❌ НЕПРАВИЛЬНО - вызывает SIGPIPE
+swift test --filter MyTest 2>&1 | head -100
+
+# ✅ ПРАВИЛЬНО - работает без зависания
+swift test --filter MyTest --verbose 2>&1
+
+# Для ограничения вывода используй tee + tail/head
+swift test --filter MyTest 2>&1 | tee /tmp/test.log | tail -50
+```
+
+**Дополнительные рекомендации:**
+- Используй `--verbose` для детального вывода без зависания
+- Используй `--skip-build` если сборка уже выполнена
+- Для фильтрации вывода: сохрани в файл через `tee`, затем анализируй
+
 ### Рекомендации
 
 1. **Используйте tmux** для длительных операций:
@@ -240,10 +269,17 @@ rm -rf .build && swift build 2>&1 | tail -20
    # Подключиться обратно: tmux attach -s dev
    ```
 
-2. **Ограничивайте вывод** длинных команд:
+2. **⚠️ ОСТОРОЖНО с pipe redirection:**
    ```bash
-   swift build 2>&1 | tail -20  # Показать только последние 20 строк
-   swift test 2>&1 | head -50   # Показать только первые 50 строк
+   # ✅ Безопасно для build (не вызывает SIGPIPE)
+   swift build 2>&1 | tail -20
+
+   # ❌ НЕ используй для swift test (вызывает зависание)
+   # swift test 2>&1 | head -50
+
+   # ✅ Правильно для swift test
+   swift test --verbose 2>&1
+   swift test 2>&1 | tee /tmp/test.log | tail -50
    ```
 
 3. **Проверяйте зависшие процессы** перед сборкой:
