@@ -66,6 +66,25 @@ final class MockTDLibFFI: TDLibFFI {
         queuedUpdates.append(update)
     }
 
+    /// Эмитит update напрямую в pendingResponses (БЕЗ loadChats).
+    ///
+    /// **Использование в тестах:**
+    /// Для unit-тестов которые проверяют обработку updates без loadChats API.
+    /// Например, тесты на race condition в updates stream initialization.
+    ///
+    /// ```swift
+    /// mockFFI.mockUpdate(.chatReadInbox(chatId: 123, lastReadInboxMessageId: 10, unreadCount: 0))
+    /// // Сразу доступно через receive()
+    /// ```
+    func mockUpdate(_ update: Update) {
+        let encoder = JSONEncoder.tdlib()
+        guard let data = try? encoder.encode(update),
+              let json = String(data: data, encoding: .utf8) else {
+            fatalError("MockTDLibFFI.mockUpdate(): failed to encode update")
+        }
+        pendingResponses.append(json)
+    }
+
     func send(_ request: String) {
         guard let data = request.data(using: .utf8),
               let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

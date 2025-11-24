@@ -30,6 +30,9 @@ struct FetchUnreadMessagesScenarioTests {
         let logger = Logger(label: "tg-client.e2e")
         let tdlib = TDLibClient(appLogger: logger)
 
+        // Запускаем background updates loop (необходим для ChannelMessageSource)
+        tdlib.startUpdatesLoop()
+
         // TODO: start() с config - добавим позже, сейчас фокус на ChannelMessageSource
 
         // 2. Создание ChannelMessageSource

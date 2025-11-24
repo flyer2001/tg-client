@@ -75,4 +75,36 @@ struct TDLibClientTests {
         #expect(c2.id == 456)
         #expect(c2.title == "Second")
     }
+
+    @Test("updates stream получает update даже если startUpdatesLoop() вызван ДО подписки")
+    func updatesStreamReceivesUpdateAfterStartUpdatesLoop() async throws {
+        let mockFFI = MockTDLibFFI()
+        let logger = Logger(label: "test")
+        let client = TDLibClient(ffi: mockFFI, appLogger: logger)
+
+        // КРИТИЧНО: startUpdatesLoop() вызывается ДО подписки на updates
+        // Это имитирует реальный сценарий в start() где loop запускается сразу
+        client.startUpdatesLoop()
+
+        // Эмитим update ПОСЛЕ запуска loop (но ДО подписки)
+        mockFFI.mockUpdate(.chatReadInbox(chatId: 999, lastReadInboxMessageId: 42, unreadCount: 3))
+
+        // ТЕПЕРЬ подписываемся на updates (ПОСЛЕ startUpdatesLoop и ПОСЛЕ emit)
+        // for await детерминированно ждёт первого update (НЕ нужен Task.sleep)
+        var receivedUpdate: Update?
+        for await update in client.updates {
+            receivedUpdate = update
+            break
+        }
+
+        // Проверяем что update дошёл несмотря на race condition
+        guard case .chatReadInbox(let chatId, let messageId, let unreadCount) = receivedUpdate else {
+            #expect(Bool(false), "Expected chatReadInbox update, got \(String(describing: receivedUpdate))")
+            return
+        }
+
+        #expect(chatId == 999)
+        #expect(messageId == 42)
+        #expect(unreadCount == 3)
+    }
 }

@@ -85,26 +85,19 @@ extension TDLibClient: TDLibClientProtocol {
 
     /// AsyncStream для получения updates от TDLib.
     ///
-    /// **ВАЖНО:** Background loop запускается в `start()`, НЕ здесь!
+    /// **ВАЖНО:**
+    /// - Background loop запускается в `start()` и инициализирует stream
+    /// - Поддерживается только ОДИН подписчик (для MVP)
+    ///
+    /// **Technical Debt:**
+    /// - ⚠️ ПРОБЛЕМА: AsyncStream можно consume только один раз
+    /// - ✅ РЕШЕНИЕ (когда понадобится 2+ подписчиков): broadcast через массив continuation'ов
+    /// - 📝 См. TASKS.md → Technical Debt → "TDLibClient.updates broadcast"
     public var updates: AsyncStream<Update> {
-        // Создаём stream только один раз
-        if updatesContinuation == nil {
-            let (stream, continuation) = AsyncStream<Update>.makeStream()
-            updatesContinuation = continuation
-            return stream
+        guard let stream = updatesStream else {
+            fatalError("updates stream not initialized. Call startUpdatesLoop() first.")
         }
-
-        // Повторное обращение - создаём новый stream с тем же continuation
-        return AsyncStream<Update> { continuation in
-            // FIXME: Это не правильно - нужно хранить массив continuation'ов для broadcast
-            // Для MVP работает т.к. у нас один подписчик (ChannelMessageSource)
-            //
-            // Когда появится второй подписчик (например, NotificationManager):
-            // - ⚠️ ПРОБЛЕМА ПРОЯВИТСЯ: второй подписчик получит пустой stream
-            // - ✅ РЕШЕНИЕ: broadcast через массив continuations (см. TASKS.md → Technical Debt)
-            // - ✅ ТЕСТ: unit-тест на двух подписчиков (пока рано писать)
-            continuation.onTermination = { @Sendable _ in }
-        }
+        return stream
     }
 
     // MARK: - Helper Methods

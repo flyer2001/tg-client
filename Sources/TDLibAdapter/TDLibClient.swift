@@ -14,6 +14,7 @@ public final class TDLibClient: @unchecked Sendable {
     private let authorizationTimeout: TimeInterval
 
     // AsyncStream для updates от TDLib
+    var updatesStream: AsyncStream<Update>?
     var updatesContinuation: AsyncStream<Update>.Continuation?
     var updatesTask: Task<Void, Never>?
 
@@ -288,6 +289,15 @@ public final class TDLibClient: @unchecked Sendable {
     /// - AsyncStream<Update> для updates (updateNewChat, updateUser и т.д.)
     /// - ResponseWaiters для request/response (ok, user, chats и т.д.)
     func startUpdatesLoop() {
+        // КРИТИЧНО: Инициализируем updates stream ДО запуска loop
+        // Иначе если никто не подписался на updates → updatesContinuation = nil → updates теряются
+        if updatesContinuation == nil {
+            let (stream, continuation) = AsyncStream<Update>.makeStream()
+            updatesStream = stream
+            updatesContinuation = continuation
+            appLogger.debug("startUpdatesLoop: initialized updates stream and continuation")
+        }
+
         appLogger.info("startUpdatesLoop: background loop started")
 
         let (stream, continuation) = AsyncStream.makeStream(of: TDLibJSON.self)
