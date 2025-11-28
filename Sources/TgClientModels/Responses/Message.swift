@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Сообщение из Telegram (из TDLib getChatHistory).

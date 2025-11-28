@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
@@ -6,6 +7,7 @@ public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
     public let message: String
 
     enum CodingKeys: String, CodingKey {
+        case type = "@type"
         case code
         case message
     }

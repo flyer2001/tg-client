@@ -1,3 +1,4 @@
+import TgClientModels
 import Foundation
 import Logging
 import TDLibAdapter

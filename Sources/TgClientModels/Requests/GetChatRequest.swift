@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Запрос для получения полной информации о чате.

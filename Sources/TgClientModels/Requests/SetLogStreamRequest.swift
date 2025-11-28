@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Настройки записи логов в файл.

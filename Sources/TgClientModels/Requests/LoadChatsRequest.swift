@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Запрос loadChats для TDLib.

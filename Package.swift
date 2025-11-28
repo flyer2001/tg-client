@@ -44,9 +44,21 @@ let package = Package(
             path: "Sources/FoundationExtensions"
         ),
         .target(
+            name: "TGClientInterfaces",
+            dependencies: [],
+            path: "Sources/TGClientInterfaces"
+        ),
+        .target(
+            name: "TgClientModels",
+            dependencies: ["TGClientInterfaces", "FoundationExtensions"],
+            path: "Sources/TgClientModels"
+        ),
+        .target(
             name: "TDLibAdapter",
             dependencies: [
                 "CTDLib",
+                "TGClientInterfaces",
+                "TgClientModels",
                 "FoundationExtensions",
                 .product(name: "Logging", package: "swift-log")
             ],
@@ -63,13 +75,13 @@ let package = Package(
         ),
         .target(
             name: "DigestCore",
-            dependencies: ["TDLibAdapter"],
+            dependencies: ["TGClientInterfaces", "TgClientModels"],
             path: "Sources/DigestCore"
         ),
         // Test targets
         .target(
             name: "TestHelpers",
-            dependencies: ["TDLibAdapter"],
+            dependencies: ["TGClientInterfaces", "TgClientModels", "FoundationExtensions", "TDLibAdapter"],
             path: "Tests/TestHelpers"
         ),
         .testTarget(
@@ -79,7 +91,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers", "TgClientUnitTests"],
+            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers"],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(

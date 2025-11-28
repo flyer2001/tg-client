@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Тип списка чатов в TDLib.

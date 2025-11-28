@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Formatted text (с поддержкой entities для форматирования).

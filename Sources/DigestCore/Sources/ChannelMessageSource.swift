@@ -1,6 +1,7 @@
 import Foundation
 import Logging
-import TDLibAdapter
+import TGClientInterfaces
+import TgClientModels
 
 /// Источник сообщений из Telegram каналов.
 ///

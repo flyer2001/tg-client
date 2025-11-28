@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Запрос для установки уровня детализации логирования TDLib.

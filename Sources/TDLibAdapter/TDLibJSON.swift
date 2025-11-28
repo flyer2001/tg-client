@@ -1,3 +1,4 @@
+import TgClientModels
 import Foundation
 
 /// Sendable-safe обёртка над TDLib JSON response.

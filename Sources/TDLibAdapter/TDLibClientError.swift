@@ -1,3 +1,4 @@
+import TgClientModels
 import Foundation
 
 /// Client-side ошибки TDLib адаптера (НЕ от TDLib сервера).

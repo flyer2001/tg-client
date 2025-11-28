@@ -1,5 +1,6 @@
 import Foundation
 import FoundationExtensions
+import TGClientInterfaces
 
 /// Энкодер для сериализации TDLibRequest в JSON формат TDLib.
 ///

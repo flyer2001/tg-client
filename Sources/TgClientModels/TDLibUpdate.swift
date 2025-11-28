@@ -1,5 +1,6 @@
 import Foundation
 import FoundationExtensions
+import TGClientInterfaces
 
 /// Type-safe представление всех возможных обновлений и ответов от TDLib.
 ///

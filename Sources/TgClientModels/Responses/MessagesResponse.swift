@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Ответ TDLib с списком сообщений (из getChatHistory).

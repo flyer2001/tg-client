@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Update от TDLib (уведомления о событиях).

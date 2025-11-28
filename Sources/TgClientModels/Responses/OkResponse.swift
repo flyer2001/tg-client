@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Универсальный успешный ответ TDLib без дополнительных данных.
@@ -11,4 +12,8 @@ public struct OkResponse: TDLibResponse, Sendable {
     enum CodingKeys: String, CodingKey {
         case type = "@type"
     }
+
+    #if DEBUG
+    public init() {}
+    #endif
 }

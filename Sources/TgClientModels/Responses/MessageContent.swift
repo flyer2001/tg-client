@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Содержимое сообщения (контент).

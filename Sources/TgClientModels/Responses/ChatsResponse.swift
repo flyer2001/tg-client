@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Модель ответа TDLib с списком ID чатов.

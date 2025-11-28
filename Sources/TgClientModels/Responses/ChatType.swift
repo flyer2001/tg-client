@@ -1,3 +1,4 @@
+import TGClientInterfaces
 import Foundation
 
 /// Тип чата в TDLib.
