@@ -11,6 +11,14 @@ public final class TDLibClient: @unchecked Sendable {
     private let ffi: TDLibFFI
     internal let appLogger: Logger
     private var parametersSet = false
+
+    /// Флаг для проверки что TDLib логирование было настроено перед созданием клиента.
+    ///
+    /// **Зачем:** Без вызова `configureTDLibLogging()` TDLib выводит огромное количество debug логов в stdout.
+    ///
+    /// **Concurrency:** `nonisolated(unsafe)` используется т.к. это простой boolean флаг для debug проверки.
+    /// Race condition не критична - worst case пропустим проверку один раз.
+    nonisolated(unsafe) private static var loggingConfigured = false
     internal let authorizationPollTimeout: Double
     private let maxAuthorizationAttempts: Int
     private let authorizationTimeout: TimeInterval
@@ -31,6 +39,22 @@ public final class TDLibClient: @unchecked Sendable {
 
     private var isStopped = false
     private let stopLock = NSLock()
+
+    /// Определяет название платформы для TDLib deviceModel.
+    ///
+    /// **Возвращает:**
+    /// - `"macOS"` на macOS
+    /// - `"Linux"` на Linux
+    /// - `"Unknown"` если платформа не определена
+    private static func detectDeviceModel() -> String {
+        #if os(macOS)
+        return "macOS"
+        #elseif os(Linux)
+        return "Linux"
+        #else
+        return "Unknown"
+        #endif
+    }
 
     /// Инициализирует TDLib клиент.
     ///
@@ -81,6 +105,9 @@ public final class TDLibClient: @unchecked Sendable {
     /// Применяет настройки уровня детализации и пути к лог-файлу из конфигурации.
     ///
     /// - Parameter config: Конфигурация с параметрами логирования
+    ///
+    /// - Important: **Обязательно** вызовите этот метод ПЕРЕД `start()` / `ffi.create()`,
+    ///   иначе TDLib будет выводить огромное количество debug логов в stdout.
     public static func configureTDLibLogging(config: TDConfig) {
         // Устанавливаем уровень детализации логов
         _ = td_execute("{\"@type\":\"setLogVerbosityLevel\",\"new_verbosity_level\":\(config.logVerbosity.rawValue)}")
@@ -97,6 +124,16 @@ public final class TDLibClient: @unchecked Sendable {
         }
         """
         _ = td_execute(logStreamRequest)
+
+        // Устанавливаем флаг для runtime проверки в start()
+        loggingConfigured = true
+    }
+
+    /// Сбрасывает флаг настройки логирования (только для тестов).
+    ///
+    /// **Использование:** Вызывайте в `tearDown()` / `deinit` тестов для изоляции тестов друг от друга.
+    internal static func resetLoggingConfiguredForTesting() {
+        loggingConfigured = false
     }
 
     /// Запускает TDLib клиент и выполняет авторизацию.
@@ -109,6 +146,16 @@ public final class TDLibClient: @unchecked Sendable {
     ///   - promptFor: Колбэк для запроса данных авторизации (номер телефона, код, пароль 2FA)
     public func start(config: TDConfig,
                       promptFor: @escaping @Sendable (AuthenticationPrompt) async -> String) async throws {
+        // ⚠️ КРИТИЧНО: Настраиваем логирование TDLib ПЕРЕД созданием клиента
+        // Иначе TDLib выводит огромное количество debug логов в stdout
+        TDLibClient.configureTDLibLogging(config: config)
+
+        // Runtime проверка: гарантируем что логирование настроено перед ffi.create()
+        precondition(
+            TDLibClient.loggingConfigured,
+            "⚠️ TDLib logging must be configured before ffi.create()! Call TDLibClient.configureTDLibLogging(config:) first."
+        )
+
         try ffi.create()
 
         // КРИТИЧНО: Запускаем background loop ДО authorization
@@ -223,6 +270,13 @@ public final class TDLibClient: @unchecked Sendable {
                         appLogger.info("✓ Database encryption enabled (key length: \(config.databaseEncryptionKey.count) chars)")
                     }
 
+                    let deviceModel = Self.detectDeviceModel()
+                    if deviceModel == "Unknown" {
+                        appLogger.warning("Не удалось определить платформу. Используется deviceModel='Unknown'. Поддерживаются: macOS, Linux.")
+                    } else {
+                        appLogger.info("Device model: \(deviceModel)")
+                    }
+
                     let request = SetTdlibParametersRequest(
                         useTestDc: false,
                         databaseDirectory: config.stateDir + "/db",
@@ -235,7 +289,7 @@ public final class TDLibClient: @unchecked Sendable {
                         apiId: config.apiId,
                         apiHash: config.apiHash,
                         systemLanguageCode: "en",
-                        deviceModel: "macOS",
+                        deviceModel: deviceModel,
                         systemVersion: "",
                         applicationVersion: "0.1.0"
                     )
@@ -293,6 +347,7 @@ public final class TDLibClient: @unchecked Sendable {
     /// - AsyncStream<Update> для updates (updateNewChat, updateUser и т.д.)
     /// - ResponseWaiters для request/response (ok, user, chats и т.д.)
     func startUpdatesLoop() {
+
         // КРИТИЧНО: Инициализируем updates stream ДО запуска loop
         // Иначе если никто не подписался на updates → updatesContinuation = nil → updates теряются
         if updatesContinuation == nil {
@@ -300,6 +355,7 @@ public final class TDLibClient: @unchecked Sendable {
             updatesStream = stream
             updatesContinuation = continuation
             appLogger.debug("startUpdatesLoop: initialized updates stream and continuation")
+        } else {
         }
 
         appLogger.info("startUpdatesLoop: background loop started")
@@ -314,12 +370,15 @@ public final class TDLibClient: @unchecked Sendable {
             }
 
             var loopCount = 0
+            var nilCount = 0
             while true {
                 self.stopLock.lock()
                 let stopped = self.isStopped
                 self.stopLock.unlock()
 
-                if stopped { break }
+                if stopped {
+                    break
+                }
 
                 loopCount += 1
                 if loopCount % 500 == 0 {
@@ -328,11 +387,16 @@ public final class TDLibClient: @unchecked Sendable {
 
                 do {
                     guard let json = try self.receive(timeout: 0.1) else {
+                        nilCount += 1
+                        if nilCount <= 5 || nilCount % 10 == 0 {
+                        }
                         continue
                     }
+                    nilCount = 0
                     continuation.yield(json)
                 } catch {
                     self.appLogger.error("startUpdatesLoop: receive() error: \(error)")
+                    break
                 }
             }
 
@@ -342,9 +406,14 @@ public final class TDLibClient: @unchecked Sendable {
 
         // Task для async обработки результатов
         updatesTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                return
+            }
 
+            var updateTaskLoopCount = 0
             for await tdlibJSON in stream {
+                updateTaskLoopCount += 1
+
                 guard let type = tdlibJSON["@type"] as? String else {
                     appLogger.trace("startUpdatesLoop: received object without @type")
                     continue
@@ -352,7 +421,7 @@ public final class TDLibClient: @unchecked Sendable {
 
                 appLogger.trace("startUpdatesLoop: received @type='\(type)'")
 
-                // 1. Ошибки — пробрасываем в waiter по @extra
+                // 1. Ошибки — пробрасываем в waiter по @extra или forType (auth errors)
                 if type == "error" {
                     do {
                         let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
@@ -366,8 +435,11 @@ public final class TDLibClient: @unchecked Sendable {
                                 appLogger.warning("startUpdatesLoop: no waiter for error with @extra='\(extra)' [\(error.code)]: \(error.message)")
                             }
                         } else {
-                            // TODO: Обработка ошибок без @extra (см. BACKLOG.md)
-                            appLogger.error("startUpdatesLoop: error response without @extra [\(error.code)]: \(error.message)")
+                            // Unsolicited error (например auth error) — отправляем waiter по типу "updateAuthorizationState"
+                            let result = await self.responseWaiters.resumeWaiter(forType: "updateAuthorizationState", with: error)
+                            if !result.wasResumed {
+                                appLogger.error("startUpdatesLoop: error response without @extra and no auth waiter [\(error.code)]: \(error.message)")
+                            }
                         }
                     } catch {
                         appLogger.error("startUpdatesLoop: failed to decode error response: \(error)")
@@ -391,7 +463,7 @@ public final class TDLibClient: @unchecked Sendable {
                         let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
                         let update = try JSONDecoder.tdlib().decode(Update.self, from: data)
                         appLogger.trace("startUpdatesLoop: decoded Update, yielding to stream")
-                        updatesContinuation?.yield(update)
+                        self.updatesContinuation?.yield(update)
                     } catch {
                         appLogger.warning("startUpdatesLoop: failed to decode update type '\(type)': \(error)")
                     }

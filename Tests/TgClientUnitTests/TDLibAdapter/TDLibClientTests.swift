@@ -54,17 +54,19 @@ struct TDLibClientTests {
         }
     }
 
-    @Test("Параллельные запросы getChat обрабатываются через FIFO")
-    func parallelRequestsHandledViaFIFO() async throws {
-        print("\n🧪 TEST START: parallelRequestsHandledViaFIFO")
+    @Test("Параллельные запросы getChat матчатся по @extra")
+    func parallelRequestsMatchByExtra() async throws {
+        print("\n🧪 TEST START: parallelRequestsMatchByExtra")
         let mockFFI = MockTDLibFFI()
+
+        // Мокаем 2 "шаблонных" response (id будет перезаписан из request)
         mockFFI.mockResponse(
             forRequestType: "getChat",
-            return: .success(ChatResponse(id: 123, type: .private(userId: 1), title: "First", unreadCount: 0, lastReadInboxMessageId: 0))
+            return: .success(ChatResponse(id: 0, type: .private(userId: 1), title: "Mock", unreadCount: 0, lastReadInboxMessageId: 0))
         )
         mockFFI.mockResponse(
             forRequestType: "getChat",
-            return: .success(ChatResponse(id: 456, type: .private(userId: 2), title: "Second", unreadCount: 0, lastReadInboxMessageId: 0))
+            return: .success(ChatResponse(id: 0, type: .private(userId: 2), title: "Mock", unreadCount: 0, lastReadInboxMessageId: 0))
         )
 
         let logger = Logger(label: "test")
@@ -76,10 +78,9 @@ struct TDLibClientTests {
 
         let (c1, c2) = try await (chat1, chat2)
 
+        // Главное: каждый request получил response с СВОИМ chatId
         #expect(c1.id == 123)
-        #expect(c1.title == "First")
         #expect(c2.id == 456)
-        #expect(c2.title == "Second")
     }
 
     /// 100 параллельных getChat запросов матчатся точно по @extra.

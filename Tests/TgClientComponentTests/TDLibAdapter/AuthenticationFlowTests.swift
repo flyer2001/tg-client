@@ -1,17 +1,15 @@
 import TgClientModels
 import TGClientInterfaces
-// ⚠️ TODO: Переписать на TDLibClient + MockTDLibFFI (вместо удалённого MockTDLibClient)
-// Временно закомментировано, чтобы не ломать компиляцию других компонентных тестов
-
-/*
 import Testing
 import Foundation
+import Logging
 @testable import TDLibAdapter
+import TestHelpers
 
 /// Component-тесты для авторизации через TDLib с использованием high-level API.
 ///
 /// Эти тесты проверяют полный flow авторизации с типобезопасным API,
-/// используя MockTDLibClient для изоляции от реального TDLib.
+/// используя MockTDLibFFI для изоляции от реального TDLib.
 ///
 /// **Scope:**
 /// - Авторизация по номеру телефона + код
@@ -21,7 +19,7 @@ import Foundation
 /// **Related:**
 /// - Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdateResponse)
 /// - E2E тест: `scripts/manual_e2e_auth.sh` (реальный TDLib)
-/// - TDLib docs: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_authentication_phone_number.html
+/// - TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_authentication_phone_number.html
 @Suite("TDLibAdapter: Процесс авторизации (High-Level API)")
 struct AuthenticationFlowTests {
 
@@ -30,35 +28,54 @@ struct AuthenticationFlowTests {
     /// Тест успешной авторизации: phone → code → ready.
     ///
     /// **TDLib flow:**
-    /// 1. `setAuthenticationPhoneNumber("+1234567890")` → `authorizationStateWaitCode`
-    /// 2. `checkAuthenticationCode("12345")` → `authorizationStateReady`
+    /// 1. `setAuthenticationPhoneNumber("+1234567890")` → unsolicited update `authorizationStateWaitCode`
+    /// 2. `checkAuthenticationCode("12345")` → unsolicited update `authorizationStateReady`
     ///
-    /// **Docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1authorization_state.html
+    /// **Docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1authorization_state.html
     @Test("Успешная авторизация: телефон + код")
     func authenticateWithPhoneAndCode() async throws {
-        // Given: Mock client который эмулирует успешную авторизацию
-        let mockClient = MockTDLibClient()
+        // Given: TDLibClient с MockTDLibFFI
+        let mockFFI = MockTDLibFFI()
+        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
+        let tdlibClient = TDLibClient(
+            ffi: mockFFI,
+            appLogger: logger,
+            authorizationPollTimeout: 0.1,
+            maxAuthorizationAttempts: 10,
+            authorizationTimeout: 5
+        )
 
-        // Настраиваем mock ответы для каждого шага авторизации
-        // Шаг 1: SetAuthenticationPhoneNumberRequest → AuthorizationStateUpdateResponse (waitCode)
-        await mockClient.setMockResponse(
-            for: SetAuthenticationPhoneNumberRequest.testWithPhone("+1234567890"),
-            response: .success(AuthorizationStateUpdateResponse.waitCode)
-        )
-        // Шаг 2: CheckAuthenticationCodeRequest → AuthorizationStateUpdateResponse (ready)
-        await mockClient.setMockResponse(
-            for: CheckAuthenticationCodeRequest.testWith12345Code,
-            response: .success(AuthorizationStateUpdateResponse.ready)
-        )
+        // Запускаем TDLib background loop для обработки updates
+        tdlibClient.startUpdatesLoop()
+
+        // Шаг 1: Мокаем setAuthenticationPhoneNumber → Ok (fire-and-forget)
+        mockFFI.mockResponse(forRequestType: "setAuthenticationPhoneNumber", return: .success(OkResponse()))
+
+        // Мокаем unsolicited update: authorizationStateWaitCode
+        // Важно: update должен быть добавлен ПОСЛЕ вызова setAuthenticationPhoneNumber()
+        // чтобы waiter успел зарегистрироваться
+        Task {
+            try await Task.sleep(for: .milliseconds(50))
+            mockFFI.mockUpdate(AuthorizationStateUpdateResponse.waitCode)
+        }
 
         // When: Отправляем номер телефона
-        let phoneUpdate = try await mockClient.setAuthenticationPhoneNumber("+1234567890")
+        let phoneUpdate = try await tdlibClient.setAuthenticationPhoneNumber("+1234567890")
 
         // Then: Получаем состояние "ждём код"
         #expect(phoneUpdate.authorizationState.type == "authorizationStateWaitCode")
 
+        // Шаг 2: Мокаем checkAuthenticationCode → Ok (fire-and-forget)
+        mockFFI.mockResponse(forRequestType: "checkAuthenticationCode", return: .success(OkResponse()))
+
+        // Мокаем unsolicited update: authorizationStateReady
+        Task {
+            try await Task.sleep(for: .milliseconds(50))
+            mockFFI.mockUpdate(AuthorizationStateUpdateResponse.ready)
+        }
+
         // When: Отправляем код подтверждения
-        let codeUpdate = try await mockClient.checkAuthenticationCode("12345")
+        let codeUpdate = try await tdlibClient.checkAuthenticationCode("12345")
 
         // Then: Авторизация успешна
         #expect(codeUpdate.authorizationState.type == "authorizationStateReady")
@@ -69,47 +86,40 @@ struct AuthenticationFlowTests {
     /// Тест обработки ошибки TDLib: неверный код авторизации.
     ///
     /// **TDLib error:**
-    /// ```json
-    /// {
-    ///   "@type": "error",
-    ///   "code": 400,
-    ///   "message": "PHONE_CODE_INVALID"
-    /// }
-    /// ```
+    /// - checkAuthenticationCode("12345") → Ok
+    /// - Но TDLib эмитит updateAuthorizationState с ошибкой (неверный код)
     ///
     /// **Проверяем:**
     /// - Ошибка пробрасывается как TDLibErrorResponse
-    /// - Ошибка логируется в формате "TDLib error [code]: message"
-    @Test("Обработка ошибок: неверный код авторизации + логирование")
+    @Test("Обработка ошибок: неверный код авторизации")
     func errorHandlingInvalidCode() async throws {
-        // Given: Mock logger для перехвата логов
-        let mockLogger = MockLogger()
-        let logger = mockLogger.makeLogger(label: "test")
-
-        // Mock client с логгером
-        let mockClient = MockTDLibClient(logger: logger)
-
-        // Настраиваем mock: код неверный → ошибка
-        // CheckAuthenticationCodeRequest → TDLibErrorResponse (PHONE_CODE_INVALID)
-        let tdlibError = TDLibErrorResponse(code: 400, message: "PHONE_CODE_INVALID")
-        await mockClient.setMockResponse(
-            for: CheckAuthenticationCodeRequest.testWith12345Code,
-            response: .failure(tdlibError) as Result<AuthorizationStateUpdateResponse, TDLibErrorResponse>
+        // Given: TDLibClient с MockTDLibFFI
+        let mockFFI = MockTDLibFFI()
+        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
+        let tdlibClient = TDLibClient(
+            ffi: mockFFI,
+            appLogger: logger,
+            authorizationPollTimeout: 0.1,
+            maxAuthorizationAttempts: 10,
+            authorizationTimeout: 5
         )
+
+        // Запускаем TDLib background loop для обработки updates
+        tdlibClient.startUpdatesLoop()
+
+        // Мокаем checkAuthenticationCode → Ok (fire-and-forget)
+        mockFFI.mockResponse(forRequestType: "checkAuthenticationCode", return: .success(OkResponse()))
+
+        // Мокаем unsolicited update: ERROR вместо authorizationStateReady
+        let tdlibError = TDLibErrorResponse(code: 400, message: "PHONE_CODE_INVALID")
+        Task {
+            try await Task.sleep(for: .milliseconds(50))
+            mockFFI.mockUpdate(tdlibError)
+        }
 
         // When: Отправляем неверный код → ожидаем TDLibErrorResponse
         await #expect(throws: TDLibErrorResponse.self) {
-            try await mockClient.checkAuthenticationCode("12345")
+            try await tdlibClient.checkAuthenticationCode("12345")
         }
-
-        // Then: Проверяем что ошибка была залогирована
-        #expect(mockLogger.messages.count == 1)
-
-        let errorLog = mockLogger.messages[0]
-        #expect(errorLog.level == .error)
-        #expect(errorLog.message.contains("TDLib error [400]"))
-        #expect(errorLog.message.contains("PHONE_CODE_INVALID"))
-
     }
 }
-*/

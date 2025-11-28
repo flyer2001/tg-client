@@ -14,6 +14,7 @@ public struct MessagesResponse: TDLibResponse, Sendable, Equatable {
     public let messages: [Message]
 
     enum CodingKeys: String, CodingKey {
+        case type = "@type"
         case totalCount
         case messages
     }

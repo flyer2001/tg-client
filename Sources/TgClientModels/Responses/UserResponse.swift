@@ -3,7 +3,7 @@ import Foundation
 
 /// Модель пользователя Telegram.
 ///
-/// **TDLib API:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1user.html
+/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1user.html
 public struct UserResponse: TDLibResponse, Sendable {
     public let type = "user"
 

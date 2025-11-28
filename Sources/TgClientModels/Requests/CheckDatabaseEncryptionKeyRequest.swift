@@ -3,7 +3,7 @@ import Foundation
 
 /// Запрос для проверки ключа шифрования базы данных.
 ///
-/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1check_database_encryption_key.html
+/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1check_database_encryption_key.html
 public struct CheckDatabaseEncryptionKeyRequest: TDLibRequest {
     public let type = "checkDatabaseEncryptionKey"
 

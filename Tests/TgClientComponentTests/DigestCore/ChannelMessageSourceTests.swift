@@ -10,9 +10,9 @@ import TestHelpers
 /// Component тесты для ChannelMessageSource.
 ///
 /// **Scope:**
-/// - Загрузка каналов через loadChats + updates stream
+/// - Загрузка каналов через LoadChatsRequest + updates stream
 /// - Фильтрация: только каналы (isChannel=true) с unreadCount > 0
-/// - Получение сообщений через getChatHistory
+/// - Получение сообщений через GetChatHistoryRequest
 ///
 /// **Связанная документация:**
 /// - E2E сценарий: <doc:FetchUnreadMessages>
@@ -31,6 +31,7 @@ struct ChannelMessageSourceTests {
     /// **Then:** Получаем 2 сообщения только из "Tech News"
     @Test("fetchUnreadMessages: каналы с непрочитанными")
     func fetchUnreadMessagesFromChannels() async throws {
+
         // Given: TDLibClient с MockTDLibFFI
         let mockFFI = MockTDLibFFI()
         let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
@@ -44,6 +45,7 @@ struct ChannelMessageSourceTests {
 
         // Запускаем TDLib background loop для обработки updates
         tdlibClient.startUpdatesLoop()
+
 
         // 1. Настраиваем loadChats → Ok (после эмиссии updates)
         let techNews = ChatResponse(
@@ -94,6 +96,7 @@ struct ChannelMessageSourceTests {
             return: .success(MessagesResponse(totalCount: 2, messages: [message1, message2]))
         )
 
+
         // When: Вызываем fetchUnreadMessages() с быстрыми таймаутами для тестов
         let messageSource = ChannelMessageSource(
             tdlib: tdlibClient,
@@ -103,6 +106,7 @@ struct ChannelMessageSourceTests {
             maxParallelHistoryRequests: 5,
             maxLoadChatsBatches: 5
         )
+
         let messages = try await messageSource.fetchUnreadMessages()
 
         // Then: Получили 2 сообщения из "Tech News" (единственный канал с unreadCount > 0)

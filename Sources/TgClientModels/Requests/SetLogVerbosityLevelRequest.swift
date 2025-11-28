@@ -6,7 +6,7 @@ import Foundation
 /// Устанавливает максимальный уровень логирования TDLib.
 /// Сообщения с уровнем выше указанного будут игнорироваться.
 ///
-/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1set_log_verbosity_level.html
+/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_log_verbosity_level.html
 public struct SetLogVerbosityLevelRequest: TDLibRequest {
     public let type = "setLogVerbosityLevel"
 
@@ -29,7 +29,7 @@ public struct SetLogVerbosityLevelRequest: TDLibRequest {
     ///
     /// Определяет количество информации, записываемой в лог-файл TDLib.
     ///
-    /// См. документацию: https://core.telegram.org/tdlib/.claude/classtd_1_1_log.html
+    /// См. документацию: https://core.telegram.org/tdlib/docs/classtd_1_1_log.html
     public enum Verbosity: Int32, Codable, Sendable {
         /// Только критические ошибки (FATAL)
         case fatal = 0

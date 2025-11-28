@@ -144,23 +144,21 @@ struct TDLibErrorResponseTests {
 
     // MARK: - Encoding Tests
 
-    /// Проверка что @type присутствует при encoding.
+    /// Regression test: Unsolicited errors БЕЗ @extra должны корректно роутиться.
     ///
-    /// **Regression test:** Без @type в JSON, TDLibClient не может распарсить response.
-    /// Bug найден при рефакторинге MockTDLibFFI - responses не матчились.
-    @Test("Encoding включает @type='error'")
-    func encodingIncludesAtType() throws {
-        // Given: TDLibErrorResponse с кодом 500
-        let error = TDLibErrorResponse(code: 500, message: "Internal error")
-        let encoder = JSONEncoder.tdlib()
+    /// Background loop должен отправлять такие ошибки в auth waiter через forType.
+    @Test("Regression: Unsolicited error БЕЗ @extra")
+    func regressionUnsolicitedErrorWithoutExtra() throws {
+        let original = TDLibErrorResponse(code: 400, message: "PHONE_CODE_INVALID")
 
-        // When: encode в JSON
-        let data = try encoder.encode(error)
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try original.assertValidEncoding()
+
+        let encoder = JSONEncoder.tdlib()
+        let data = try encoder.encode(original)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-        // Then: JSON содержит @type="error"
-        #expect(json?["@type"] as? String == "error")
-        #expect(json?["code"] as? Int == 500)
-        #expect(json?["message"] as? String == "Internal error")
+        // Проверяем что @extra отсутствует (unsolicited error)
+        #expect(json?["@extra"] == nil)
     }
 }

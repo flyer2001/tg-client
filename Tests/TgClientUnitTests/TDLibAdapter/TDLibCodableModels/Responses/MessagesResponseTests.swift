@@ -33,6 +33,9 @@ struct MessagesResponseTests {
             messages: [message1, message2]
         )
 
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try original.assertValidEncoding()
+
         let data = try original.toTDLibData()
         let decoded = try JSONDecoder.tdlib().decode(MessagesResponse.self, from: data)
 

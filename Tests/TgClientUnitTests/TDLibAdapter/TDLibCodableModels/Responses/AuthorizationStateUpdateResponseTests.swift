@@ -56,6 +56,9 @@ struct AuthorizationStateUpdateResponseTests {
         let stateInfo = AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters")
         let original = AuthorizationStateUpdateResponse(authorizationState: stateInfo)
 
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try original.assertValidEncoding()
+
         let data = try original.toTDLibData()
         let decoded = try decoder.decode(AuthorizationStateUpdateResponse.self, from: data)
 

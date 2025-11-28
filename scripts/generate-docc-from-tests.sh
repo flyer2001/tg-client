@@ -95,7 +95,7 @@ extract_test_body_comments() {
     echo "$comments"
 }
 
-# Функция для извлечения используемых Request/Response моделей из кода теста
+# Функция для извлечения используемых Request/Response моделей и хелперов из кода теста
 extract_model_references() {
     local file="$1"
     local models=""
@@ -106,8 +106,11 @@ extract_model_references() {
     # Ищем типы *Response (например, AuthorizationStateUpdateResponse, TDLibErrorResponse)
     local responses=$(grep -o '\b[A-Z][a-zA-Z]*Response\b' "$file" | sort | uniq)
 
+    # Ищем хелперы тестирования (конкретные имена классов)
+    local helpers=$(grep -oE '\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b' "$file" | sort | uniq)
+
     # Объединяем все типы и добавляем суффикс Tests
-    for model in $requests $responses; do
+    for model in $requests $responses $helpers; do
         # Добавляем Tests к имени модели
         models="${models}${model}Tests"$'\n'
     done
@@ -115,8 +118,9 @@ extract_model_references() {
     echo "$models" | grep -v '^$' | sort | uniq
 }
 
-# Функция для замены упоминаний моделей в комментариях на DoCC ссылки
+# Функция для замены упоминаний моделей и хелперов в комментариях на DoCC ссылки
 # Пример: "SetAuthenticationPhoneNumberRequest" -> "<doc:SetAuthenticationPhoneNumberRequestTests>"
+# Пример: "MockTDLibFFI" -> "<doc:MockTDLibFFITests>"
 add_doc_links_to_models() {
     local text="$1"
 
@@ -126,6 +130,9 @@ add_doc_links_to_models() {
 
     # Заменяем *Response на ссылки (например, AuthorizationStateUpdateResponse)
     text=$(printf '%s\n' "$text" | sed -E 's/[[:<:]]([A-Z][a-zA-Z]*Response)[[:>:]]/<doc:\1Tests>/g')
+
+    # Заменяем хелперы тестирования на ссылки (MockTDLibFFI, ResponseWaiters, TDLibClient, Update)
+    text=$(printf '%s\n' "$text" | sed -E 's/\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b/<doc:\1Tests>/g')
 
     printf '%s' "$text"
 }

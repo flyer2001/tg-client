@@ -3,6 +3,7 @@ import TGClientInterfaces
 import Foundation
 import Testing
 import FoundationExtensions
+import TestHelpers
 @testable import TDLibAdapter
 
 /// Тесты для декодирования OkResponse.
@@ -33,6 +34,9 @@ struct OkResponseTests {
         let data = Data(json.utf8)
         let decoder = JSONDecoder.tdlib()
         let response = try decoder.decode(OkResponse.self, from: data)
+
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try response.assertValidEncoding()
 
         #expect(response.type == "ok")
     }

@@ -23,6 +23,9 @@ struct ChatResponseTests {
             lastReadInboxMessageId: 999
         )
 
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try original.assertValidEncoding()
+
         let data = try original.toTDLibData()
         let decoded = try JSONDecoder.tdlib().decode(ChatResponse.self, from: data)
 

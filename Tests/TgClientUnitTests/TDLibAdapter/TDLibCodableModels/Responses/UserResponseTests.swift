@@ -8,7 +8,7 @@ import TestHelpers
 
 /// Тесты для модели UserResponse.
 ///
-/// **TDLib API:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1user.html
+/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1user.html
 ///
 /// TDLib возвращает информацию о пользователе при вызове метода `getMe`.
 /// Используется для верификации успешной авторизации.
@@ -19,7 +19,7 @@ struct UserResponseTests {
     ///
     /// Проверяет что модель корректно encode/decode через TDLib encoder/decoder.
     ///
-    /// **TDLib docs:** https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_me.html
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_me.html
     @Test("Round-trip кодирование пользователя с полными данными")
     func roundTripUserWithFullData() throws {
         let original = UserResponse(
@@ -28,6 +28,9 @@ struct UserResponseTests {
             lastName: "Doe",
             username: "johndoe"
         )
+
+        // Проверяем что @type включен в encoded JSON (критично для TDLibClient routing)
+        try original.assertValidEncoding()
 
         let data = try original.toTDLibData()
         let decoded = try JSONDecoder.tdlib().decode(UserResponse.self, from: data)
