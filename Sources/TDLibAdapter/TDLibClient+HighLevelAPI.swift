@@ -43,11 +43,6 @@ extension TDLibClient: TDLibClientProtocol {
 
     // MARK: - Chat Methods
 
-    public func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse {
-        let extra = send(GetChatsRequest(chatList: chatList, limit: limit))
-        return try await waitForResponse(forExtra: extra, ofType: ChatsResponse.self)
-    }
-
     public func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse {
         appLogger.debug("loadChats: sending request (chatList: \(chatList), limit: \(limit))")
         let extra = send(LoadChatsRequest(chatList: chatList, limit: limit))
@@ -78,7 +73,6 @@ extension TDLibClient: TDLibClientProtocol {
     /// **Technical Debt:**
     /// - ⚠️ ПРОБЛЕМА: AsyncStream можно consume только один раз
     /// - ✅ РЕШЕНИЕ (когда понадобится 2+ подписчиков): broadcast через массив continuation'ов
-    /// - 📝 См. TASKS.md → Technical Debt → "TDLibClient.updates broadcast"
     public var updates: AsyncStream<Update> {
         guard let stream = updatesStream else {
             fatalError("updates stream not initialized. Call startUpdatesLoop() first.")
@@ -123,8 +117,6 @@ extension TDLibClient: TDLibClientProtocol {
     /// **АРХИТЕКТУРНОЕ РЕШЕНИЕ:**
     /// Вместо polling через `receive()` (race condition!), регистрируем continuation
     /// в `responseWaiters`. Background loop вызовет continuation когда получит @extra.
-    ///
-    /// См. `.claude/ARCHITECTURE.md`: Error Handling Strategy
     ///
     /// - Parameters:
     ///   - extra: Уникальный @extra ID запроса (сгенерированный через generateExtra())

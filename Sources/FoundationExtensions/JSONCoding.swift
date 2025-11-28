@@ -51,7 +51,7 @@ extension JSONDecoder {
     /// **Использование:**
     /// ```swift
     /// let decoder = JSONDecoder.tdlib()
-    /// let response = try decoder.decode(ChatsResponse.self, from: data)
+    /// let response = try decoder.decode(MessagesResponse.self, from: data)
     /// ```
     ///
     /// **Маппинг полей:**
