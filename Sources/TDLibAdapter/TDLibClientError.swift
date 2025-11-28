@@ -6,6 +6,13 @@ import Foundation
 /// Эти ошибки генерируются внутри TDLibClient, а не возвращаются от TDLib.
 /// Для server-side ошибок используется ``TDLibErrorResponse``.
 public enum TDLibClientError: Error, Sendable {
+    /// Не удалось закодировать запрос в JSON формат TDLib.
+    ///
+    /// - Parameters:
+    ///   - requestType: Тип запроса (@type поле)
+    ///   - underlyingError: Исходная ошибка кодирования
+    case encodingFailed(requestType: String, underlyingError: Error)
+
     /// Не удалось декодировать ответ TDLib в ожидаемый тип.
     ///
     /// - Parameters:

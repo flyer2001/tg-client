@@ -40,6 +40,11 @@ public final class TDLibClient: @unchecked Sendable {
     private var isStopped = false
     private let stopLock = NSLock()
 
+    // Генерация @extra для Request-Response matching
+    private var extraCounter: UInt64 = 0
+    private let counterLock = NSLock()
+    private let sessionId = UUID().uuidString.prefix(8)
+
     /// Определяет название платформы для TDLib deviceModel.
     ///
     /// **Возвращает:**
@@ -173,21 +178,91 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
-    /// Отправляет типизированный запрос в TDLib, возвращает сгенерированный @extra.
+    /// Генерирует уникальный @extra ID для Request-Response matching.
+    ///
+    /// - Returns: Уникальный строковый идентификатор вида "sessionId_counter"
+    ///
+    /// **Thread Safety:** Метод thread-safe (использует NSLock).
+    func generateExtra() -> String {
+        counterLock.lock()
+        extraCounter &+= 1
+        let extra = "\(sessionId)_\(extraCounter)"
+        counterLock.unlock()
+        return extra
+    }
+
+    /// Отправляет запрос в TDLib и ожидает ответ (Request-Response pattern).
+    ///
+    /// **Решает Race Condition проблему:**
+    /// 1. Генерирует @extra
+    /// 2. Регистрирует waiter (continuation) ДО отправки
+    /// 3. Отправляет request с @extra
+    /// 4. Ожидает response с тем же @extra
+    /// 5. Декодирует TDLibJSON → Response
+    ///
+    /// - Parameters:
+    ///   - request: TDLib запрос для отправки
+    ///   - responseType: Тип ожидаемого response (для type safety)
+    /// - Returns: Декодированный response типа `Response`
+    /// - Throws: `TDLibClientError` если кодирование или декодирование не удалось
+    func sendAndWait<Request: TDLibRequest, Response: TDLibResponse>(
+        _ request: Request,
+        expecting responseType: Response.Type
+    ) async throws -> Response {
+        let extra = generateExtra()
+        let encoder = TDLibRequestEncoder()
+
+        // 1. Кодируем request с @extra
+        let data: Data
+        do {
+            data = try encoder.encode(request, withExtra: extra)
+        } catch {
+            throw TDLibClientError.encodingFailed(requestType: request.type, underlyingError: error)
+        }
+
+        // 2. Регистрируем waiter ДО отправки и ожидаем TDLibJSON
+        let tdlibJSON: TDLibJSON = try await withCheckedThrowingContinuation { continuation in
+            Task {
+                await responseWaiters.addWaiter(forExtra: extra, continuation: continuation)
+
+                // 3. Отправляем в TDLib
+                let json = String(decoding: data, as: UTF8.self)
+                ffi.send(json)
+            }
+        }
+
+        // 4. Проверяем на ошибку
+        let update = TDLibUpdate(tdlibJSON.data)
+        if case .error(let error) = update {
+            appLogger.error("TDLib error [\(error.code)]: \(error.message)")
+            throw error
+        }
+
+        // 5. Декодируем TDLibJSON → Response
+        do {
+            let responseData = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
+            let decoder = JSONDecoder.tdlib()
+            return try decoder.decode(Response.self, from: responseData)
+        } catch {
+            appLogger.error("sendAndWait: failed to decode response for @extra='\(extra)' as \(Response.self): \(error)")
+            throw TDLibClientError.decodeFailed(expectedType: "\(Response.self)", underlyingError: error)
+        }
+    }
+
+    /// Отправляет fire-and-forget запрос в TDLib (без ожидания response).
+    ///
+    /// **Use case:** Authentication flow — запросы отправляются БЕЗ ожидания response,
+    /// вместо этого мы ждём unsolicited updates `updateAuthorizationState`.
     ///
     /// - Parameter request: TDLib запрос
-    /// - Returns: Уникальный @extra ID для матчинга response
-    ///
-    /// **@discardableResult:** Для fire-and-forget запросов (authentication) return можно игнорировать.
-    @discardableResult
-    func send(_ request: TDLibRequest) -> String {
+    func send(_ request: TDLibRequest) {
         let encoder = TDLibRequestEncoder()
         guard let data = try? encoder.encode(request) else {
             fatalError("TDLibClient.send(): encoder failed for \(request.type)")
         }
 
         let json = String(decoding: data, as: UTF8.self)
-        return ffi.send(json)
+        ffi.send(json)
     }
 
     /// Получает ответ или обновление от TDLib.
@@ -475,11 +550,13 @@ public final class TDLibClient: @unchecked Sendable {
                     appLogger.debug("startUpdatesLoop: response type '\(type)' @extra='\(extra)', notifying waiter")
                     let result = await self.responseWaiters.resumeWaiter(forExtra: extra, with: tdlibJSON)
                     if !result.wasResumed {
-                        appLogger.warning("startUpdatesLoop: no waiter for @extra='\(extra)' (type '\(type)')")
+                        // КРИТИЧНО: response с @extra БЕЗ waiter = deadlock!
+                        // Waiter потерян в sendAndWait() → continuation никогда не resumе
+                        appLogger.error("startUpdatesLoop: DEADLOCK DETECTED - no waiter for @extra='\(extra)' (type '\(type)')")
                     }
-                } else {
-                    appLogger.warning("startUpdatesLoop: response type '\(type)' without @extra (unexpected)")
                 }
+                // Response БЕЗ @extra = fire-and-forget response (auth flow)
+                // Игнорируем (мы не ждём этих responses, они приходят от send())
             }
 
             await self.responseWaiters.cancelAll()

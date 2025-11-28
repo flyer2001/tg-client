@@ -26,15 +26,6 @@ final class CTDLibFFI: TDLibFFI {
     /// Используется для проверки thread safety.
     private var expectedThread: pthread_t?
 
-    /// Уникальный ID сессии FFI клиента.
-    private let sessionId = UUID().uuidString.prefix(8)
-
-    /// Счётчик для генерации уникального @extra.
-    private var extraCounter: UInt64 = 0
-
-    /// Lock для thread-safe инкремента extraCounter.
-    private let counterLock = NSLock()
-
     init() {}
 
     func create() throws {
@@ -50,35 +41,13 @@ final class CTDLibFFI: TDLibFFI {
         }
     }
 
-    @discardableResult
-    func send(_ request: String) -> String {
+    func send(_ request: String) {
         guard let client else {
             preconditionFailure("CTDLibFFI: client not created")
         }
 
-        // Парсим JSON (должен быть валидным от TDLibRequestEncoder)
-        guard let data = request.data(using: .utf8),
-              var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            fatalError("CTDLibFFI.send(): invalid JSON from encoder: \(request)")
-        }
-
-        // Генерируем @extra
-        counterLock.lock()
-        extraCounter &+= 1
-        let extra = "\(sessionId)_\(extraCounter)"
-        counterLock.unlock()
-
-        // Добавляем @extra
-        dict["@extra"] = extra
-
-        // Re-encode (не должен упасть)
-        guard let newData = try? JSONSerialization.data(withJSONObject: dict),
-              let jsonWithExtra = String(data: newData, encoding: .utf8) else {
-            fatalError("CTDLibFFI.send(): failed to encode with @extra")
-        }
-
-        td_json_client_send(client, jsonWithExtra)
-        return extra
+        // JSON уже содержит @extra (сгенерированный TDLibClient)
+        td_json_client_send(client, request)
     }
 
     func receive(timeout: Double) -> String? {

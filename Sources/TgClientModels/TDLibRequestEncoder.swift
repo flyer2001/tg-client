@@ -24,4 +24,26 @@ public struct TDLibRequestEncoder {
     public func encode(_ request: TDLibRequest) throws -> Data {
         return try jsonEncoder.encode(request)
     }
+
+    /// Кодирует TDLibRequest в JSON Data с добавлением @extra поля.
+    ///
+    /// - Parameters:
+    ///   - request: Запрос для кодирования
+    ///   - extra: Уникальный @extra ID для Request-Response matching
+    /// - Returns: JSON Data с @extra полем для отправки в TDLib
+    /// - Throws: EncodingError если кодирование не удалось
+    public func encode(_ request: TDLibRequest, withExtra extra: String) throws -> Data {
+        let data = try jsonEncoder.encode(request)
+        guard var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                request,
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Failed to parse encoded request as JSON Dictionary"
+                )
+            )
+        }
+        dict["@extra"] = extra
+        return try JSONSerialization.data(withJSONObject: dict)
+    }
 }

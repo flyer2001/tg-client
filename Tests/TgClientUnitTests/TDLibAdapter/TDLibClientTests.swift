@@ -171,4 +171,92 @@ struct TDLibClientTests {
         #expect(messageId == 42)
         #expect(unreadCount == 3)
     }
+
+    /// 100 параллельных getMe() запросов для проверки Race Condition.
+    ///
+    /// **Regression test:** Race Condition в ResponseWaiters (сессия 9, 2025-11-28)
+    ///
+    /// **Проблема:**
+    /// Клиент зависает на getMe() после авторизации на Linux. Логи показывают:
+    /// "no waiter for @extra='XXX' (type 'user')" → continuation никогда не получает ответ.
+    ///
+    /// **Root cause:**
+    /// ```swift
+    /// // TDLibClient+HighLevelAPI.swift:126
+    /// private func waitForResponse<T>(forExtra extra: String, ofType: T.Type) async throws -> T {
+    ///     let tdlibJSON: TDLibJSON = try await withCheckedThrowingContinuation { continuation in
+    ///         Task {  // ← Race condition! Task создаёт асинхронность
+    ///             await self.responseWaiters.addWaiter(forExtra: extra, continuation: continuation)
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// **Последовательность событий:**
+    /// 1. `send(GetMeRequest())` отправляет запрос → TDLib отвечает мгновенно (< 1ms)
+    /// 2. `withCheckedThrowingContinuation` создаёт continuation
+    /// 3. Внутри closure создаётся **новый Task** (асинхронный!)
+    /// 4. TDLib ответ приходит **ДО того как Task добавит waiter**
+    /// 5. Background loop пытается найти waiter → не находит → warning
+    /// 6. Continuation ждёт бесконечно → зависание
+    ///
+    /// **Решение:**
+    /// Объединить send() + waitForResponse() в sendAndWait():
+    /// 1. Сначала добавить waiter
+    /// 2. Затем отправить запрос
+    /// 3. Ждать ответ (continuation уже зарегистрирован)
+    ///
+    /// **Given:** MockTDLibFFI с 100 замоканными getMe responses
+    /// **When:** 100 параллельных getMe() запросов
+    /// **Then:** Все 100 запросов успешно завершаются (БЕЗ зависания)
+    @Test("100 параллельных getMe() запросов (проверка Race Condition)")
+    func parallelGetMeRequestsRaceCondition() async throws {
+        print("\n🧪 TEST START: parallelGetMeRequestsRaceCondition")
+        let mockFFI = MockTDLibFFI()
+
+        // Мокаем 100 responses для getMe
+        for i in 1...100 {
+            mockFFI.mockResponse(
+                forRequestType: "getMe",
+                return: .success(UserResponse(
+                    id: Int64(i),
+                    firstName: "User\(i)",
+                    lastName: "Test"
+                ))
+            )
+        }
+
+        let logger = Logger(label: "test")
+        let client = TDLibClient(ffi: mockFFI, appLogger: logger)
+        client.startUpdatesLoop()
+
+        // 100 параллельных запросов
+        print("📤 Отправляем 100 параллельных getMe() запросов...")
+        let results: [(index: Int, userId: Int64)] = try await withThrowingTaskGroup(
+            of: (Int, Int64).self
+        ) { group in
+            for i in 1...100 {
+                group.addTask {
+                    let user = try await client.getMe()
+                    return (i, user.id)
+                }
+            }
+
+            var collected: [(Int, Int64)] = []
+            for try await result in group {
+                collected.append(result)
+            }
+            return collected
+        }
+
+        print("✅ Получено \(results.count) ответов из 100")
+
+        // ASSERT: все 100 запросов успешно завершились
+        #expect(results.count == 100, "Ожидали 100 ответов, получили \(results.count)")
+
+        // ASSERT: каждый response содержит валидный userId
+        for (index, userId) in results {
+            #expect(userId > 0, "Request #\(index) получил некорректный userId=\(userId)")
+        }
+    }
 }

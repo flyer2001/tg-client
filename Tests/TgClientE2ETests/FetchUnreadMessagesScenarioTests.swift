@@ -1,4 +1,4 @@
-#if ENABLE_E2E_TESTS
+
 
 import TgClientModels
 import TGClientInterfaces
@@ -35,7 +35,9 @@ struct FetchUnreadMessagesScenarioTests {
     /// - Полный цикл: авторизация → loadChats → getChat → фильтрация каналов → getChatHistory
     /// - Структуру возвращаемых данных (SourceMessage)
     /// - Корректность ссылок на сообщения (для публичных каналов)
-    @Test("Получение непрочитанных сообщений через реальный TDLib")
+    ///
+    /// **ПРИМЕЧАНИЕ:** E2E тест disabled по умолчанию. Запускайте вручную из Xcode по необходимости.
+    @Test("Получение непрочитанных сообщений через реальный TDLib", .disabled())
     func fetchUnreadMessagesFromRealChannels() async throws {
         // 1. Создание TDLib клиента и загрузка config из переменных окружения
         let logger = Logger(label: "tg-client.e2e")
@@ -91,4 +93,3 @@ struct FetchUnreadMessagesScenarioTests {
     }
 }
 
-#endif // ENABLE_E2E_TESTS

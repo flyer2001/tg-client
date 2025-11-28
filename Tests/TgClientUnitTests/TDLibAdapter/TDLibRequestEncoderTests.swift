@@ -157,4 +157,33 @@ struct TDLibRequestEncoderTests {
         // Не должно быть camelCase ключей
         #expect(!keys.contains("chatList"), "Не должно быть ключа chatList")
     }
+
+    /// Проверяем что метод encode(withExtra:) добавляет @extra поле в JSON.
+    ///
+    /// **TDLib протокол:** @extra используется для Request-Response matching.
+    /// Клиент генерирует уникальный @extra, TDLib возвращает response с тем же @extra.
+    @Test("Encode с @extra полем")
+    func encodeWithExtra() throws {
+        // Given
+        let request = LoadChatsRequest(chatList: .main, limit: 100)
+        let extra = "test_extra_123"
+
+        // When
+        let data = try encoder.encode(request, withExtra: extra)
+        let jsonObject = try JSONSerialization.jsonObject(with: data)
+        let json = try #require(jsonObject as? [String: Any], "JSON должен быть словарём")
+
+        // Then: проверяем что @extra добавлен
+        #expect(json["@extra"] as? String == extra, "@extra должен быть добавлен")
+
+        // Then: проверяем что остальные поля сохранились
+        #expect(json["@type"] as? String == "loadChats", "@type должен сохраниться")
+        #expect(json["limit"] as? Int == 100, "limit должен сохраниться")
+        #expect(json["chat_list"] != nil, "chat_list должен сохраниться")
+
+        // Then: проверяем что snake_case маппинг работает
+        let chatListObject = json["chat_list"]
+        let chatList = try #require(chatListObject as? [String: Any], "chat_list должен быть словарём")
+        #expect(chatList["@type"] as? String == "chatListMain")
+    }
 }

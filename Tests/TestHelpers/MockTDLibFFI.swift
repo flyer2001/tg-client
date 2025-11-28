@@ -6,16 +6,24 @@ import Foundation
 /// Mock реализация TDLibFFI для Unit-тестов и Component-тестов.
 ///
 /// Имитирует поведение реального TDLib FFI слоя (CTDLibFFI):
-/// - `send()` генерирует уникальный @extra и сохраняет response в `responsesByExtra`
+/// - `send()` принимает JSON с @extra (для Request-Response) или БЕЗ @extra (для fire-and-forget)
+/// - Responses с @extra сохраняются в `responsesByExtra` для матчинга
 /// - `receive()` возвращает responses по @extra (НЕ FIFO!) или updates (FIFO)
 ///
 /// ## @extra Matching (Request-Response)
 ///
 /// Для точного матчинга параллельных запросов:
-/// - `send()` генерирует уникальный @extra (mock_1, mock_2...)
+/// - TDLibClient генерирует уникальный @extra через `sendAndWait()`
 /// - Response сохраняется в Dictionary `responsesByExtra[@extra]`
 /// - `receive()` возвращает любой response из Dictionary (порядок НЕ важен)
 /// - TDLibClient матчит response по @extra через ResponseWaiters
+///
+/// ## Fire-and-Forget (Auth Flow)
+///
+/// Для auth flow запросов БЕЗ @extra:
+/// - TDLibClient отправляет через `send()` БЕЗ @extra
+/// - MockTDLibFFI игнорирует response (не сохраняет)
+/// - Auth flow ждёт unsolicited updates (`updateAuthorizationState`) через `mockUpdate()`
 ///
 /// ## Updates (Asynchronous)
 ///
@@ -60,9 +68,6 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     /// Поток, на котором был первый вызов receive().
     /// Используется для проверки thread safety (как в CTDLibFFI).
     private var expectedThread: pthread_t?
-
-    /// Счётчик для генерации уникального @extra.
-    private var extraCounter: UInt64 = 0
 
     public init() {}
 
@@ -152,8 +157,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         pendingUpdates.append(json)
     }
 
-    @discardableResult
-    public func send(_ request: String) -> String {
+    public func send(_ request: String) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -163,24 +167,38 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             fatalError("MockTDLibFFI.send(): invalid JSON or missing @type")
         }
 
-        // Генерируем уникальный @extra (как реальный TDLib FFI)
-        extraCounter &+= 1
-        let generatedExtra = "mock_\(extraCounter)"
+        // Парсим @extra из JSON (OPTIONAL!)
+        // Fire-and-forget запросы (auth flow) НЕ имеют @extra
+        // Request-Response запросы (sendAndWait) имеют @extra
+        let extra = parsed["@extra"] as? String
 
         // Специальная логика для loadChats (имитация Real TDLib API)
+        // loadChats всегда вызывается через sendAndWait() → требует @extra
         if requestType == "loadChats" {
-            handleLoadChats(parsed: parsed, extra: generatedExtra)
-            return generatedExtra
+            guard let extra = extra else {
+                fatalError("MockTDLibFFI.send(): loadChats requires @extra (must be called via sendAndWait)")
+            }
+            handleLoadChats(parsed: parsed, extra: extra)
+            return
         }
 
         // Специальная логика для getChat (параметры request → response)
+        // getChat всегда вызывается через sendAndWait() → требует @extra
         if requestType == "getChat" {
-            handleGetChat(parsed: parsed, extra: generatedExtra)
-            return generatedExtra
+            guard let extra = extra else {
+                fatalError("MockTDLibFFI.send(): getChat requires @extra (must be called via sendAndWait)")
+            }
+            handleGetChat(parsed: parsed, extra: extra)
+            return
         }
 
         // Обычная FIFO логика для других запросов
         guard var queue = mockedResponses[requestType], !queue.isEmpty else {
+            // Fire-and-forget (без @extra) и нет мокнутого response → OK (игнорируем)
+            // Auth flow использует fire-and-forget БЕЗ моков (только unsolicited updates)
+            if extra == nil {
+                return
+            }
             fatalError("MockTDLibFFI.send(): no mocked response for @type='\(requestType)'")
         }
 
@@ -191,22 +209,26 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             mockedResponses[requestType] = queue
         }
 
-        // Кодируем response с @extra (используем toTDLibJSON helper)
+        // Fire-and-forget (без @extra) → не сохраняем response (игнорируем)
+        guard let extra = extra else {
+            return
+        }
+
+        // Request-Response (с @extra) → кодируем и сохраняем response для матчинга
         let jsonString: String
         do {
             switch result {
             case .success(let response):
-                jsonString = try response.toTDLibJSON(withExtra: generatedExtra)
+                jsonString = try response.toTDLibJSON(withExtra: extra)
             case .failure(let error):
-                jsonString = try error.toTDLibJSON(withExtra: generatedExtra)
+                jsonString = try error.toTDLibJSON(withExtra: extra)
             }
         } catch {
             fatalError("MockTDLibFFI.send(): failed to encode response: \(error)")
         }
 
         // Сохраняем response по @extra для точного матчинга
-        responsesByExtra[generatedExtra] = jsonString
-        return generatedExtra
+        responsesByExtra[extra] = jsonString
     }
 
     private func handleLoadChats(parsed: [String: Any], extra: String) {

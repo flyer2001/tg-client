@@ -1,3 +1,57 @@
+- **2025-11-28 (сессия 11):** ✅ False positive WARNING устранен! Убрана генерация @extra из fire-and-forget запросов (send() БЕЗ @extra), MockTDLibFFI поддерживает optional @extra, WARNING → ERROR для потерянных waiters (DEADLOCK detection). E2E тест disabled по умолчанию через .disabled() trait (запуск вручную из Xcode). 128 тестов GREEN на macOS, боевой клиент работает (600 чатов, 79 каналов, 3 сообщения) БЕЗ WARNING в логах.
+
+## 2025-11-28 (сессия 10)
+
+### 🎯 Цель сессии
+Исправить критический баг Race Condition в ResponseWaiters (клиент зависал на getMe()).
+
+### ✅ Выполнено
+
+**Архитектурный рефакторинг @extra генерации:**
+1. **Breaking change в TDLibFFI protocol:** `send()` теперь `void` (без return)
+2. **Генерация @extra перемещена** из FFI в TDLibClient
+   - `TDLibClient.generateExtra()` - thread-safe счётчик
+   - `TDLibRequestEncoder.encode(withExtra:)` - добавляет @extra в JSON
+3. **Новый метод `sendAndWait()`** для Request-Response pattern
+   - Атомарная операция: generateExtra() → addWaiter() → send()
+   - Устраняет race condition (waiter регистрируется ДО отправки)
+4. **Переписано высокоуровневое API:** getMe(), loadChats(), getChat(), getChatHistory()
+5. **Cleanup:** удалён старый `waitForResponse(forExtra:)`
+6. **Добавлен `TDLibClientError.encodingFailed`** для proper error handling
+
+**Тестирование:**
+- ✅ 127 Unit/Component тестов GREEN (удалён 1 устаревший MockTDLibFFITests)
+- ✅ E2E тест GREEN (запущен вручную из Xcode, 533 чата, 16 непрочитанных)
+- ✅ Боевой клиент на macOS GREEN (453 чата, 6 непрочитанных, 1 сообщение)
+- ⚠️ WARNING "no waiter for @extra" остался (требует дополнительного исправления)
+
+### 🐛 Обнаруженные проблемы
+
+1. **⚠️ @extra в fire-and-forget запросах** (НЕ критично, но мусорный лог)
+   - `send()` сейчас генерирует @extra для auth flow
+   - TDLib возвращает response, но waiter не нужен (fire-and-forget)
+   - Появляется WARNING "no waiter for @extra" (false positive)
+   - **Решение:** убрать генерацию @extra из `send()`, оставить только в `sendAndWait()`
+
+2. **swift test -Xswiftc -DENABLE_E2E_TESTS** не работает из CLI (работает только из Xcode)
+
+3. **Exit code 134** при завершении main.swift (краш в deinit?, не блокирует работу)
+
+### 📊 Статистика
+- Изменённые файлы: 8 (TDLibFFI, CTDLibFFI, MockTDLibFFI, TDLibClient, TDLibRequestEncoder, TDLibClientError, HighLevelAPI, TDLibRequestEncoderTests)
+- Удалённые тесты: 1 файл (MockTDLibFFITests.swift, 3 теста)
+- Новые тесты: 1 (TDLibRequestEncoderTests.encodeWithExtra)
+- Regression тест: parallelGetMeRequestsRaceCondition (100 параллельных getMe)
+
+### 📝 Следующие шаги
+1. Исправить @extra в fire-and-forget запросах (Приоритет 1)
+2. Проверить на Linux VPS
+3. Создать 3 коммита (refactor, feat, test)
+4. Создать релиз v0.2.0
+5. Сгенерировать DoCC документацию
+
+---
+
 ## 2025-11-28 (Сессия 8): Удаление getChats + чистка ссылок
 
 ### Цель сессии
