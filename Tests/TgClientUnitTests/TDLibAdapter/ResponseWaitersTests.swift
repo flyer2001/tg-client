@@ -1,3 +1,5 @@
+import TgClientModels
+import TGClientInterfaces
 import Foundation
 import Testing
 @preconcurrency @testable import TDLibAdapter
@@ -5,16 +7,30 @@ import Testing
 // MARK: - Test Helpers
 
 extension ResponseWaiters {
-    /// Для тестов: регистрирует waiter и вызывает callback когда готово.
+    /// Для тестов: регистрирует waiter по @extra и вызывает callback когда готово.
     ///
     /// Гарантирует что continuation зарегистрирован до возврата из callback.
     nonisolated func addWaiterWithCallback(
-        for type: String,
+        forExtra extra: String,
         continuation: CheckedContinuation<TDLibJSON, Error>,
         onRegistered: @escaping @Sendable () -> Void
     ) {
         Task {
-            await self.addWaiter(for: type, continuation: continuation)
+            await self.addWaiter(forExtra: extra, continuation: continuation)
+            onRegistered()  // ✅ Сигнал: continuation зарегистрирован
+        }
+    }
+
+    /// Для тестов: регистрирует waiter по типу (для unsolicited updates).
+    ///
+    /// Гарантирует что continuation зарегистрирован до возврата из callback.
+    nonisolated func addWaiterWithCallback(
+        forType type: String,
+        continuation: CheckedContinuation<TDLibJSON, Error>,
+        onRegistered: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await self.addWaiter(forType: type, continuation: continuation)
             onRegistered()  // ✅ Сигнал: continuation зарегистрирован
         }
     }
@@ -23,131 +39,184 @@ extension ResponseWaiters {
 /// Unit-тесты для ResponseWaiters - механизм управления continuations для async запросов.
 ///
 /// **Назначение:**
-/// ResponseWaiters управляет очередью ожидающих continuations для каждого типа запроса,
-/// обеспечивая thread-safe FIFO обработку ответов.
+/// ResponseWaiters управляет continuations для запросов к TDLib.
+/// Каждый запрос идентифицируется уникальным @extra ключом.
+///
+/// **@extra matching:**
+/// - TDLibClient генерирует уникальный @extra для каждого запроса
+/// - TDLib копирует @extra из request в response
+/// - ResponseWaiters матчит response к waiter по @extra
 ///
 /// **Используется в:**
 /// - TDLibClient (Real) - для обработки ответов от TDLib
-/// - MockTDLibClient (Test) - для имитации поведения Real клиента
-@Suite("Unit: ResponseWaiters - continuation management")
+@Suite("Unit: ResponseWaiters - @extra matching")
 struct ResponseWaitersTests {
 
-    /// Добавление waiter и успешное resume с response.
+    // MARK: - Basic @extra Matching
+
+    /// Базовый сценарий: добавление waiter и успешный resume по @extra.
     ///
     /// **Given:** ResponseWaiters без waiters
-    /// **When:** Добавляем waiter → resume с success
+    /// **When:** Добавляем waiter с @extra="req_1" → resume с тем же @extra
     /// **Then:** Continuation получает response
-    @Test("addWaiter + resumeWithSuccess → continuation получает response")
-    func addWaiterAndResumeWithSuccess() async throws {
+    @Test("addWaiter + resume по @extra → continuation получает response")
+    func addWaiterAndResumeByExtra() async throws {
         let waiters = ResponseWaiters()
-        let expectedResponse = try TDLibJSON(parsing: ["result": "success", "value": 42])
+        let extra = "req_123"
+        let expectedResponse = try TDLibJSON(parsing: ["@type": "chat", "id": 42, "@extra": extra])
 
-        // AsyncStream для синхронизации
         let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
 
-        // Создаём task с continuation (проверки внутри, возвращаем Bool)
         let task = Task<Bool, Error> {
             let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                waiters.addWaiterWithCallback(for: "testRequest", continuation: continuation) {
-                    streamContinuation.yield(())  // ✅ Сигнал: зарегистрирован
+                waiters.addWaiterWithCallback(forExtra: extra, continuation: continuation) {
+                    streamContinuation.yield(())
                 }
             }
-            // Проверяем результат внутри task
-            return result["result"] as? String == "success" && result["value"] as? Int == 42
+            return result["id"] as? Int == 42
         }
 
-        // Ждём подтверждения регистрации
         _ = await stream.first(where: { _ in true })
 
-        // Resume с response
-        let resumeResult = await waiters.resumeWaiter(for: "testRequest", with: expectedResponse)
+        let resumeResult = await waiters.resumeWaiter(forExtra: extra, with: expectedResponse)
         #expect(resumeResult.wasResumed)
 
-        // Получаем результат
         let success = try await task.value
-
-        // Then: Проверяем успех
         #expect(success)
     }
 
-    /// Добавление waiter и resume с error.
+    /// Resume waiter с error по @extra.
     ///
-    /// **Given:** ResponseWaiters без waiters
-    /// **When:** Добавляем waiter → resume с error
+    /// **Given:** Waiter зарегистрирован с @extra="err_req"
+    /// **When:** Resume с error для того же @extra
     /// **Then:** Continuation бросает ошибку
-    @Test("addWaiter + resumeWithError → continuation бросает ошибку")
-    func addWaiterAndResumeWithError() async throws {
+    @Test("resume с error по @extra → continuation бросает ошибку")
+    func resumeWithErrorByExtra() async throws {
         let waiters = ResponseWaiters()
-        let expectedError = NSError(domain: "test", code: 404, userInfo: [NSLocalizedDescriptionKey: "Not found"])
+        let extra = "err_req"
+        let expectedError = NSError(domain: "TDLib", code: 404, userInfo: [NSLocalizedDescriptionKey: "Chat not found"])
 
-        // AsyncStream для синхронизации
         let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
 
-        // Создаём task с continuation (проверки внутри, возвращаем Bool)
         let task = Task<Bool, Error> {
             do {
                 _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                    waiters.addWaiterWithCallback(for: "testRequest", continuation: continuation) {
-                        streamContinuation.yield(())  // ✅ Сигнал: зарегистрирован
+                    waiters.addWaiterWithCallback(forExtra: extra, continuation: continuation) {
+                        streamContinuation.yield(())
                     }
                 }
-                return false  // Не должны попасть сюда
+                return false
             } catch {
-                // Проверяем ошибку внутри task
                 let nsError = error as NSError
-                return nsError.domain == "test" && nsError.code == 404
+                return nsError.domain == "TDLib" && nsError.code == 404
             }
         }
 
-        // Ждём подтверждения регистрации
         _ = await stream.first(where: { _ in true })
 
-        // Resume с error
-        let resumeResult = await waiters.resumeWaiter(for: "testRequest", with: expectedError)
+        let resumeResult = await waiters.resumeWaiter(forExtra: extra, with: expectedError)
         #expect(resumeResult.wasResumed)
 
-        // Получаем результат
         let errorMatched = try await task.value
-
-        // Then: Проверяем что ошибка совпала
         #expect(errorMatched)
     }
 
-    /// Resume без waiters → возвращает .noWaiter.
+    /// Resume с несуществующим @extra → .noWaiter.
     ///
     /// **Given:** ResponseWaiters без waiters
-    /// **When:** Вызываем resumeWaiter
+    /// **When:** Resume с неизвестным @extra
     /// **Then:** Возвращает .noWaiter (не крашится)
-    @Test("resumeWaiter без waiters → .noWaiter")
-    func resumeWaiterWithoutWaiters() async throws {
+    @Test("resume с несуществующим @extra → .noWaiter")
+    func resumeWithUnknownExtra() async throws {
         let waiters = ResponseWaiters()
-        let testResponse = try TDLibJSON(parsing: ["test": "value"])
+        let response = try TDLibJSON(parsing: ["@type": "ok", "@extra": "unknown_123"])
 
-        // When: Resume без добавления waiter
-        let result = await waiters.resumeWaiter(for: "nonExistent", with: testResponse)
+        let result = await waiters.resumeWaiter(forExtra: "unknown_123", with: response)
 
-        // Then: Возвращает .noWaiter
         #expect(!result.wasResumed)
         #expect(result == .noWaiter)
     }
 
-    /// cancelAll() → все continuations получают CancellationError.
+    // MARK: - Precise Matching (не FIFO!)
+
+    /// Точный матчинг: 3 параллельных запроса, resume в обратном порядке.
     ///
-    /// **Given:** 3 waiters разных типов
-    /// **When:** Вызываем cancelAll()
-    /// **Then:** Все continuations бросают CancellationError
+    /// **Проблема старой реализации:**
+    /// Ключ = requestType → параллельные getChat попадают в одну FIFO очередь.
+    /// Response для chatId=456 может прийти к waiter для chatId=123.
+    ///
+    /// **Given:** 3 waiters: @extra="req_1", "req_2", "req_3"
+    /// **When:** Resume в ОБРАТНОМ порядке: req_3 → req_2 → req_1
+    /// **Then:** Каждый waiter получает СВОЙ response (точный матчинг по @extra)
+    @Test("@extra matching: точный матчинг, не FIFO")
+    func preciseMatchingNotFIFO() async throws {
+        let waiters = ResponseWaiters()
+
+        let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
+
+        // 3 waiters с разными @extra
+        let task1 = Task<String, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forExtra: "req_1", continuation: continuation) {
+                    streamContinuation.yield(())
+                }
+            }
+            return result["data"] as? String ?? "none"
+        }
+        let task2 = Task<String, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forExtra: "req_2", continuation: continuation) {
+                    streamContinuation.yield(())
+                }
+            }
+            return result["data"] as? String ?? "none"
+        }
+        let task3 = Task<String, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forExtra: "req_3", continuation: continuation) {
+                    streamContinuation.yield(())
+                }
+            }
+            return result["data"] as? String ?? "none"
+        }
+
+        // Ждём регистрации всех 3
+        for _ in 0..<3 {
+            _ = await stream.first(where: { _ in true })
+        }
+
+        // Resume в ОБРАТНОМ порядке (если бы был FIFO — req_1 получил бы data_3)
+        let response3 = try TDLibJSON(parsing: ["data": "data_3", "@extra": "req_3"])
+        let response2 = try TDLibJSON(parsing: ["data": "data_2", "@extra": "req_2"])
+        let response1 = try TDLibJSON(parsing: ["data": "data_1", "@extra": "req_1"])
+
+        #expect((await waiters.resumeWaiter(forExtra: "req_3", with: response3)).wasResumed)
+        #expect((await waiters.resumeWaiter(forExtra: "req_2", with: response2)).wasResumed)
+        #expect((await waiters.resumeWaiter(forExtra: "req_1", with: response1)).wasResumed)
+
+        // Каждый получил СВОЙ response
+        #expect(try await task1.value == "data_1")
+        #expect(try await task2.value == "data_2")
+        #expect(try await task3.value == "data_3")
+    }
+
+    // MARK: - cancelAll
+
+    /// cancelAll() отменяет все ожидающие continuations.
+    ///
+    /// **Given:** 3 waiters с разными @extra
+    /// **When:** cancelAll()
+    /// **Then:** Все continuations получают CancellationError
     @Test("cancelAll → все continuations получают CancellationError")
     func cancelAllWaiters() async throws {
         let waiters = ResponseWaiters()
 
-        // AsyncStream для синхронизации 3 регистраций
         let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
 
-        // Создаём 3 task с continuations разных типов (возвращаем Bool)
         let task1 = Task<Bool, Error> {
             do {
                 _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                    waiters.addWaiterWithCallback(for: "getChat", continuation: continuation) {
+                    waiters.addWaiterWithCallback(forExtra: "cancel_1", continuation: continuation) {
                         streamContinuation.yield(())
                     }
                 }
@@ -159,7 +228,7 @@ struct ResponseWaitersTests {
         let task2 = Task<Bool, Error> {
             do {
                 _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                    waiters.addWaiterWithCallback(for: "getMe", continuation: continuation) {
+                    waiters.addWaiterWithCallback(forExtra: "cancel_2", continuation: continuation) {
                         streamContinuation.yield(())
                     }
                 }
@@ -171,7 +240,7 @@ struct ResponseWaitersTests {
         let task3 = Task<Bool, Error> {
             do {
                 _ = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                    waiters.addWaiterWithCallback(for: "getChatHistory", continuation: continuation) {
+                    waiters.addWaiterWithCallback(forExtra: "cancel_3", continuation: continuation) {
                         streamContinuation.yield(())
                     }
                 }
@@ -181,78 +250,116 @@ struct ResponseWaitersTests {
             }
         }
 
-        // Ждём регистрации всех 3 waiters
         for _ in 0..<3 {
             _ = await stream.first(where: { _ in true })
         }
 
-        // When: Отменяем все waiters
         await waiters.cancelAll()
 
-        // Then: Все 3 continuations бросили CancellationError
-        let cancelled1 = try await task1.value
-        let cancelled2 = try await task2.value
-        let cancelled3 = try await task3.value
-
-        #expect(cancelled1)
-        #expect(cancelled2)
-        #expect(cancelled3)
+        #expect(try await task1.value)
+        #expect(try await task2.value)
+        #expect(try await task3.value)
     }
 
-    /// Thread-safety: параллельные addWaiter + resumeWaiter.
-    ///
-    /// **Given:** ResponseWaiters
-    /// **When:** 10 параллельных задач добавляют waiters + 10 задач resume
-    /// **Then:** Все операции выполняются thread-safe, continuations получают ответы
-    @Test("Thread-safety: параллельные операции")
-    func threadSafetyParallelOperations() async throws {
-        let waiters = ResponseWaiters()
-        let iterations = 10
+    // MARK: - Type-based Matching (для unsolicited updates)
 
-        // AsyncStream для синхронизации 10 регистраций
+    /// addWaiter(forType:) для unsolicited updates (updateAuthorizationState).
+    ///
+    /// **Use case:** Authorization flow ждёт `updateAuthorizationState` без @extra
+    /// (TDLib отправляет их сам, не в ответ на request).
+    ///
+    /// **Given:** ResponseWaiters без waiters
+    /// **When:** addWaiter(forType: "updateAuthorizationState") → resume с тем же типом
+    /// **Then:** Continuation получает update
+    @Test("addWaiter(forType:) + resume по типу → continuation получает update")
+    func addWaiterByTypeAndResumeByType() async throws {
+        let waiters = ResponseWaiters()
+        let updateType = "updateAuthorizationState"
+        let expectedUpdate = try TDLibJSON(parsing: [
+            "@type": updateType,
+            "authorization_state": ["@type": "authorizationStateReady"]
+        ])
+
         let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
 
-        // Создаём 10 параллельных tasks
-        var tasks: [Task<Int, Error>] = []
-        for _ in 0..<iterations {
-            let task = Task {
-                let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
-                    waiters.addWaiterWithCallback(for: "parallelTest", continuation: continuation) {
-                        streamContinuation.yield(())
-                    }
+        let task = Task<Bool, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forType: updateType, continuation: continuation) {
+                    streamContinuation.yield(())
                 }
-                guard let index = result["index"] as? Int else {
-                    throw NSError(domain: "test", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing index"])
-                }
-                return index
             }
-            tasks.append(task)
+            return result["@type"] as? String == updateType
         }
 
-        // Ждём регистрации всех 10 waiters
-        for _ in 0..<iterations {
-            _ = await stream.first(where: { _ in true })
+        _ = await stream.first(where: { _ in true })
+
+        let resumeResult = await waiters.resumeWaiter(forType: updateType, with: expectedUpdate)
+        #expect(resumeResult.wasResumed)
+
+        let success = try await task.value
+        #expect(success)
+    }
+
+    /// Resume с несуществующим типом → .noWaiter.
+    ///
+    /// **Given:** ResponseWaiters без waiters
+    /// **When:** Resume с неизвестным типом
+    /// **Then:** Возвращает .noWaiter
+    @Test("resume с несуществующим типом → .noWaiter")
+    func resumeWithUnknownType() async throws {
+        let waiters = ResponseWaiters()
+        let update = try TDLibJSON(parsing: ["@type": "updateNewChat", "chat": ["id": 123]])
+
+        let result = await waiters.resumeWaiter(forType: "updateNewChat", with: update)
+
+        #expect(!result.wasResumed)
+        #expect(result == .noWaiter)
+    }
+
+    /// Смешанный сценарий: @extra и @type waiters одновременно (изоляция).
+    ///
+    /// **Given:** ResponseWaiters с 2 waiters: один по @extra, один по @type
+    /// **When:** Resume оба
+    /// **Then:** Каждый получает свой response, нет cross-matching
+    @Test("@extra и @type waiters не мешают друг другу")
+    func mixedExtraAndTypeWaiters() async throws {
+        let waiters = ResponseWaiters()
+
+        let (stream, streamContinuation) = AsyncStream.makeStream(of: Void.self)
+
+        // Waiter по @extra (request/response)
+        let extraTask = Task<String, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forExtra: "req_42", continuation: continuation) {
+                    streamContinuation.yield(())
+                }
+            }
+            return result["data"] as? String ?? "none"
         }
 
-        // Resume все waiters
-        for i in 0..<iterations {
-            let response = try TDLibJSON(parsing: ["index": i])
-            let resumeResult = await waiters.resumeWaiter(for: "parallelTest", with: response)
-            #expect(resumeResult.wasResumed)
+        // Waiter по @type (unsolicited update)
+        let typeTask = Task<String, Error> {
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+                waiters.addWaiterWithCallback(forType: "updateAuthorizationState", continuation: continuation) {
+                    streamContinuation.yield(())
+                }
+            }
+            return result["@type"] as? String ?? "none"
         }
 
-        // Собираем результаты
-        var receivedIndices: [Int] = []
-        for task in tasks {
-            let index = try await task.value
-            receivedIndices.append(index)
-        }
+        // Ждём регистрации обоих
+        _ = await stream.first(where: { _ in true })
+        _ = await stream.first(where: { _ in true })
 
-        // Then: Все 10 continuations получили ответы
-        #expect(receivedIndices.count == iterations)
+        // Resume оба (в любом порядке)
+        let extraResponse = try TDLibJSON(parsing: ["data": "response_data", "@extra": "req_42"])
+        let typeResponse = try TDLibJSON(parsing: ["@type": "updateAuthorizationState", "state": "ready"])
 
-        // Проверяем что все индексы от 0 до 9 присутствуют
-        let sortedIndices = receivedIndices.sorted()
-        #expect(sortedIndices == Array(0..<iterations))
+        #expect((await waiters.resumeWaiter(forExtra: "req_42", with: extraResponse)).wasResumed)
+        #expect((await waiters.resumeWaiter(forType: "updateAuthorizationState", with: typeResponse)).wasResumed)
+
+        // Каждый получил свой response
+        #expect(try await extraTask.value == "response_data")
+        #expect(try await typeTask.value == "updateAuthorizationState")
     }
 }
