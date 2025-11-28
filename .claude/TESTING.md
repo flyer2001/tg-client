@@ -20,6 +20,37 @@
 
 #### Правила написания Unit-тестов
 
+**Rule #6: Regression тесты на найденные баги**
+
+⚠️ **При обнаружении бага во время рефакторинга или дебага — ОБЯЗАТЕЛЬНО напиши тест!**
+
+**Workflow:**
+1. Нашёл баг (например: `@type` не кодируется в JSON)
+2. **Сначала** напиши falling test, который воспроизводит баг
+3. **Потом** исправь код
+4. Убедись что тест проходит
+5. Добавь комментарий `// Regression test:` с описанием бага
+
+**Пример:**
+```swift
+/// Проверка что @type присутствует при encoding.
+///
+/// **Regression test:** Без @type в JSON, TDLibClient не может распарсить response.
+/// Bug найден при рефакторинге MockTDLibFFI - responses не матчились.
+@Test("Encoding включает @type='error'")
+func encodingIncludesAtType() throws {
+    let error = TDLibErrorResponse(code: 500, message: "Internal error")
+    let data = try JSONEncoder.tdlib().encode(error)
+    let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+    #expect(json?["@type"] as? String == "error")
+}
+```
+
+**Зачем:** Предотвращает регрессию в будущем. Тест — документация бага.
+
+---
+
 **Rule #7: НЕ используй raw JSON в тестах**
 
 ⚠️ **КРИТИЧНО:** В проекте используются **модельные конструкторы** вместо raw JSON строк.
@@ -69,6 +100,124 @@ let decoded = try JSONDecoder.tdlib().decode(Message.self, from: data)
 **Ссылки:**
 - Завершённая задача: `.claude/TASKS.md` → TD-7 (убрать raw JSON из ResponseTests)
 - Примеры тестов: `Tests/TgClientUnitTests/.../ChatResponseTests.swift`
+
+**Rule #8: Параметризованные тесты (@Test(arguments:))**
+
+⚠️ **Источник:** https://swiftology.io/articles/pitfalls-of-parameterized-tests/
+
+**Проблемы, которых избегаем:**
+
+**1. Вычисляемые значения маскируют баги**
+```swift
+// ❌ НЕПРАВИЛЬНО: зеркалирует реализацию
+@Test(arguments: ChatType.allCases)
+func chatTypeGreeting(type: ChatType) {
+    #expect(greeting(of: type) == "Hello \(type.rawValue)!")  // Пройдёт даже если логика неверна
+}
+
+// ✅ ПРАВИЛЬНО: конкретные ожидаемые значения
+@Test(arguments: [
+    (.private, "Hello Private Chat!"),
+    (.supergroup, "Hello Group!"),
+    (.channel, "Hello Channel!")
+])
+func chatTypeGreeting(type: ChatType, expected: String) {
+    #expect(greeting(of: type) == expected)
+}
+```
+
+**2. Логика в тестах (if/else дублирует код)**
+```swift
+// ❌ НЕПРАВИЛЬНО: тест содержит бизнес-логику
+@Test(arguments: ChatType.allCases)
+func chatPermissions(type: ChatType) {
+    if type == .channel {
+        #expect(permissions(for: type).canPost == false)
+    } else {
+        #expect(permissions(for: type).canPost == true)
+    }
+}
+
+// ✅ ПРАВИЛЬНО: разные тесты для разных сценариев
+@Test("Channels are read-only")
+func channelsReadOnly() {
+    #expect(permissions(for: .channel).canPost == false)
+}
+
+@Test(arguments: [ChatType.private, .supergroup, .basicGroup])
+func groupsAllowPosting(type: ChatType) {
+    #expect(permissions(for: type).canPost == true)
+}
+```
+
+**3. Хрупкие тесты через zip() + CaseIterable**
+```swift
+// ❌ НЕПРАВИЛЬНО: зависит от порядка enum cases
+@Test(arguments: zip(Ingredient.allCases, Dish.allCases))
+func cook(_ ingredient: Ingredient, into dish: Dish) {
+    #expect(cook(ingredient) == dish)
+}
+// Проблема: изменение порядка enum → тест сломается БЕЗ причины
+
+// ✅ ПРАВИЛЬНО: явные пары (массив кортежей)
+@Test(arguments: [
+    (.rice, .onigiri),
+    (.potato, .fries),
+    (.egg, .omelette)
+])
+func cook(_ ingredient: Ingredient, into dish: Dish) {
+    #expect(cook(ingredient) == dish)
+}
+```
+
+**4. Потеря coverage через zip()**
+```swift
+// ❌ ОПАСНО: zip обрезает массивы разной длины
+zip([.rice, .potato, .egg, .tomato], [.onigiri, .fries, .omelette])
+// .tomato ПРОПАДЁТ из тестов БЕЗ предупреждения!
+
+// ✅ ПРАВИЛЬНО: явный список гарантирует покрытие
+@Test(arguments: [
+    (.rice, .onigiri),
+    (.potato, .fries),
+    (.egg, .omelette),
+    (.tomato, .salad)  // Явно видим что добавили
+])
+```
+
+**Когда параметризация уместна:**
+
+**Property-based тесты:**
+```swift
+// ✅ Проверяем универсальное свойство для ВСЕХ значений
+@Test("Full clockwise rotation returns to original",
+      arguments: Orientation.allCases)
+func fullCircle(orientation: Orientation) {
+    let rotated = orientation
+        .turnClockwise()
+        .turnClockwise()
+        .turnClockwise()
+        .turnClockwise()
+    #expect(rotated == orientation)  // Свойство: 4 поворота = 360°
+}
+
+// ✅ Проверяем границы для numeric типов
+@Test(arguments: [Int64.min, -1, 0, 1, Int64.max])
+func chatIdValidation(chatId: Int64) {
+    #expect(throws: Never.self) {
+        _ = try ChatRequest(chatId: chatId)  // Должен принимать ВСЕ Int64
+    }
+}
+```
+
+**Чек-лист перед использованием @Test(arguments:):**
+- [ ] Это property-based тест? (универсальное свойство для всех значений)
+- [ ] Используешь конкретные значения (не вычисляемые)?
+- [ ] НЕ используешь `zip()` с разными enum?
+- [ ] НЕТ `if/else` логики в теле теста?
+- [ ] Массив кортежей читаем и понятен?
+
+**Золотое правило:** Если сомневаешься — лучше несколько отдельных тестов, чем один параметризованный с логикой.
 
 #### Тестирование Actor кода: синхронизация в тестах
 
