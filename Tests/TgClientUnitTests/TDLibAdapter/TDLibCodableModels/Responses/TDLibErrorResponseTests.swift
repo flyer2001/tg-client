@@ -1,3 +1,5 @@
+import TgClientModels
+import TGClientInterfaces
 import Testing
 import Foundation
 import FoundationExtensions
@@ -138,5 +140,27 @@ struct TDLibErrorResponseTests {
         #expect(error.code == 404)
         #expect(error.message == "Not Found")
         #expect(error.isAllChatsLoaded == true)
+    }
+
+    // MARK: - Encoding Tests
+
+    /// Проверка что @type присутствует при encoding.
+    ///
+    /// **Regression test:** Без @type в JSON, TDLibClient не может распарсить response.
+    /// Bug найден при рефакторинге MockTDLibFFI - responses не матчились.
+    @Test("Encoding включает @type='error'")
+    func encodingIncludesAtType() throws {
+        // Given: TDLibErrorResponse с кодом 500
+        let error = TDLibErrorResponse(code: 500, message: "Internal error")
+        let encoder = JSONEncoder.tdlib()
+
+        // When: encode в JSON
+        let data = try encoder.encode(error)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        // Then: JSON содержит @type="error"
+        #expect(json?["@type"] as? String == "error")
+        #expect(json?["code"] as? Int == 500)
+        #expect(json?["message"] as? String == "Internal error")
     }
 }

@@ -1,3 +1,5 @@
+import TgClientModels
+import TGClientInterfaces
 import Testing
 import Logging
 @testable import TDLibAdapter

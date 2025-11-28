@@ -1,3 +1,5 @@
+import TgClientModels
+import TGClientInterfaces
 // ⚠️ TODO: Переписать на TDLibClient + MockTDLibFFI (вместо удалённого MockTDLibClient)
 // Временно закомментировано, чтобы не ломать компиляцию других компонентных тестов
 

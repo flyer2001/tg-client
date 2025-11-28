@@ -1,5 +1,8 @@
+import TgClientModels
+import TGClientInterfaces
 import Testing
 import Logging
+import TestHelpers
 @testable import TDLibAdapter
 
 /// Unit-тесты для TDLibClient.
@@ -11,6 +14,7 @@ struct TDLibClientTests {
 
     @Test("getMe() возвращает успешный ответ через FFI")
     func getMeReturnsSuccessResponse() async throws {
+        print("\n🧪 TEST START: getMeReturnsSuccessResponse")
         let mockFFI = MockTDLibFFI()
         mockFFI.mockResponse(
             forRequestType: "getMe",
@@ -30,6 +34,7 @@ struct TDLibClientTests {
 
     @Test("getMe() бросает TDLibErrorResponse при ошибке от FFI")
     func getMeThrowsErrorFromFFI() async throws {
+        print("\n🧪 TEST START: getMeThrowsErrorFromFFI")
         let mockFFI = MockTDLibFFI()
         mockFFI.mockResponse(
             forRequestType: "getMe",
@@ -51,6 +56,7 @@ struct TDLibClientTests {
 
     @Test("Параллельные запросы getChat обрабатываются через FIFO")
     func parallelRequestsHandledViaFIFO() async throws {
+        print("\n🧪 TEST START: parallelRequestsHandledViaFIFO")
         let mockFFI = MockTDLibFFI()
         mockFFI.mockResponse(
             forRequestType: "getChat",
@@ -76,8 +82,65 @@ struct TDLibClientTests {
         #expect(c2.title == "Second")
     }
 
+    /// 100 параллельных getChat запросов матчатся точно по @extra.
+    ///
+    /// **Проблема (до @extra matching):**
+    /// При FIFO подходе response для chatId=456 мог прийти к waiter для chatId=123.
+    ///
+    /// **Given:** MockTDLibFFI с 100 замоканными getChat responses
+    /// **When:** 100 параллельных getChat запросов
+    /// **Then:** Каждый запрос получает response с СВОИМ chatId (точный матчинг по @extra)
+    @Test("100 параллельных getChat запросов матчатся по @extra")
+    func parallelGetChatRequestsMatchByExtra() async throws {
+        print("\n🧪 TEST START: parallelGetChatRequestsMatchByExtra")
+        let mockFFI = MockTDLibFFI()
+
+        // Мокаем 100 responses с разными chatId
+        let chatIds: [Int64] = (1...100).map { Int64($0 * 1000) }  // 1000, 2000, ... 100000
+        for chatId in chatIds {
+            mockFFI.mockResponse(
+                forRequestType: "getChat",
+                return: .success(ChatResponse(
+                    id: chatId,
+                    type: .`private`(userId: chatId),
+                    title: "Chat \(chatId)",
+                    unreadCount: 0,
+                    lastReadInboxMessageId: 0
+                ))
+            )
+        }
+
+        let logger = Logger(label: "test")
+        let client = TDLibClient(ffi: mockFFI, appLogger: logger)
+        client.startUpdatesLoop()
+
+        // 100 параллельных запросов
+        let results: [(requested: Int64, received: Int64)] = try await withThrowingTaskGroup(
+            of: (Int64, Int64).self
+        ) { group in
+            for chatId in chatIds {
+                group.addTask {
+                    let chat = try await client.getChat(chatId: chatId)
+                    return (chatId, chat.id)
+                }
+            }
+
+            var collected: [(Int64, Int64)] = []
+            for try await result in group {
+                collected.append(result)
+            }
+            return collected
+        }
+
+        // ASSERT: каждый запрос получил СВОЙ response
+        for (requested, received) in results {
+            #expect(requested == received, "Request for chatId=\(requested) received chatId=\(received)")
+        }
+    }
+
     @Test("updates stream получает update даже если startUpdatesLoop() вызван ДО подписки")
     func updatesStreamReceivesUpdateAfterStartUpdatesLoop() async throws {
+        print("\n🧪 TEST START: updatesStreamReceivesUpdateAfterStartUpdatesLoop")
         let mockFFI = MockTDLibFFI()
         let logger = Logger(label: "test")
         let client = TDLibClient(ffi: mockFFI, appLogger: logger)

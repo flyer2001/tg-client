@@ -1,9 +1,11 @@
+import TgClientModels
+import TGClientInterfaces
 import Foundation
 import Logging
 import Testing
 @testable import TDLibAdapter
 @testable import DigestCore
-@testable import TgClientUnitTests
+import TestHelpers
 
 /// Component тесты для ChannelMessageSource.
 ///
