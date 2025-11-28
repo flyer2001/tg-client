@@ -19,7 +19,7 @@
 > 🎯 **MVP (цели и scope):** [MVP.md](.claude/MVP.md) — читать по требованию (большой файл)
 > 💡 **Будущие фичи:** [BACKLOG.md](.claude/BACKLOG.md) — бэклог для версий после MVP
 > 📝 **История изменений:** [CHANGELOG.md](.claude/CHANGELOG.md) — логи завершенных сессий, читать только по требованию (большой файл)
-> 📋 **Последнее обновление:** 2025-11-27
+> 📋 **Последнее обновление:** 2025-11-28 (сессия 8)
 
 ---
 
@@ -39,102 +39,95 @@
 
 ---
 
-## 🎯 Топ-3 приоритета (текущие задачи)
+## 🎯 Текущие задачи
 
-### 🔥 ПРИОРИТЕТ 0: @extra matching для параллельных запросов (IN PROGRESS)
-
-**Прогресс сессии 2025-11-28:**
-
-| # | Задача | Статус |
-|---|--------|--------|
-| 1-5 | Предыдущая сессия (ResponseWaiters, MockTDLibFFI copy) | ✅ |
-| 6 | send() → String (TDLibFFI, CTDLibFFI, MockTDLibFFI, TDLibClient) | ✅ |
-| 7 | Updates loop: @extra parsing + forType для auth | ✅ |
-| 8 | Удалить debug логи из MockTDLibFFI | ✅ |
-| 9 | ResponseWaiters: добавить forType для unsolicited updates | ✅ |
-| 10 | **TODO:** MockTDLibFFI mocking strategy (FIFO → @extra matching) | ⬜ |
-
-**Текущее состояние:**
-- ✅ send() генерирует @extra внутри FFI слоя (TDLibFFI, CTDLibFFI, MockTDLibFFI)
-- ✅ ResponseWaiters поддерживает forExtra (responses) и forType (unsolicited updates как auth)
-- ✅ startUpdatesLoop переведён на реальный @extra parsing
-- ✅ Debug принты убраны из MockTDLibFFI
-- ⚠️ Тест 100 getChat: deadlock исчез (0.009s), но matching неверный
-  - **Проблема:** MockTDLibFFI мокает по requestType (FIFO queue), не учитывает @extra
-  - **Решение:** Изменить стратегию моков — создавать responses заранее с уникальными chatId, матчить по @extra
+⚠️ **КРИТИЧНО:** Есть uncommitted changes из сессий 4-7!
+НИ В КОЕМ СЛУЧАЕ не использовать `git reset --hard` или `git clean`!
+Коммиты — на вечерней сессии после 17:00.
 
 ---
 
-**СЛЕДУЮЩИЙ ШАГ: Исправить MockTDLibFFI mocking strategy**
+### 🔥 ПРИОРИТЕТ 1: Закоммитить изменения (после 17:00)
 
-**Проблема:**
-```swift
-// Сейчас (FIFO по типу):
-mockFFI.mockResponse(forRequestType: "getChat", return: .success(chat1))  // queue[0]
-mockFFI.mockResponse(forRequestType: "getChat", return: .success(chat2))  // queue[1]
-// При параллельных запросах порядок ответов = порядок send(), НЕ порядок моков
-```
+Файлы для коммита (4 коммита):
 
-**Решение:**
-```swift
-// Новая стратегия:
-mockFFI.mockResponse(forExtra: "mock_1", return: .success(chat1))
-mockFFI.mockResponse(forExtra: "mock_2", return: .success(chat2))
-// Матчинг по @extra, а не FIFO
-```
+**Коммит 1: Sources/**
+- `Sources/TDLibAdapter/TDLibClient.swift` (deviceModel fix + configureTDLibLogging + precondition)
 
-**Файлы для изменения:**
-- `Tests/TestHelpers/MockTDLibFFI.swift` — изменить логику mockedResponses
-- `Tests/TgClientUnitTests/TDLibAdapter/MockTDLibFFITests.swift` — обновить тесты
-- `Tests/TgClientUnitTests/TDLibAdapter/TDLibClientTests.swift` — тест 100 getChat должен стать GREEN
+**Коммит 2: Tests/**
+- `Tests/TestHelpers/TDLibResponseValidation.swift` (новый)
+- `Tests/TestHelpers/EnvFileLoader.swift` (новый)
+- `Tests/TestHelpers/TDConfigTestHelpers.swift` (новый)
+- `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift` (убран .serialized)
+- `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift` (упоминания Request моделей)
+- `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift` (#if ENABLE_E2E_TESTS + start() + chatId fix)
+- `Tests/.../MessagesResponseTests, OkResponseTests, ChatResponseTests` (assertValidEncoding)
 
----
+**Коммит 3: DoCC документация + скрипт генерации**
+- `scripts/generate-docc-from-tests.sh` (поддержка линковки хелперов: MockTDLibFFI, ResponseWaiters, TDLibClient, Update)
+- `Sources/TgClient/TgClient.docc/TgClient.md` (раздел "Аудит безопасности" + метаинформация v0.2.0)
+- `Sources/TgClient/TgClient.docc/E2E-Scenarios/FetchUnreadMessages.md` (актуализация под v0.2.0)
+- `Sources/TgClient/TgClient.docc/Tests/Component-Tests/*.md` (автогенерация с ссылками на хелперы)
 
-### 🧹 BACKLOG: Удалить неиспользуемый getChats
-
-**Причина:** `getChats()` не используется нигде в коде, заменён на `loadChats()`.
-
-**Задачи:**
-- [ ] Удалить `getChats()` из TDLibClientProtocol
-- [ ] Удалить реализацию из TDLibClient+HighLevelAPI
-- [ ] Удалить `GetChatsRequest` модель
-- [ ] Удалить `ChatsResponse` модель (проверить зависимости)
-- [ ] Обновить документацию
+**Коммит 4: Внутренняя документация**
+- `.claude/TESTING.md` (E2E инструкции + Rule #8)
+- `.claude/RETROSPECTIVE.md` (инциденты сессии 5)
+- `.claude/TASKS.md` (актуализация)
+- `.claude/CHANGELOG.md` (записи сессий 6-7)
 
 ---
 
-### 🔥 ПРИОРИТЕТ 1: Восстановить AuthenticationFlowTests
+### 🔥 ПРИОРИТЕТ 2: Проверка перед релизом (ОБЯЗАТЕЛЬНО)
 
-**Статус:** Временно закомментированы в `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift`
+**⚠️ КРИТИЧНО:** Перед созданием релиза ОБЯЗАТЕЛЬНО выполнить:
 
-**Задача:**
-1. Переписать на TDLibClient + MockTDLibFFI (вместо удалённого MockTDLibClient)
-2. Использовать паттерн из ChannelMessageSourceTests как референс
-3. Проверить coverage:
-   - Phone + Code → Ready
-   - Phone + Code + 2FA Password → Ready
-   - Error handling (неверный код, неверный пароль)
+1. **Запуск E2E тестов на Linux:**
+   ```bash
+   # На Linux VPS через SSH
+   ssh ufohosting
+   cd ~/repos/tg-client
+   git pull origin main
+   ./scripts/build-clean.sh
+   swift test -Xswiftc -DENABLE_E2E_TESTS 2>&1
+   ```
 
-**Референс:** `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift`
+2. **Предусловия для E2E:**
+   - [ ] `.env` файл на VPS с `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`
+   - [ ] Авторизованная сессия TDLib (если нет → `swift run tg-client`)
+   - [ ] Подписка на каналы с непрочитанными сообщениями
 
-**Зависимости:** ПРИОРИТЕТ 0 (@extra matching нужен для корректной работы тестов)
+3. **Что проверяем:**
+   - [ ] Все Unit/Component тесты проходят (128 тестов без E2E: 122 Unit + 6 Component)
+   - [ ] E2E тест `FetchUnreadMessagesScenarioTests` проходит (включается через -Xswiftc -DENABLE_E2E_TESTS)
+   - [ ] deviceModel корректно определяется как "Linux"
+   - [ ] Нет warning "Не удалось определить платформы"
+
+**Только после SUCCESS всех тестов на Linux → создавать релиз!**
 
 ---
 
-### 🔥 ПРИОРИТЕТ 2: Реализация MVP-1.6 (ChannelMessageSource)
+### 🔥 ПРИОРИТЕТ 3: Создать релиз v0.2.0
 
-**Статус:** Component тесты написаны (RED фаза), ждут реализации
+После коммитов И проверки на Linux (ПРИОРИТЕТ 2):
+- [ ] Создать git tag v0.2.0
+- [ ] Push tag на remote
+- [ ] Создать GitHub Release с описанием изменений
 
-**Задачи:**
-- [ ] Реализация `ChannelMessageSource.fetchUnreadMessages()`
-- [ ] Алгоритм: loadChats loop → обработка updates → фильтрация каналов → получение сообщений
-- [ ] Stateless подход (без realtime кеша для MVP)
+---
 
-**Файлы:**
-- `Sources/DigestCore/Sources/ChannelMessageSource.swift`
-- `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift`
+### 📋 MVP доработки (backlog)
 
-**Зависимости:** ПРИОРИТЕТ 0 и ПРИОРИТЕТ 1
+_Пока нет задач_
+
+---
+
+## ✅ Недавно завершено
+
+- **2025-11-28 (сессия 8):** Удален неиспользуемый getChats/GetChatsRequest/ChatsResponse (через git rm -f). ChatList enum перемещен в LoadChatsRequest.swift. Убраны все ссылки на .claude/*.md из комментариев кода. Исправлены битые ссылки TDLib docs (.claude/ → docs/). Документация обновлена (примеры с getChats → loadChats/getChatHistory). DoCC регенерирована. 128 тестов GREEN (122 Unit + 6 Component). Клиент работает в production (566 чатов, 23 с непрочитанными, 3 сообщения).
+- **2025-11-28 (сессия 7):** DoCC документация актуализирована для v0.2.0 (раздел "Аудит безопасности", убраны упоминания нереализованного функционала, проверка линковки E2E → Component → Unit тестов, линковка хелперов через обновлённый скрипт)
+- **2025-11-28 (сессия 6):** deviceModel кросс-платформенность (macOS/Linux через #if), E2E условная компиляция (#if ENABLE_E2E_TESTS), документация обновлена (TESTING.md + TASKS.md)
+- **2025-11-28 (сессия 5):** E2E тест починен, TDLib логирование настроено
+- **2025-11-28 (сессии 1-4):** @extra matching, assertValidEncoding(), инциденты задокументированы
 
 ---
 
@@ -154,5 +147,5 @@ mockFFI.mockResponse(forExtra: "mock_2", return: .success(chat2))
 
 ---
 
-**Последнее обновление:** 2025-11-27
+**Последнее обновление:** 2025-11-28 (сессия 7)
 **Завершённые задачи:** См. [CHANGELOG.md](.claude/CHANGELOG.md)

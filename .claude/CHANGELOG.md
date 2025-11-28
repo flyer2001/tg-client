@@ -1,3 +1,368 @@
+## 2025-11-28 (Сессия 8): Удаление getChats + чистка ссылок
+
+### Цель сессии
+
+Удалить неиспользуемый метод `getChats` и связанные модели, убрать ссылки на внутренние документы из кода.
+
+### Выполнено
+
+**Удаление неиспользуемого кода:**
+- ❌ Удалён метод `TDLibClient.getChats()` из TDLibClient+HighLevelAPI.swift
+- ❌ Удалена сигнатура из TDLibClientProtocol.swift
+- ❌ Удалены 4 файла через `git rm -f`:
+  - Sources/TgClientModels/Requests/GetChatsRequest.swift
+  - Sources/TgClientModels/Responses/ChatsResponse.swift
+  - Tests/.../GetChatsRequestTests.swift
+  - Tests/.../ChatsResponseTests.swift
+- ✅ `ChatList` enum перемещён в LoadChatsRequest.swift (используется LoadChatsRequest)
+- ❌ Удалены 2 теста с ChatsResponse из TDLibResponseDecoderTests.swift
+
+**Чистка ссылок на внутренние документы:**
+- Убраны все ссылки на `.claude/*.md` из комментариев кода:
+  - ChannelMessageSource.swift: ссылка на BACKLOG.md
+  - TDLibClient+HighLevelAPI.swift: ссылки на TASKS.md, ARCHITECTURE.md
+  - FetchUnreadMessagesScenarioTests.swift: ссылка на CREDENTIALS.md
+  - TDConfigTestHelpers.swift: ссылка на CREDENTIALS.md
+  - TDLibResponseValidation.swift: ссылка на TESTING.md
+- Исправлены битые ссылки на TDLib docs (`.claude/` → `docs/`):
+  - 15+ файлов в Sources/ и Tests/
+
+**Обновление документации:**
+- Примеры в .claude/*.md: getChats → loadChats/getChatHistory
+- TESTING.md: все примеры актуализированы
+- PROMPTS.md: примеры Outside-In TDD обновлены
+- MVP.md: убран раздел про getChats
+- ARCHITECTURE.md, BACKLOG.md: примеры обновлены
+- DoCC регенерирована (./scripts/generate-docc-from-tests.sh)
+
+**Тестирование:**
+- ✅ Сборка: успешна (1.78s)
+- ✅ Unit тесты: 122 GREEN (0.134s)
+- ✅ Component тесты: 6 GREEN (0.108s)
+- ✅ **Итого: 128 тестов GREEN**
+- ✅ Клиент работает: 566 чатов, 23 с непрочитанными, 3 сообщения
+
+### Инциденты
+
+**Проблема 1: Забыли ChatList enum**
+- При удалении GetChatsRequest.swift потерялся `ChatList` enum
+- Ошибка компиляции: "cannot find type 'ChatList' in scope"
+- **Решение:** Скопировал ChatList + helper структуры в LoadChatsRequest.swift
+- **Урок:** При удалении файлов проверять используемые зависимости
+
+**Проблема 2: ChatsResponse в TDLibResponseDecoderTests**
+- Тесты использовали удалённый ChatsResponse
+- **Решение:** Удалил дублирующие тесты (функциональность покрыта в MessagesResponseTests)
+
+### Статистика
+
+- Удалено: 4 файла моделей/тестов, 2 теста, ~300 строк кода
+- Изменено: 20+ файлов (код + документация)
+- Тесты: было 141, стало 128 (-13 тестов)
+- Все тесты GREEN, клиент работает
+
+---
+
+## 2025-11-28: Сессия 7 (продолжение) - Линковка хелперов в DoCC
+
+**Задачи:** Добавление ссылок на тестовые хелперы в Component тесты
+
+### Выполнено
+
+**Обновление скрипта генерации DoCC:**
+- Добавлен поиск хелперов: MockTDLibFFI, ResponseWaiters, TDLibClient, Update
+- Функция `extract_model_references()` теперь извлекает хелперы из кода тестов
+- Функция `add_doc_links_to_models()` создаёт ссылки на хелперы (например, MockTDLibFFI → <doc:MockTDLibFFITests>)
+
+**Результат линковки:**
+- AuthenticationFlowTests → MockTDLibFFITests, TDLibClientTests ✅
+- ChannelMessageSourceTests → MockTDLibFFITests, TDLibClientTests ✅
+- ResponseWaitersTests и UpdateTests доступны через навигацию DoCC ✅
+
+### Файлы изменены
+- `scripts/generate-docc-from-tests.sh` (поддержка хелперов)
+- `Sources/TgClient/TgClient.docc/Tests/Component-Tests/*.md` (автогенерация с ссылками на хелперы)
+
+---
+
+## 2025-11-28: Сессия 7 - Актуализация DoCC документации для релиза v0.2.0
+
+**Задачи:** ПРИОРИТЕТ 1 (актуализация документации перед релизом)
+
+### Выполнено
+
+**1. Проверка и исправление DoCC документации**
+- Убран `.serialized` из AuthenticationFlowTests.swift → исправлен заголовок в DoCC
+- Добавлены упоминания LoadChatsRequest/GetChatHistoryRequest в ChannelMessageSourceTests
+- Регенерация DoCC через `./scripts/generate-docc-from-tests.sh`
+
+**2. Актуализация E2E сценариев для v0.2.0**
+- FetchUnreadMessages.md: убраны упоминания будущего функционала (DigestOrchestrator, AI-саммари)
+- Добавлена инструкция запуска E2E теста вместо несуществующей CLI команды
+- User Story переформулирована на актуальный scope v0.2.0
+
+**3. Расширение TgClient.md**
+- Добавлен раздел "Аудит безопасности" с 4 подразделами:
+  - Шифрование локальной БД (что хранится, ключ, путь, рекомендации)
+  - Безопасность авторизации (ссылки на исходный код, уведомления, отзыв доступа)
+  - Безопасность данных (сообщения в памяти, не отправляются на внешние серверы)
+  - Управление секретами (переменные окружения, хранение)
+  - Рекомендации по безопасности (5 пунктов для работы с клиентом)
+- Указано что документация актуальна для релиза v0.2.0
+- Добавлена ссылка на GitHub Releases
+- Пользовательские сценарии вынесены на самый верх (Topics)
+
+**4. Проверка линковки документации**
+- TgClient.md → E2E сценарии (Authentication, FetchUnreadMessages) ✅
+- E2E сценарии → Component тесты ✅
+- Component тесты → Unit тесты (Request/Response) ✅
+
+### Результаты
+- ✅ DoCC документация полностью актуальна для v0.2.0
+- ✅ Все ссылки между документами работают
+- ✅ Убраны упоминания нереализованного функционала
+- ✅ Добавлен раздел безопасности с прозрачностью кода
+
+### Файлы изменены
+- `Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift` (убран .serialized)
+- `Tests/TgClientComponentTests/DigestCore/ChannelMessageSourceTests.swift` (добавлены упоминания Request моделей)
+- `Sources/TgClient/TgClient.docc/TgClient.md` (раздел безопасности + метаинформация)
+- `Sources/TgClient/TgClient.docc/E2E-Scenarios/FetchUnreadMessages.md` (актуализация под v0.2.0)
+- `Sources/TgClient/TgClient.docc/Tests/Component-Tests/*.md` (автогенерация через скрипт)
+
+---
+
+## 2025-11-28: Сессия 6 - deviceModel кросс-платформенность + E2E условная компиляция
+
+**Задачи:** ПРИОРИТЕТ 1 (deviceModel fix)
+
+### Выполнено
+
+**1. Фикс deviceModel для Linux релиза**
+- Добавлена функция `detectDeviceModel()` с `#if os(macOS)` / `#if os(Linux)`
+- Динамическое определение OS вместо hardcoded "macOS"
+- Warning логирование если платформа не определена (fallback "Unknown")
+- Файл: `Sources/TDLibAdapter/TDLibClient.swift:43-57, 273-278`
+
+**2. Условная компиляция E2E тестов**
+- Обёрнуто в `#if ENABLE_E2E_TESTS ... #endif`
+- Запуск БЕЗ E2E: `swift test` (141 тест, 0.17s)
+- Запуск С E2E: `swift test -Xswiftc -DENABLE_E2E_TESTS`
+- Файл: `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift`
+
+**3. Документация обновлена**
+- `.claude/TESTING.md` - инструкции по запуску E2E тестов
+- `.claude/TASKS.md` - добавлен ПРИОРИТЕТ 3 (обязательная проверка E2E на Linux перед релизом)
+
+### Результаты
+- ✅ Все 141 теста GREEN (без E2E)
+- ✅ Сборка успешна
+- ✅ E2E тесты не запускаются при обычном `swift test`
+
+### Файлы изменены
+- `Sources/TDLibAdapter/TDLibClient.swift`
+- `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift`
+- `.claude/TESTING.md`
+- `.claude/TASKS.md`
+
+---
+
+## Сессия 5: E2E тест + TDLib логирование (2025-11-28)
+
+### ✅ Выполнено
+
+**1. E2E тест полностью починен и работает на реальном TDLib**
+- Создан `TDConfig.forTesting()` - helper для создания конфига из env переменных
+- Создан `EnvFileLoader` - парсер .env файлов (без внешних зависимостей)
+- E2E тест обновлён: добавлен вызов `start(config:promptFor:)` перед `fetchUnreadMessages()`
+- Исправлена проверка `chatId` в assertions (каналы/супергруппы имеют отрицательные ID начиная с `-100`)
+- ✅ E2E тест успешно прошёл: "Fetched 1 unread messages from 5 channels"
+
+**2. Исправлен мусор в логах TDLib**
+- **Проблема:** TDLib выводил огромное количество debug логов в stdout (cyan цвет), даже при `logVerbosity: .fatal`
+- **Решение:** Добавлен вызов `TDLibClient.configureTDLibLogging(config:)` в `start()` ПЕРЕД `ffi.create()`
+- **Результат:** Логи теперь чистые, видны только наши логи (tg-client.e2e) + минимум от TDLib
+
+**3. Runtime защита от забывания configureTDLibLogging**
+- Добавлен static флаг `loggingConfigured` в `TDLibClient`
+- Добавлен `precondition()` в `start()` - падает с понятной ошибкой если логирование не настроено
+- Добавлен `resetLoggingConfiguredForTesting()` helper для изоляции тестов
+- ✅ Все 141 unit/component тестов прошли БЕЗ падений (они не вызывают `start()`)
+
+**4. Заведена КРИТИЧНАЯ задача для Linux релиза**
+- **Проблема:** В `TDLibClient.swift:238` захардкожено `deviceModel: "macOS"` → Linux релиз некорректен
+- **Задача:** Определять OS динамически через `#if os(macOS)` / `#if os(Linux)`
+- **Документация:** TDLib deviceModel - свободная строка, должна быть непустой
+- **Приоритет:** #1 в TASKS.md (КРИТИЧНО для релиза)
+
+### 📦 Новые файлы
+
+- `Tests/TestHelpers/EnvFileLoader.swift` - парсер .env файлов
+- `Tests/TestHelpers/TDConfigTestHelpers.swift` - `TDConfig.forTesting()` helper
+
+### 🔧 Изменённые файлы
+
+- `Sources/TDLibAdapter/TDLibClient.swift` - configureTDLibLogging в start() + precondition
+- `Tests/TgClientE2ETests/FetchUnreadMessagesScenarioTests.swift` - start() + chatId fix
+- `.claude/TASKS.md` - добавлен ПРИОРИТЕТ 1 (deviceModel)
+
+### 📊 Тесты
+
+- ✅ 141 unit/component тестов: GREEN
+- ✅ 1 E2E тест: GREEN (на реальном TDLib)
+- **Итого:** 142 теста
+
+### 🎯 Следующие приоритеты
+
+1. **ПРИОРИТЕТ 1:** Фикс deviceModel для кросс-платформенности (КРИТИЧНО для Linux релиза)
+2. **ПРИОРИТЕТ 2:** Актуализировать документацию (DoCC)
+3. **ПРИОРИТЕТ 3:** Закоммитить изменения (после 17:00)
+4. **ПРИОРИТЕТ 4:** Создать релиз v0.2.0
+
+---
+
+## 2025-11-28 (Сессия 4): Валидация @type + RETROSPECTIVE.md
+
+### Задачи
+- assertValidEncoding() добавлен во все Response тесты (7 файлов)
+- Rule #8 добавлен в TESTING.md (TDLibResponse ОБЯЗАНЫ включать @type)
+- RETROSPECTIVE.md: расширен пункт 12 (системный анализ багов), добавлен пункт 14 (раздутый контекст)
+
+### Результат
+- Unit Tests: 135/135 GREEN
+- Component Tests: 6/6 GREEN
+
+### Изменённые файлы
+- Tests/TestHelpers/TDLibResponseValidation.swift (fix: enum вынесен из extension)
+- Tests/.../MessagesResponseTests.swift, OkResponseTests.swift, ChatResponseTests.swift, ChatsResponseTests.swift
+- .claude/TESTING.md
+- .claude/RETROSPECTIVE.md
+
+---
+
+## 2025-11-28 (Сессия 3): ChannelMessageSourceTests GREEN - исправлен bug с @type
+
+### Проблема
+После фикса Auth тестов (сессия 2) ChannelMessageSourceTests зависал при запуске.
+
+### Root Cause
+**MessagesResponse** и **ChatsResponse** не включали `@type` в CodingKeys.
+TDLibClient background loop не мог route responses → зависание в `getChatHistory()` waiter.
+
+### Debug Process
+1. Добавлены debug prints в TDLibClient, MockTDLibFFI, ChannelMessageSourceTests
+2. Обнаружено: `updatesTask` получил response без @type → `guard let type = ...` fail → continue → response потерян
+3. Найдено через grep: MessagesResponse/ChatsResponse missing `case type = "@type"` in CodingKeys
+
+### Исправления
+
+**Production Code:**
+- `Sources/TgClientModels/Responses/MessagesResponse.swift` - добавлен `case type = "@type"` в CodingKeys
+- `Sources/TgClientModels/Responses/ChatsResponse.swift` - добавлен `case type = "@type"` в CodingKeys
+
+**Test Helpers:**
+- `Tests/TestHelpers/TDLibResponseValidation.swift` - создан helper с `assertValidEncoding()` для проверки @type encoding
+- `Tests/TestHelpers/MockTDLibFFI.swift` - добавлена задержка 1ms в receive() для имитации async TDLib
+
+**Test Code:**
+- `Tests/TgClientUnitTests/.../UserResponseTests.swift` - добавлен `assertValidEncoding()`
+- `Tests/TgClientUnitTests/.../AuthorizationStateUpdateResponseTests.swift` - добавлен `assertValidEncoding()`, удален regression test
+- `Tests/TgClientUnitTests/.../TDLibErrorResponseTests.swift` - упрощен regression test, добавлен `assertValidEncoding()`
+
+### Результаты
+- ✅ ChannelMessageSourceTests: 1/1 GREEN (0.060s)
+- ✅ AuthenticationFlowTests: 2/2 GREEN (из сессии 2)
+
+### Оставшиеся задачи
+- [ ] Добавить `assertValidEncoding()` в: MessagesResponseTests, OkResponseTests, ChatResponseTests, ChatsResponseTests
+- [ ] Добавить правило в TESTING.md про TDLibResponse coding requirements
+- [ ] Добавить ретроспективу: "Дважды попали на одни грабли"
+
+### Ретроспектива (для обсуждения)
+**Дважды попали на одну проблему (@type):**
+1. Сессия 2: AuthorizationStateUpdateResponse не имел @type
+2. Сессия 3: MessagesResponse/ChatsResponse не имели @type
+
+**Что пошло не так:**
+- После первого fix не проверили ВСЕ остальные Response модели
+- Не создали автоматическую проверку для предотвращения regression
+- Не задокументировали requirement в TESTING.md
+
+**Что сделано:**
+- Создан `assertValidEncoding()` helper
+- Начали добавлять в тесты
+- ⚠️ Но это МАНУАЛЬНАЯ проверка - можно забыть для новых Response!
+
+**Идеи для обсуждения:**
+1. Protocol extension с automatic validation в DEBUG init?
+2. SwiftLint custom rule для CodingKeys?
+3. Build script для auto-generation тестов?
+
+---
+
+## 2025-11-28 (Сессия 2): @extra matching для параллельных запросов
+
+### 🎯 Цель
+Реализовать точный матчинг request-response через @extra для поддержки параллельных запросов к TDLib.
+
+### ✅ Выполнено
+
+**MockTDLibFFI: @extra matching**
+- Разделены коллекции: `responsesByExtra` (responses) и `pendingUpdates` (updates)
+- Добавлена спецлогика `handleGetChat()`: копирует `chat_id` из request в response
+- `receive()` отдаёт responses по @extra (не FIFO), потом updates (FIFO)
+
+**Тесты**
+- ✅ Unit: 100 параллельных getChat корректно матчатся (TDLibClientTests)
+- ✅ Реальный клиент: 34 параллельных getChatHistory работают
+
+**Рефакторинг тестов**
+- Переименован тест: `parallelRequestsHandledViaFIFO` → `parallelRequestsMatchByExtra`
+- Обновлена логика: теперь мокает "шаблонные" responses (id=0), MockTDLibFFI подставляет chat_id
+
+### 📝 Изменённые файлы
+
+**Tests/TestHelpers/MockTDLibFFI.swift**
+- Добавлены: `responsesByExtra`, `pendingUpdates`, `handleGetChat()`
+- Изменён: `receive()` — приоритетно отдаёт responses, потом updates
+- Обновлена документация (DocC)
+
+**Tests/TgClientUnitTests/TDLibAdapter/TDLibClientTests.swift**
+- Переименован и обновлён тест для @extra matching
+
+### 🔍 Детали реализации
+
+**Архитектура MockTDLibFFI:**
+```swift
+// Responses (request-response с @extra)
+private var responsesByExtra: [String: String] = [:]
+
+// Updates (асинхронные, БЕЗ @extra, FIFO)
+private var pendingUpdates: [String] = []
+```
+
+**handleGetChat() имитирует TDLib:**
+- Берёт `chat_id` из request JSON
+- Подставляет в замоканный ChatResponse
+- Сохраняет в `responsesByExtra[@extra]`
+
+**receive() приоритеты:**
+1. Responses с @extra (любой, порядок НЕ важен)
+2. Updates FIFO (если нет responses)
+
+### 📊 Результаты
+
+- ✅ 100 параллельных getChat: 0.007s, все матчинги точные
+- ✅ Реальный клиент: 34 getChatHistory параллельно, @extra matching работает
+- ✅ Нет регрессий в других тестах
+
+### 🚀 Следующие шаги
+
+- **ПРИОРИТЕТ 0:** Восстановить AuthenticationFlowTests (переписать на MockTDLibFFI)
+- Удалить неиспользуемый getChats/GetChatsRequest/ChatsResponse
+
+---
+
 ## [2025-11-28] - @extra matching refactoring
 
 **Реализовано:**
@@ -1987,3 +2352,51 @@ MockTDLibClient дублировал логику Real TDLibClient (ResponseWait
 - Успешная авторизация в Telegram
 
 **Коммит:** начальный commit
+
+## Сессия 2025-11-28 (продолжение): Восстановление AuthenticationFlowTests
+
+**Задача:** Переписать закомментированные AuthenticationFlowTests на новую архитектуру MockTDLibFFI с @extra matching.
+
+### ✅ Выполнено
+
+**Восстановлены тесты:**
+- `authenticateWithPhoneAndCode` - успешная авторизация phone → code → ready
+- `errorHandlingInvalidCode` - обработка unsolicited error (PHONE_CODE_INVALID)
+
+**Найденные и исправленные баги:**
+
+1. **`AuthorizationStateUpdateResponse` не включал `@type` в CodingKeys**
+   - Background loop не мог распознать update (строка 348: `guard let type = tdlibJSON["@type"]`)
+   - Фикс: добавлен `case type = "@type"` в CodingKeys
+   - Regression test: `AuthorizationStateUpdateResponseTests.regressionAtTypeInJSON()`
+
+2. **Unsolicited errors (без @extra) терялись в background loop**
+   - Auth errors приходят БЕЗ @extra, loop их игнорировал
+   - Фикс: добавлена логика роутинга unsolicited errors в auth waiter через `forType`
+   - Regression test: `TDLibErrorResponseTests.regressionUnsolicitedErrorWithoutExtra()`
+
+**Изменённые файлы:**
+- `AuthenticationFlowTests.swift` - восстановлены 2 теста, используют `MockTDLibFFI.mockUpdate()`
+- `AuthorizationStateUpdateResponse.swift` - добавлен `@type` в CodingKeys
+- `MockTDLibFFI.swift` - добавлен generic метод `mockUpdate<R: TDLibResponse>()`, `@unchecked Sendable`
+- `TDLibClient.swift` - unsolicited errors роутятся через `resumeWaiter(forType: "updateAuthorizationState")`
+- Regression тесты в Unit tests
+
+**Архитектурные решения:**
+- `Task.sleep(50ms)` в тестах - минимальная задержка для actor waiter registration
+- `.serialized` для Suite - тесты выполняются последовательно (избегаем перемешивания updates)
+
+### ⚠️ Регрессия
+
+**ChannelMessageSourceTests зависает после изменений:**
+- Возможно изменения в background loop повлияли на routing обычных updates
+- Требуется debug session с prints для диагностики
+
+### 📊 Статус тестов
+
+- ✅ AuthenticationFlowTests: 2/2 GREEN (0.160s)
+- ❌ ChannelMessageSourceTests: зависает (требует фикса)
+- Unit tests: не проверены полностью
+
+---
+

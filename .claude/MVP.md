@@ -168,19 +168,14 @@ TDLib отслеживает состояние прочитанности на 
 
 **Методы TDLib API:**
 
-1. **`getChats(chatList:, limit:)`** → возвращает `Chats`
-   - Получает список чатов с актуальным `unreadCount` и `lastReadInboxMessageId`
-   - Параметр `chatList` может быть `.main` (основной список) или `.archive`
-   - Документация: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_chats.html
-
-2. **`getChatHistory(chatId:, fromMessageId:, offset:, limit:)`** → возвращает `Messages`
+1. **`getChatHistory(chatId:, fromMessageId:, offset:, limit:)`** → возвращает `Messages`
    - `fromMessageId: Int64` — ID сообщения, от которого начать (включительно)
    - `offset: Int` — смещение относительно fromMessageId (обычно 0)
    - `limit: Int` — количество сообщений для получения
    - Сообщения возвращаются в **обратном хронологическом порядке** (новые → старые)
    - Документация: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1get_chat_history.html
 
-3. **`viewMessages(chatId:, messageIds:, forceRead:)`** → возвращает `Ok`
+2. **`viewMessages(chatId:, messageIds:, forceRead:)`** → возвращает `Ok`
    - Отмечает сообщения как прочитанные (обновляет `lastReadInboxMessageId`)
    - `forceRead: true` — отметить как прочитанные (не только просмотренные)
    - Документация: https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1view_messages.html
@@ -226,7 +221,7 @@ try await tdlib.send(
 
 **Важные замечания:**
 
-- ⚠️ **Race condition:** между `getChats` и `getChatHistory` кто-то может прочитать сообщения → всегда фильтровать по `lastReadInboxMessageId`
+- ⚠️ **Race condition:** между `loadChats` и `getChatHistory` кто-то может прочитать сообщения → всегда фильтровать по `lastReadInboxMessageId`
 - ✅ **Эффективность:** используя `limit: unreadCount` минимизируем трафик
 - ✅ **Надёжность:** фильтр по `messageId > lastReadInboxMessageId` гарантирует корректность
 

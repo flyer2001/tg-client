@@ -101,7 +101,51 @@ let decoded = try JSONDecoder.tdlib().decode(Message.self, from: data)
 - Завершённая задача: `.claude/TASKS.md` → TD-7 (убрать raw JSON из ResponseTests)
 - Примеры тестов: `Tests/TgClientUnitTests/.../ChatResponseTests.swift`
 
-**Rule #8: Параметризованные тесты (@Test(arguments:))**
+---
+
+**Rule #8: TDLibResponse ОБЯЗАНЫ включать @type в encoded JSON**
+
+⚠️ **КРИТИЧНО:** Все TDLibResponse модели ДОЛЖНЫ включать поле `@type` в encoded JSON.
+
+**Причина:**
+TDLibClient.startUpdatesLoop() использует `@type` для routing responses.
+Без `@type` response теряется в background loop → зависание тестов и production кода!
+
+**Требования к модели:**
+1. Свойство: `public let type = "typeName"`
+2. CodingKeys ОБЯЗАТЕЛЬНО: `case type = "@type"`
+
+**Проверка в тестах:**
+```swift
+import TestHelpers
+
+@Test func roundTrip() throws {
+    let response = YourResponse(...)
+
+    // ОБЯЗАТЕЛЬНО! Проверяем @type в encoded JSON
+    try response.assertValidEncoding()
+
+    let data = try response.toTDLibData()
+    // ...
+}
+```
+
+**История инцидентов:**
+- 2025-11-28: MessagesResponse не имел `case type = "@type"` в CodingKeys → зависание тестов 2+ часа
+
+**При создании новой Response модели:**
+1. Добавь `public let type = "typeName"` (значение из TDLib docs)
+2. Добавь `case type = "@type"` в CodingKeys
+3. Создай unit test с `assertValidEncoding()`
+4. Запусти тест → если fail, проверь CodingKeys
+
+**См. также:**
+- `Tests/TestHelpers/TDLibResponseValidation.swift` — реализация assertValidEncoding()
+- `.claude/RETROSPECTIVE.md` — детали инцидента
+
+---
+
+**Rule #9: Параметризованные тесты (@Test(arguments:))**
 
 ⚠️ **Источник:** https://swiftology.io/articles/pitfalls-of-parameterized-tests/
 
@@ -275,6 +319,29 @@ await actor.resume()  // Теперь безопасно!
 - Требуют credentials
 - Медленные, опционально в CI
 - Примеры: полный цикл авторизации
+
+**Запуск E2E тестов:**
+
+E2E тесты **отключены по умолчанию** через условную компиляцию (`#if ENABLE_E2E_TESTS`).
+
+```bash
+# Обычный запуск - БЕЗ E2E тестов (быстро)
+swift test
+
+# Запуск С E2E тестами (медленно, требует credentials)
+swift test -Xswiftc -DENABLE_E2E_TESTS
+```
+
+**Когда запускать E2E тесты:**
+- ✅ Перед созданием релиза (обязательно на Linux!)
+- ✅ После крупного рефакторинга TDLibAdapter
+- ✅ При изменении API интеграции с TDLib
+- ❌ НЕ запускать при обычной разработке (используй Unit/Component тесты)
+
+**Предусловия для E2E:**
+- `.env` файл с `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`
+- Авторизованная сессия TDLib в `~/.tdlib/` (выполнить `swift run tg-client` если нет)
+- Подписка на Telegram каналы с непрочитанными сообщениями
 
 ## TDD Workflow
 
@@ -515,7 +582,7 @@ swift run tg-client [команда]
    └─> Пример: "Пользователь получает список непрочитанных чатов"
 
 2. Component Test (RED)
-   └─> ⚠️ ВАЖНО: Пишем РЕАЛЬНЫЙ вызов метода: `mockClient.getChats()`, а НЕ `mockClient.mockGetChats()`
+   └─> ⚠️ ВАЖНО: Пишем РЕАЛЬНЫЙ вызов метода: `mockClient.loadChats()`, а НЕ `mockClient.mockLoadChats()`
    └─> ⚠️ НЕ ПРИДУМЫВАЙ Mock API! Используй то же имя метода что будет в TDLibClient
    └─> Комментарий: требуемые Request/Response модели + ссылки на TDLib docs
    └─> Пример JSON из TDLib (в комментарии или fixtures)
@@ -525,22 +592,22 @@ swift run tg-client [команда]
 3. Protocol extension (определяем интерфейс)
    └─> Добавляем сигнатуру метода в TDLibClientProtocol
    └─> Смотрим TDLib docs — какие параметры нужны, что возвращается
-   └─> Определяем типы: func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse
-   └─> Component Test всё ещё НЕ КОМПИЛИРУЕТСЯ (нет типов ChatsResponse, ChatList)
+   └─> Определяем типы: func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse
+   └─> Component Test всё ещё НЕ КОМПИЛИРУЕТСЯ (нет типа ChatList)
 
 4. Unit Tests для моделей (RED)
-   ├─> GetChatsRequestTests — проверка кодирования
-   ├─> ChatsResponseTests — проверка декодирования реального JSON
+   ├─> LoadChatsRequestTests — проверка кодирования
+   ├─> OkResponseTests — проверка декодирования реального JSON
    └─> Используем реальные примеры из TDLib docs
    └─> Тесты НЕ КОМПИЛИРУЮТСЯ (нет моделей)
 
 5. Models implementation (GREEN unit tests)
-   ├─> Создаём GetChatsRequest, ChatsResponse, ChatList enum
+   ├─> Создаём LoadChatsRequest, ChatList enum
    ├─> Unit-тесты компилируются и зелёные
    └─> Component Test всё ещё НЕ КОМПИЛИРУЕТСЯ (нет реализации в TDLibClient/Mock)
 
 6. Real implementation (TDLibClient)
-   └─> Реализуем getChats() на реальном клиенте
+   └─> Реализуем loadChats() на реальном клиенте
    └─> Используем Request/Response из шага 5
    └─> Обработка ошибок, async/await, логирование
    └─> Component Test компилируется, но всё ещё RED (MockTDLibClient не реализован)
@@ -890,22 +957,22 @@ struct LoadChatsAndGetChatTests { ... }
 
 1. **RED = не компилируется** — настоящий RED тест пишется как будто метод уже существует:
    ```swift
-   @Test("Получение списка чатов")
-   func getChatsFromMainList() async throws {
+   @Test("Загрузка чатов в кеш")
+   func loadChatsToCache() async throws {
        let mockClient = MockTDLibClient()
-       let response = try await mockClient.getChats(chatList: .main, limit: 100)
-       #expect(response.chatIds.count > 0)
+       let response = try await mockClient.loadChats(chatList: .main, limit: 100)
+       #expect(response.type == "ok")
    }
-   // Этот тест НЕ СОБЕРЁТСЯ — метода getChats() не существует
+   // Этот тест НЕ СОБЕРЁТСЯ — метода loadChats() не существует
    // НЕ ПИШИ заглушки типа #expect(Bool(false), "TODO")!
    ```
 
 2. **Mock ПОСЛЕ Real — НИКОГДА не придумывай Mock API раньше времени!**
 
    **✅ ПРАВИЛЬНО:**
-   - Шаг 2: Component Test вызывает `mockClient.getChat(id: 123)` (РЕАЛЬНЫЙ метод)
-   - Шаг 6: Реализуем `TDLibClient.getChat(id:)` с обработкой ошибок, async/await
-   - Шаг 7: MockTDLibClient получает тот же метод `getChat(id:)` и имитирует поведение Real
+   - Шаг 2: Component Test вызывает `mockClient.getChatHistory(chatId: 123)` (РЕАЛЬНЫЙ метод)
+   - Шаг 6: Реализуем `TDLibClient.getChatHistory()` с обработкой ошибок, async/await
+   - Шаг 7: MockTDLibClient получает тот же метод `getChatHistory()` и имитирует поведение Real
 
    **❌ НЕПРАВИЛЬНО (антипаттерн):**
    ```swift
@@ -1053,7 +1120,7 @@ Tests/
 
 ```swift
 // ❌ НЕПРАВИЛЬНО: избыточная документация
-/// Запрос getChats для получения списка чатов.
+/// Запрос loadChats для загрузки чатов в кеш.
 ///
 /// Используется в: ChannelMessageSource, DigestOrchestrator
 ///
@@ -1061,14 +1128,14 @@ Tests/
 /// - chat_list: тип списка (main или archive)
 /// - limit: максимальное количество чатов
 ///
-/// Возвращает: Ok (данные через updates)
-public struct GetChatsRequest: TDLibRequest { ... }
+/// Возвращает: Ok
+public struct LoadChatsRequest: TDLibRequest { ... }
 
 // ✅ ПРАВИЛЬНО: минимум
-/// Запрос getChats для TDLib.
+/// Запрос loadChats для TDLib.
 ///
-/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
-public struct GetChatsRequest: TDLibRequest { ... }
+/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
+public struct LoadChatsRequest: TDLibRequest { ... }
 ```
 
 ### Business logic helpers
@@ -1121,7 +1188,7 @@ extension TDLibErrorResponse {
 
 **Обязательные элементы:**
 - Conformance: `TDLibRequest, Sendable, Equatable`
-- Свойство `type: String` с TDLib методом (например, `"getChats"`)
+- Свойство `type: String` с TDLib методом (например, `"loadChats"`)
 - `CodingKeys` enum с маппингом snake_case → camelCase (если нужно)
 - `init` с параметрами запроса (публичный, БЕЗ #if DEBUG)
 
@@ -1136,8 +1203,8 @@ public enum ChatList: Sendable, Equatable {
     case archive
 }
 
-public struct GetChatsRequest: TDLibRequest, Sendable, Equatable {
-    public let type = "getChats"
+public struct LoadChatsRequest: TDLibRequest, Sendable, Equatable {
+    public let type = "loadChats"
     public let chatList: ChatList
     public let limit: Int
 
@@ -1264,7 +1331,7 @@ public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
 - Мы **не знаем точный интерфейс** до начала проектирования
 
 **Примеры:**
-- ✅ **E2E → TDLibClient.getChats()** (consumer = пользователь "получить непрочитанные")
+- ✅ **E2E → TDLibClient.loadChats()** (consumer = пользователь "получить непрочитанные")
 - ✅ **Component → UpdatesHandler** (consumer = ChannelMessageSource нужен фоновый updates)
 - ✅ **Component → MessageFetcher** (consumer = ChannelMessageSource нужны сообщения)
 
@@ -1323,7 +1390,7 @@ public struct TDLibErrorResponse: TDLibResponse, Error, Sendable {
 ```
 DigestOrchestrator (Chicago — наша логика)
     ├─> ChannelMessageSource (Chicago — наш дизайн)
-    │   └─> TDLibClient.getChats() (London — TDLib adapter)
+    │   └─> TDLibClient.loadChats() (London — TDLib adapter)
     ├─> SummaryGenerator (Chicago — наш интерфейс)
     │   └─> OpenAIClient (London — OpenAI adapter)
     └─> BotNotifier (Chicago — наш интерфейс)
@@ -1336,7 +1403,7 @@ DigestOrchestrator (Chicago — наша логика)
 - **Переход:** готовый adapter становится зависимостью для core логики
 
 **Пример:**
-1. Сначала: `TDLibClient.getChats()` — **London** (адаптируемся к TDLib)
+1. Сначала: `TDLibClient.loadChats()` — **London** (адаптируемся к TDLib)
 2. Потом: `ChannelMessageSource.fetchUnreadMessages()` — **Chicago** (наш дизайн, использует готовый TDLibClient через моки)
 3. Наконец: `DigestOrchestrator.run()` — **Chicago** (оркестрация, использует готовые MessageSource/SummaryGenerator)
 

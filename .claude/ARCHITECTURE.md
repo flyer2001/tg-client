@@ -136,7 +136,7 @@ actor CircuitBreaker {
 - **Error code** и **message** из сервиса
 - **Категория** (recoverable/unrecoverable)
 - **Retry count** (если применимо)
-- **Context**: какая операция выполнялась (getChats, summarize, sendNotification)
+- **Context**: какая операция выполнялась (loadChats, summarize, sendNotification)
 
 **TDLib ошибки:** См. https://core.telegram.org/api/errors
 
@@ -728,5 +728,5 @@ appLogger.info("TDLib authorization READY")
 ## Документация используемых библиотек
 
 - **TDLib**: https://core.telegram.org/tdlib/docs
-  - Основные методы: `getChats`, `getChatHistory`, `sendMessage` (через бота)
+  - Основные методы: `loadChats`, `getChatHistory`, `sendMessage` (через бота)
 - **swift-log**: https://github.com/apple/swift-log

@@ -301,7 +301,7 @@ extension TDLibErrorResponse {
 
 **Пример лога:**
 ```
-[ERROR] TDLib getChats failed
+[ERROR] TDLib loadChats failed
   code: 401
   message: SESSION_REVOKED
   category: needsAuth

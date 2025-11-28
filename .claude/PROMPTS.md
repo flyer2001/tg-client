@@ -127,7 +127,7 @@ London School (mockist), Detroit School (classicist).
 **КРИТИЧНО: Outside-In работает на КАЖДОМ уровне абстракции!**
 
 **Outside-In TDD (когда есть явный consumer):**
-- ✅ E2E → TDLibClient.getChats() (consumer = пользователь "получить непрочитанные")
+- ✅ E2E → TDLibClient.loadChats() (consumer = пользователь "получить непрочитанные")
 - ✅ Component → MessageFetcher (consumer = ChannelMessageSource нужны сообщения)
 - [Пример] Component → UpdatesHandler (гипотетический пример, в MVP не потребовался)
 
@@ -314,11 +314,11 @@ Assistant: "Переключаюсь на роль Senior Architect.
 
 **Комментарии для DoCC:**
 ```swift
-// Шаг 1: GetChatsRequest → ChatsResponse
+// Шаг 1: LoadChatsRequest → OkResponse
 await mockClient.setMockResponse(...)
 
 /// **Related:**
-/// - Unit-тесты: `GetChatsRequestTests`, `ChatsResponseTests`
+/// - Unit-тесты: `LoadChatsRequestTests`, `OkResponseTests`
 /// - TDLib docs: https://...
 ```
 
