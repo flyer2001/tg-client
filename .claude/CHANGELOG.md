@@ -1,4 +1,4 @@
-- **2025-11-28 (сессия 11):** ✅ False positive WARNING устранен! Убрана генерация @extra из fire-and-forget запросов (send() БЕЗ @extra), MockTDLibFFI поддерживает optional @extra, WARNING → ERROR для потерянных waiters (DEADLOCK detection). E2E тест disabled по умолчанию через .disabled() trait (запуск вручную из Xcode). 128 тестов GREEN на macOS, боевой клиент работает (600 чатов, 79 каналов, 3 сообщения) БЕЗ WARNING в логах.
+- **2025-11-28 (сессия 11):** ✅ Релиз v0.2.0! False positive WARNING устранен (убрана генерация @extra из fire-and-forget запросов), MockTDLibFFI поддерживает optional @extra, WARNING → ERROR для потерянных waiters (DEADLOCK detection). Production логи почищены (logLevel = .warning, убраны шумные DEBUG логи). E2E тест disabled по умолчанию (.disabled() trait). Документация: добавлен Troubleshooting для зависаний сборки (DEPLOY.md, TESTING.md), актуализированы MVP.md + TASKS.md. 128 тестов GREEN на macOS + Linux, боевой клиент работает (macOS: 600 чатов, Linux: 801 чат, 28 сообщений) БЕЗ WARNING в логах.
 
 ## 2025-11-28 (сессия 10)
 

@@ -1,8 +1,17 @@
 # MVP: Telegram Digest Bot
 
 > **Дата создания:** 2025-10-28
-> **Статус:** Planning
-> **Версия:** 0.1.0
+> **Статус:** In Progress
+> **Текущая версия:** 0.2.0
+> **Последнее обновление:** 2025-11-28 (сессия 11)
+
+**Готово (v0.2.0):**
+- ✅ TDLibAdapter с Race Condition fix (sendAndWait)
+- ✅ ChannelMessageSource (сбор непрочитанных из каналов)
+- ✅ 128 Unit/Component тестов, E2E тест
+- ✅ Работает на macOS + Linux
+
+**Детали:** См. [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

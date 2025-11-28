@@ -343,6 +343,28 @@ swift test
 - Авторизованная сессия TDLib в `~/.tdlib/` (выполнить `swift run tg-client` если нет)
 - Подписка на Telegram каналы с непрочитанными сообщениями
 
+---
+
+## Troubleshooting
+
+### Сборка зависает на "planning build"
+
+Если `swift test` или `swift build` зависает на "planning build" или "Building for debugging...":
+
+```bash
+# Вариант 1: Очистить кеш SwiftPM (попробуй сначала это)
+swift package purge-cache && swift package reset
+
+# Вариант 2: Если вариант 1 не помог → полная очистка через скрипт
+./scripts/build-clean.sh
+```
+
+**Примечание:** Вариант 1 обычно работает на macOS и иногда на Linux. Если не помог - используй вариант 2.
+
+**⚠️ ВАЖНО:** НЕ используй pipe с `swift test` (`| head`, `| tail`) - это вызывает SIGPIPE зависание!
+
+---
+
 ## TDD Workflow
 
 ### Структура E2E сценария (DoCC документация)
