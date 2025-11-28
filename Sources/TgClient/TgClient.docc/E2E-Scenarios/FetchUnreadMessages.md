@@ -38,10 +38,13 @@
 ## Как проверить сценарий
 
 **Запуск E2E теста:**
-```bash
-# Убедитесь что вы авторизованы (запустите swift run tg-client если нет)
-swift test -Xswiftc -DENABLE_E2E_TESTS --filter FetchUnreadMessagesScenarioTests
-```
+
+E2E тест запускается ВРУЧНУЮ из Xcode:
+1. Убедитесь что вы авторизованы (запустите `swift run tg-client` если нет)
+2. Откройте проект в Xcode
+3. Найдите `FetchUnreadMessagesScenarioTests.swift`
+4. Временно уберите `.disabled()` из `@Test` атрибута
+5. Запустите тест через Xcode UI
 
 **Что проверяет тест:**
 1. Подключение к Telegram (используется сохранённая сессия из `~/.tdlib/`)
