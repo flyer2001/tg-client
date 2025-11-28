@@ -1,3 +1,5 @@
+import TGClientInterfaces
+import TgClientModels
 import Foundation
 import FoundationExtensions
 
@@ -35,50 +37,34 @@ extension TDLibClient: TDLibClientProtocol {
     // MARK: - User Methods
 
     public func getMe() async throws -> UserResponse {
-        // Отправляем запрос на получение информации о текущем пользователе
-        send(GetMeRequest())
-
-        // Ожидаем ответа от TDLib
-        return try await waitForResponse(ofType: UserResponse.self, expectedType: "user")
+        let extra = send(GetMeRequest())
+        return try await waitForResponse(forExtra: extra, ofType: UserResponse.self)
     }
 
     // MARK: - Chat Methods
 
     public func getChats(chatList: ChatList, limit: Int) async throws -> ChatsResponse {
-        // Отправляем запрос на получение списка чатов
-        send(GetChatsRequest(chatList: chatList, limit: limit))
-
-        // Ожидаем ответа от TDLib
-        return try await waitForResponse(ofType: ChatsResponse.self, expectedType: "chats")
+        let extra = send(GetChatsRequest(chatList: chatList, limit: limit))
+        return try await waitForResponse(forExtra: extra, ofType: ChatsResponse.self)
     }
 
     public func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse {
         appLogger.debug("loadChats: sending request (chatList: \(chatList), limit: \(limit))")
-
-        // Отправляем запрос на загрузку чатов
-        send(LoadChatsRequest(chatList: chatList, limit: limit))
-        appLogger.debug("loadChats: request sent, waiting for OkResponse...")
-
-        // Ожидаем ответа от TDLib
-        let response = try await waitForResponse(ofType: OkResponse.self, expectedType: "ok")
+        let extra = send(LoadChatsRequest(chatList: chatList, limit: limit))
+        appLogger.debug("loadChats: request sent (@extra=\(extra)), waiting for OkResponse...")
+        let response = try await waitForResponse(forExtra: extra, ofType: OkResponse.self)
         appLogger.debug("loadChats: received OkResponse")
         return response
     }
 
     public func getChat(chatId: Int64) async throws -> ChatResponse {
-        // Отправляем запрос на получение чата
-        send(GetChatRequest(chatId: chatId))
-
-        // Ожидаем ответа от TDLib
-        return try await waitForResponse(ofType: ChatResponse.self, expectedType: "chat")
+        let extra = send(GetChatRequest(chatId: chatId))
+        return try await waitForResponse(forExtra: extra, ofType: ChatResponse.self)
     }
 
     public func getChatHistory(chatId: Int64, fromMessageId: Int64, offset: Int32, limit: Int32) async throws -> MessagesResponse {
-        // Отправляем запрос на получение истории сообщений
-        send(GetChatHistoryRequest(chatId: chatId, fromMessageId: fromMessageId, offset: offset, limit: limit, onlyLocal: false))
-
-        // Ожидаем ответа от TDLib
-        return try await waitForResponse(ofType: MessagesResponse.self, expectedType: "messages")
+        let extra = send(GetChatHistoryRequest(chatId: chatId, fromMessageId: fromMessageId, offset: offset, limit: limit, onlyLocal: false))
+        return try await waitForResponse(forExtra: extra, ofType: MessagesResponse.self)
     }
 
     // MARK: - Updates
@@ -105,17 +91,14 @@ extension TDLibClient: TDLibClientProtocol {
     /// Ожидает следующего обновления состояния авторизации от TDLib.
     ///
     /// **АРХИТЕКТУРНОЕ РЕШЕНИЕ:**
-    /// Теперь использует единый background loop через `waitForResponse()` вместо прямого `receive()`.
+    /// Теперь использует единый background loop через `waitForResponse(forType:)` вместо прямого `receive()`.
     /// Это устраняет race condition между authorization loop и background updates loop.
     ///
     /// - Returns: Обновление состояния авторизации
     /// - Throws: `TDLibError` если TDLib вернул ошибку
     func waitForAuthorizationUpdate() async throws -> AuthorizationStateUpdateResponse {
-        // Ждём updateAuthorizationState через единый background loop
-        return try await waitForResponse(
-            ofType: AuthorizationStateUpdateResponse.self,
-            expectedType: "updateAuthorizationState"
-        )
+        // Ждём updateAuthorizationState через единый background loop (БЕЗ @extra)
+        return try await waitForResponse(forType: "updateAuthorizationState", ofType: AuthorizationStateUpdateResponse.self)
     }
 
     /// Ожидает ответа определенного типа от TDLib.
@@ -139,26 +122,26 @@ extension TDLibClient: TDLibClientProtocol {
     ///
     /// **АРХИТЕКТУРНОЕ РЕШЕНИЕ:**
     /// Вместо polling через `receive()` (race condition!), регистрируем continuation
-    /// в `responseWaiters`. Background loop вызовет continuation когда получит нужный @type.
+    /// в `responseWaiters`. Background loop вызовет continuation когда получит @extra.
     ///
     /// См. `.claude/ARCHITECTURE.md`: Error Handling Strategy
     ///
     /// - Parameters:
+    ///   - extra: Уникальный @extra ID запроса (сгенерированный через generateExtra())
     ///   - ofType: Тип ожидаемого ответа
-    ///   - expectedType: Ожидаемое значение поля "@type" в JSON ответе TDLib
     /// - Returns: Ответ указанного типа
     /// - Throws: `TDLibErrorResponse` если TDLib вернул ошибку
-    private func waitForResponse<T: TDLibResponse>(ofType: T.Type, expectedType: String) async throws -> T {
-        appLogger.debug("waitForResponse: started waiting for \(T.self) (@type='\(expectedType)')")
+    private func waitForResponse<T: TDLibResponse>(forExtra extra: String, ofType: T.Type) async throws -> T {
+        appLogger.debug("waitForResponse: waiting for @extra='\(extra)' (\(T.self))")
 
-        // Регистрируем continuation в responseWaiters (actor изоляция внутри)
+        // Регистрируем continuation в responseWaiters по @extra
         let tdlibJSON: TDLibJSON = try await withCheckedThrowingContinuation { continuation in
             Task {
-                await self.responseWaiters.addWaiter(for: expectedType, continuation: continuation)
+                await self.responseWaiters.addWaiter(forExtra: extra, continuation: continuation)
             }
         }
 
-        appLogger.debug("waitForResponse: received response for @type='\(expectedType)'")
+        appLogger.debug("waitForResponse: received response for @extra='\(extra)'")
 
         // Проверяем на ошибку
         let update = TDLibUpdate(tdlibJSON.data)
@@ -175,7 +158,49 @@ extension TDLibClient: TDLibClientProtocol {
             appLogger.debug("waitForResponse: successfully decoded \(T.self)")
             return response
         } catch {
-            appLogger.error("waitForResponse: failed to decode @type='\(expectedType)' as \(T.self): \(error)")
+            appLogger.error("waitForResponse: failed to decode response for @extra='\(extra)' as \(T.self): \(error)")
+            throw TDLibClientError.decodeFailed(expectedType: "\(T.self)", underlyingError: error)
+        }
+    }
+
+    /// Ожидает unsolicited update определенного типа (БЕЗ @extra).
+    ///
+    /// **Use case:** Authorization flow ждёт `updateAuthorizationState` от TDLib
+    /// (TDLib отправляет их сам, не в ответ на request).
+    ///
+    /// - Parameters:
+    ///   - type: Тип update (@type field, например "updateAuthorizationState")
+    ///   - ofType: Тип ожидаемого ответа
+    /// - Returns: Update указанного типа
+    /// - Throws: `TDLibErrorResponse` если TDLib вернул ошибку
+    private func waitForResponse<T: TDLibResponse>(forType type: String, ofType: T.Type) async throws -> T {
+        appLogger.debug("waitForResponse: waiting for @type='\(type)' (\(T.self))")
+
+        // Регистрируем continuation в responseWaiters по типу
+        let tdlibJSON: TDLibJSON = try await withCheckedThrowingContinuation { continuation in
+            Task {
+                await self.responseWaiters.addWaiter(forType: type, continuation: continuation)
+            }
+        }
+
+        appLogger.debug("waitForResponse: received update for @type='\(type)'")
+
+        // Проверяем на ошибку
+        let update = TDLibUpdate(tdlibJSON.data)
+        if case .error(let error) = update {
+            appLogger.error("TDLib error [\(error.code)]: \(error.message)")
+            throw error
+        }
+
+        // Декодируем в нужный тип
+        do {
+            let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
+            let decoder = JSONDecoder.tdlib()
+            let response = try decoder.decode(T.self, from: data)
+            appLogger.debug("waitForResponse: successfully decoded \(T.self)")
+            return response
+        } catch {
+            appLogger.error("waitForResponse: failed to decode update @type='\(type)' as \(T.self): \(error)")
             throw TDLibClientError.decodeFailed(expectedType: "\(T.self)", underlyingError: error)
         }
     }

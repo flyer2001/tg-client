@@ -1,6 +1,8 @@
 import Foundation
 import CTDLib
 import Logging
+import TGClientInterfaces
+import TgClientModels
 
 /// Swift-обёртка над TDLib C API для взаимодействия с Telegram.
 ///
@@ -124,19 +126,21 @@ public final class TDLibClient: @unchecked Sendable {
         }
     }
 
-    /// Отправляет типизированный запрос в TDLib.
+    /// Отправляет типизированный запрос в TDLib, возвращает сгенерированный @extra.
     ///
-    /// - Parameter request: Типизированный запрос TDLibRequest
-    func send(_ request: TDLibRequest) {
+    /// - Parameter request: TDLib запрос
+    /// - Returns: Уникальный @extra ID для матчинга response
+    ///
+    /// **@discardableResult:** Для fire-and-forget запросов (authentication) return можно игнорировать.
+    @discardableResult
+    func send(_ request: TDLibRequest) -> String {
         let encoder = TDLibRequestEncoder()
         guard let data = try? encoder.encode(request) else {
-            appLogger.error("Failed to encode request: \(request.type)")
-            return
+            fatalError("TDLibClient.send(): encoder failed for \(request.type)")
         }
-        data.withUnsafeBytes { raw in
-            let s = String(decoding: raw.bindMemory(to: UInt8.self), as: UTF8.self)
-            ffi.send(s)
-        }
+
+        let json = String(decoding: data, as: UTF8.self)
+        return ffi.send(json)
     }
 
     /// Получает ответ или обновление от TDLib.
@@ -348,21 +352,22 @@ public final class TDLibClient: @unchecked Sendable {
 
                 appLogger.trace("startUpdatesLoop: received @type='\(type)'")
 
-                // 1. Ошибки — пробрасываем в первый ожидающий waiter (FIFO)
+                // 1. Ошибки — пробрасываем в waiter по @extra
                 if type == "error" {
                     do {
                         let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
                         let error = try JSONDecoder.tdlib().decode(TDLibErrorResponse.self, from: data)
                         appLogger.debug("startUpdatesLoop: error response [\(error.code)]: \(error.message)")
-                        var result: ResponseWaiters.ResumeResult = .noWaiter
-                        for expectedType in ["ok", "user", "chats", "chat", "messages", "updateAuthorizationState"] {
-                            result = await self.responseWaiters.resumeWaiter(for: expectedType, with: error)
-                            if result.wasResumed {
-                                break
+
+                        // Парсим @extra из error response
+                        if let extra = tdlibJSON.data["@extra"] as? String {
+                            let result = await self.responseWaiters.resumeWaiter(forExtra: extra, with: error)
+                            if !result.wasResumed {
+                                appLogger.warning("startUpdatesLoop: no waiter for error with @extra='\(extra)' [\(error.code)]: \(error.message)")
                             }
-                        }
-                        if !result.wasResumed {
-                            appLogger.warning("startUpdatesLoop: no waiter for error [\(error.code)]: \(error.message)")
+                        } else {
+                            // TODO: Обработка ошибок без @extra (см. BACKLOG.md)
+                            appLogger.error("startUpdatesLoop: error response without @extra [\(error.code)]: \(error.message)")
                         }
                     } catch {
                         appLogger.error("startUpdatesLoop: failed to decode error response: \(error)")
@@ -370,8 +375,18 @@ public final class TDLibClient: @unchecked Sendable {
                     continue
                 }
 
-                // 2. Updates (updateNewChat, updateUser и т.д.) — отправляем в AsyncStream
-                if type.hasPrefix("update") && type != "updateAuthorizationState" {
+                // 2. updateAuthorizationState — unsolicited update, отправляем в responseWaiters по типу
+                if type == "updateAuthorizationState" {
+                    appLogger.debug("startUpdatesLoop: updateAuthorizationState, notifying type waiter")
+                    let result = await self.responseWaiters.resumeWaiter(forType: type, with: tdlibJSON)
+                    if !result.wasResumed {
+                        appLogger.debug("startUpdatesLoop: no waiter for updateAuthorizationState (not in authorization flow)")
+                    }
+                    continue
+                }
+
+                // 3. Updates (updateNewChat, updateUser и т.д.) — отправляем в AsyncStream
+                if type.hasPrefix("update") {
                     do {
                         let data = try JSONSerialization.data(withJSONObject: tdlibJSON.data)
                         let update = try JSONDecoder.tdlib().decode(Update.self, from: data)
@@ -383,11 +398,15 @@ public final class TDLibClient: @unchecked Sendable {
                     continue
                 }
 
-                // 3. Responses (ok, user, chats и т.д.) — отправляем в responseWaiters
-                appLogger.debug("startUpdatesLoop: response type '\(type)', notifying waiter")
-                let result = await self.responseWaiters.resumeWaiter(for: type, with: tdlibJSON)
-                if !result.wasResumed {
-                    appLogger.warning("startUpdatesLoop: no waiter for response type '\(type)'")
+                // 4. Responses (ok, user, chats и т.д.) — отправляем в responseWaiters по @extra
+                if let extra = tdlibJSON.data["@extra"] as? String {
+                    appLogger.debug("startUpdatesLoop: response type '\(type)' @extra='\(extra)', notifying waiter")
+                    let result = await self.responseWaiters.resumeWaiter(forExtra: extra, with: tdlibJSON)
+                    if !result.wasResumed {
+                        appLogger.warning("startUpdatesLoop: no waiter for @extra='\(extra)' (type '\(type)')")
+                    }
+                } else {
+                    appLogger.warning("startUpdatesLoop: response type '\(type)' without @extra (unexpected)")
                 }
             }
 

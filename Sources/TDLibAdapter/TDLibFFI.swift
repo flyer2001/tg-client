@@ -1,3 +1,4 @@
+import TgClientModels
 import Foundation
 
 enum TDLibFFIError: Error {
@@ -49,14 +50,18 @@ protocol TDLibFFI {
     /// - Throws: `TDLibFFIError.failedToCreateClient` если TDLib не смог создать клиент
     func create() throws
 
-    /// Отправляет JSON запрос в TDLib.
+    /// Отправляет JSON запрос в TDLib, генерирует @extra и возвращает его.
     ///
-    /// - Parameter request: JSON строка запроса с полями "@type" 
+    /// - Parameter request: JSON строка запроса с полями "@type"
+    /// - Returns: Сгенерированный уникальный @extra ID для матчинга response
     ///
-    /// **CTDLibFFI:** вызывает `td_json_client_send(client, request)`
+    /// **CTDLibFFI:** добавляет @extra в JSON, вызывает `td_json_client_send(client, request)`
     ///
-    /// **MockTDLibFFI:** парсит JSON, находит замоканный ответ по @type, подготавливает response
-    func send(_ request: String)
+    /// **MockTDLibFFI:** парсит JSON, генерирует @extra, находит замоканный ответ по @type
+    ///
+    /// **@discardableResult:** Для fire-and-forget запросов (authentication) return можно игнорировать.
+    @discardableResult
+    func send(_ request: String) -> String
 
     /// Получает JSON ответ от TDLib (блокирующий вызов).
     ///

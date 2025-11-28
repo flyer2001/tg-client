@@ -1,27 +1,25 @@
+import TgClientModels
 import Foundation
 
 /// Механизм управления continuations для async запросов к TDLib.
 ///
 /// **Назначение:**
 /// - Обеспечивает thread-safe хранение и обработку CheckedContinuation для async/await запросов
-/// - Используется как в реальном TDLibClient, так и в MockTDLibClient (для точной имитации поведения)
+/// - Точный матчинг запрос-ответ по уникальному `@extra` ключу
 ///
-/// **Принцип работы:**
-/// 1. Async метод создаёт continuation и регистрирует его через `addWaiter(for:continuation:)`
-/// 2. Background loop получает ответ от TDLib → вызывает `resumeWaiter(for:with:)`
-/// 3. Первый continuation из очереди получает ответ (FIFO для простых кейсов)
+/// **Принцип работы (@extra matching):**
+/// 1. TDLibClient генерирует уникальный `@extra` для каждого запроса
+/// 2. Async метод регистрирует continuation через `addWaiter(forExtra:continuation:)`
+/// 3. TDLib копирует `@extra` из request в response
+/// 4. Background loop получает ответ → вызывает `resumeWaiter(forExtra:with:)`
+/// 5. Continuation матчится точно по `@extra` (не FIFO!)
 ///
 /// **Concurrency:**
 /// - Реализован как Swift `actor` для thread-safe доступа к continuations
 /// - Все операции с `waiters` dictionary автоматически serialized
 ///
-/// **⚠️ Ограничение текущей реализации:**
-/// Ключ - только `requestType` (например "getChatHistory"), без учёта параметров.
-/// Для параллельных запросов с разными параметрами нужен RequestKey (chatId, messageId, etc.).
-///
 /// **Используется в:**
 /// - `TDLibClient` (Real) - обработка ответов от TDLib C library
-/// - `MockTDLibClient` (Test) - имитация поведения Real клиента для component тестов
 ///
 /// **Unit тесты:** `Tests/TgClientUnitTests/TDLibAdapter/ResponseWaitersTests.swift`
 public actor ResponseWaiters {
@@ -30,7 +28,7 @@ public actor ResponseWaiters {
     public enum ResumeResult: Sendable {
         /// Continuation успешно resumed
         case resumed
-        /// Нет ожидающих waiters для данного типа запроса
+        /// Нет ожидающего waiter для данного @extra
         case noWaiter
 
         /// Convenience property для проверки успеха.
@@ -39,62 +37,87 @@ public actor ResponseWaiters {
 
     /// Словарь ожидающих continuations.
     ///
-    /// **Ключ:** `requestType` (например "getChat", "getChatHistory")
-    /// **Значение:** FIFO очередь continuations для запросов этого типа
-    ///
-    /// **⚠️ Ограничение:** не учитывает параметры запросов (chatId, messageId, etc.)
-    /// Для параллельных запросов нужен RequestKey.
-    private var waiters: [String: [CheckedContinuation<TDLibJSON, Error>]] = [:]
+    /// **Ключ:** уникальный `@extra` ID запроса
+    /// **Значение:** continuation для этого запроса
+    private var waiters: [String: CheckedContinuation<TDLibJSON, Error>] = [:]
 
     public init() {}
 
-    /// Регистрирует continuation для ожидания ответа.
+    /// Регистрирует continuation для ожидания ответа по @extra.
     ///
     /// - Parameters:
-    ///   - type: Тип TDLib запроса (например "getChat", "getChatHistory")
+    ///   - extra: Уникальный @extra ID запроса (генерируется TDLibClient)
     ///   - continuation: Continuation для resume с результатом
-    public func addWaiter(for type: String, continuation: CheckedContinuation<TDLibJSON, Error>) {
-        waiters[type, default: []].append(continuation)
+    public func addWaiter(forExtra extra: String, continuation: CheckedContinuation<TDLibJSON, Error>) {
+        waiters[extra] = continuation
     }
 
-    /// Resume первого waiter из очереди с успешным ответом.
+    /// Регистрирует continuation для ожидания unsolicited update по @type.
+    ///
+    /// **Use case:** Authorization flow ждёт `updateAuthorizationState` без @extra
+    /// (TDLib отправляет их сам, не в ответ на request).
     ///
     /// - Parameters:
-    ///   - type: Тип TDLib запроса
+    ///   - type: Тип update (@type field, например "updateAuthorizationState")
+    ///   - continuation: Continuation для resume с результатом
+    public func addWaiter(forType type: String, continuation: CheckedContinuation<TDLibJSON, Error>) {
+        waiters[type] = continuation
+    }
+
+    /// Resume waiter по @extra с успешным ответом.
+    ///
+    /// - Parameters:
+    ///   - extra: @extra ID из response
     ///   - response: TDLib response как `TDLibJSON` (Sendable-safe wrapper)
-    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если очередь пуста
-    public func resumeWaiter(for type: String, with response: TDLibJSON) -> ResumeResult {
-        guard var queue = waiters[type], !queue.isEmpty else {
+    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет
+    public func resumeWaiter(forExtra extra: String, with response: TDLibJSON) -> ResumeResult {
+        guard let continuation = waiters.removeValue(forKey: extra) else {
             return .noWaiter
         }
-        let continuation = queue.removeFirst()
-        if queue.isEmpty {
-            waiters.removeValue(forKey: type)
-        } else {
-            waiters[type] = queue
-        }
-
         continuation.resume(returning: response)
         return .resumed
     }
 
-    /// Resume первого waiter из очереди с ошибкой.
+    /// Resume waiter по @extra с ошибкой.
     ///
     /// - Parameters:
-    ///   - type: Тип TDLib запроса
+    ///   - extra: @extra ID из response
     ///   - error: Ошибка для передачи в continuation
-    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если очередь пуста
-    public func resumeWaiter(for type: String, with error: Error) -> ResumeResult {
-        guard var queue = waiters[type], !queue.isEmpty else {
+    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет
+    public func resumeWaiter(forExtra extra: String, with error: Error) -> ResumeResult {
+        guard let continuation = waiters.removeValue(forKey: extra) else {
             return .noWaiter
         }
-        let continuation = queue.removeFirst()
-        if queue.isEmpty {
-            waiters.removeValue(forKey: type)
-        } else {
-            waiters[type] = queue
-        }
+        continuation.resume(throwing: error)
+        return .resumed
+    }
 
+    /// Resume waiter по @type с успешным update.
+    ///
+    /// **Use case:** Authorization flow получает `updateAuthorizationState` от TDLib.
+    ///
+    /// - Parameters:
+    ///   - type: Тип update (@type field)
+    ///   - update: TDLib update как `TDLibJSON`
+    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет
+    public func resumeWaiter(forType type: String, with update: TDLibJSON) -> ResumeResult {
+        guard let continuation = waiters.removeValue(forKey: type) else {
+            return .noWaiter
+        }
+        continuation.resume(returning: update)
+        return .resumed
+    }
+
+    /// Resume waiter по @type с ошибкой.
+    ///
+    /// - Parameters:
+    ///   - type: Тип update (@type field)
+    ///   - error: Ошибка для передачи в continuation
+    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет
+    public func resumeWaiter(forType type: String, with error: Error) -> ResumeResult {
+        guard let continuation = waiters.removeValue(forKey: type) else {
+            return .noWaiter
+        }
         continuation.resume(throwing: error)
         return .resumed
     }
@@ -106,10 +129,8 @@ public actor ResponseWaiters {
         let allWaiters = waiters
         waiters.removeAll()
 
-        for (_, queue) in allWaiters {
-            for continuation in queue {
-                continuation.resume(throwing: CancellationError())
-            }
+        for (_, continuation) in allWaiters {
+            continuation.resume(throwing: CancellationError())
         }
     }
 }
