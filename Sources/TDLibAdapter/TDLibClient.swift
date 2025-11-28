@@ -456,9 +456,6 @@ public final class TDLibClient: @unchecked Sendable {
                 }
 
                 loopCount += 1
-                if loopCount % 500 == 0 {
-                    self.appLogger.debug("startUpdatesLoop: iteration \(loopCount)")
-                }
 
                 do {
                     guard let json = try self.receive(timeout: 0.1) else {
@@ -547,7 +544,6 @@ public final class TDLibClient: @unchecked Sendable {
 
                 // 4. Responses (ok, user, chats и т.д.) — отправляем в responseWaiters по @extra
                 if let extra = tdlibJSON.data["@extra"] as? String {
-                    appLogger.debug("startUpdatesLoop: response type '\(type)' @extra='\(extra)', notifying waiter")
                     let result = await self.responseWaiters.resumeWaiter(forExtra: extra, with: tdlibJSON)
                     if !result.wasResumed {
                         // КРИТИЧНО: response с @extra БЕЗ waiter = deadlock!

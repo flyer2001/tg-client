@@ -13,9 +13,9 @@ struct TGClient {
     }
 
     static func main() async {
-        // Настройка логгера: debug для отладки
+        // Настройка логгера: только warning, error, critical
         var logger = Logger(label: "tg-client")
-        logger.logLevel = .debug
+        logger.logLevel = .warning
 
         let env = ProcessInfo.processInfo.environment
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
