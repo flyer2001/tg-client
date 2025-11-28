@@ -3,7 +3,7 @@ import Foundation
 /// Состояние авторизации в TDLib.
 ///
 /// Соответствует состояниям из TDLib API.
-/// См. https://core.telegram.org/tdlib/.claude/classtd_1_1td__api_1_1authorization_state.html
+/// См. https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1authorization_state.html
 public enum AuthorizationState: String, Sendable, Equatable {
     /// Ожидание параметров TDLib (API ID, API Hash, директории)
     case waitTdlibParameters = "authorizationStateWaitTdlibParameters"

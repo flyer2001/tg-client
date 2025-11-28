@@ -27,8 +27,6 @@ import TgClientModels
 /// - `loadChatsPaginationDelay = 2 сек` — задержка между loadChats() вызовами
 /// - `updatesCollectionTimeout = 5 сек` — ожидание после последнего loadChats()
 ///
-/// **Post-MVP оптимизации:** См. BACKLOG.md → "Адаптивная pagination для loadChats"
-///
 /// **Связанная документация:**
 /// - E2E сценарий: <doc:FetchUnreadMessages>
 /// - Component тест: `ChannelMessageSourceTests.swift`

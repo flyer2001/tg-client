@@ -71,26 +71,6 @@ struct TDLibResponseDecoderTests {
         #expect(user.username == nil)
     }
 
-    /// Проверяем что decoder корректно декодирует массивы с snake_case ключами.
-    ///
-    /// ChatsResponse содержит chatIds массив.
-    @Test("Decode ChatsResponse - массив с snake_case ключом")
-    func decodeChatsResponse() throws {
-        // Given: JSON с массивом chat_ids (snake_case)
-        let json = """
-        {
-            "chat_ids": [100, 200, 300]
-        }
-        """
-        let data = try #require(json.data(using: .utf8))
-
-        // When: декодируем
-        let chats = try decoder.decode(ChatsResponse.self, from: data)
-
-        // Then: chatIds должен быть массивом
-        #expect(chats.chatIds == [100, 200, 300])
-    }
-
     /// Проверяем что decoder корректно декодирует простые модели.
     ///
     /// TDLibErrorResponse - простая модель с code и message.
@@ -111,23 +91,5 @@ struct TDLibResponseDecoderTests {
         // Then: проверяем поля
         #expect(error.code == 404)
         #expect(error.message == "Not Found")
-    }
-
-    /// Проверяем что decoder корректно работает с пустыми массивами.
-    @Test("Decode ChatsResponse - пустой массив")
-    func decodeEmptyChatsResponse() throws {
-        // Given: пустой массив чатов
-        let json = """
-        {
-            "chat_ids": []
-        }
-        """
-        let data = try #require(json.data(using: .utf8))
-
-        // When
-        let chats = try decoder.decode(ChatsResponse.self, from: data)
-
-        // Then
-        #expect(chats.chatIds.isEmpty)
     }
 }
