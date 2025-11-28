@@ -244,7 +244,32 @@
 
 ---
 
-#### RESIL-3: Error Classification & Metadata Logging
+#### RESIL-3: Обработка ошибок TDLib без @extra
+**Проблема:** TDLib может отправлять критичные ошибки БЕЗ @extra (не в ответ на request):
+- `code: 500` — TDLib client закрыт
+- `code: 406` — Internal TDLib error (не показывать пользователю)
+- Auth session revoked — требуется ре-авторизация
+
+Сейчас такие ошибки только логируются (`.error`) и игнорируются.
+
+**Решение:** Global error handler для unsolicited errors.
+
+**Задачи:**
+- [ ] Создать `GlobalErrorHandler` для обработки ошибок без @extra
+- [ ] Классификация по code:
+  - 500 → graceful shutdown + restart recommendation
+  - 406 → логировать trace, игнорировать
+  - SESSION_REVOKED → trigger re-auth flow
+- [ ] Интеграция с CircuitBreaker (RESIL-1)
+- [ ] Метрики: counter unsolicited errors по кодам
+
+**Связано:** `TDLibClient.startUpdatesLoop()` строка 369
+
+**Приоритет:** MEDIUM (редкий edge case, но важен для production)
+
+---
+
+#### RESIL-4: Error Classification & Metadata Logging
 **Проблема:** Текущее логирование ошибок не даёт достаточно контекста для диагностики production проблем.
 
 **Решение:** Структурированное логирование ошибок с категориями и метаданными.

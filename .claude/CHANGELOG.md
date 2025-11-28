@@ -1,3 +1,157 @@
+## [2025-11-28] - @extra matching refactoring
+
+**Реализовано:**
+- ✅ Refactoring: `send() -> String` — генерация @extra внутри FFI слоя (TDLibFFI, CTDLibFFI, MockTDLibFFI, TDLibClient)
+- ✅ ResponseWaiters: добавлена поддержка `forType` для unsolicited updates (authorization flow)
+- ✅ startUpdatesLoop: переведён на реальный @extra parsing (вместо type-based workaround)
+- ✅ Тесты: ResponseWaiters, MockTDLibFFI обновлены (GREEN)
+- ✅ Debug логи убраны из MockTDLibFFI
+
+**Прогресс:**
+- Deadlock в тесте 100 параллельных getChat устранён (0.009s вместо зависания)
+- Осталось: исправить MockTDLibFFI mocking strategy (FIFO → @extra matching) для корректного матчинга
+
+**Technical Debt:**
+- BACKLOG: Обработка TDLib ошибок без @extra (RESIL-3 в BACKLOG.md)
+
+**Файлы:**
+- Sources/TDLibAdapter: TDLibFFI, CTDLibFFI, TDLibClient, ResponseWaiters
+- Tests: ResponseWaitersTests, MockTDLibFFI, MockTDLibFFITests (новый)
+
+## 2025-11-27: @extra matching — этап 1 (ResponseWaiters + MockTDLibFFI)
+
+### Выполнено
+- ✅ ResponseWaiters переведён на @extra matching (вместо requestType)
+- ✅ MockTDLibFFI копирует @extra из request в response
+- ✅ Добавлен helper `toTDLibJSON(withExtra:)` в TestHelpers
+- ✅ Написан failing тест 100 параллельных getChat (deadlock — ожидаемо)
+- ✅ Усилено правило в CLAUDE.md: НИКОГДА не использовать pipe с swift test
+
+### Изменённые файлы
+- `Sources/TDLibAdapter/ResponseWaiters.swift` — @extra matching
+- `Sources/TDLibAdapter/TDLibClient.swift` — добавлен generateExtra() (временно)
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift` — временный workaround
+- `Tests/TestHelpers/MockTDLibFFI.swift` — копирование @extra
+- `Tests/TestHelpers/EncodableExtensions.swift` — toTDLibJSON(withExtra:)
+- `Tests/TgClientUnitTests/TDLibAdapter/ResponseWaitersTests.swift` — тесты @extra
+- `Tests/TgClientUnitTests/TDLibAdapter/MockTDLibFFITests.swift` — новый файл
+- `Tests/TgClientUnitTests/TDLibAdapter/TDLibClientTests.swift` — тест 100 parallel
+
+### Следующая сессия
+- Перенести генерацию @extra в send() → String (TDD от MockTDLibFFI)
+- Обновить updates loop для парсинга @extra из response
+- Удалить debug логи из MockTDLibFFI
+- GREEN тест 100 параллельных getChat
+
+### Обнаружено
+- `getChats()` не используется — задача на удаление в BACKLOG
+
+---
+
+## 2025-11-27: Thread Safety MockTDLibFFI + Обнаружена проблема @extra matching
+
+### ✅ Выполнено
+
+**Thread Safety:**
+- Добавлена pthread проверка в `CTDLibFFI.receive()` — precondition если вызов из другого потока
+- Добавлена pthread проверка в `MockTDLibFFI.receive()` — аналогичная защита
+- Добавлен NSLock в MockTDLibFFI для защиты shared state (pendingResponses, mockedResponses, queuedUpdates)
+- Добавлен Thread.sleep(1ms) в MockTDLibFFI.receive() — имитация блокирующего поведения реального TDLib
+
+**Bug Fixes:**
+- Исправлен TDLibErrorResponse — добавлен `@type` в CodingKeys (без него response не матчился)
+- Добавлен regression тест `encodingIncludesAtType()` на encoding TDLibErrorResponse
+
+**Documentation:**
+- Добавлено правило Rule #6 в TESTING.md — "Regression тесты на найденные баги"
+- Обновлена документация CTDLibFFI и MockTDLibFFI (Thread Safety секция)
+
+### 🔴 Найдена критическая проблема
+
+**@extra matching отсутствует:**
+- Тест `parallelRequestsHandledViaFIFO` выявил что параллельные запросы одного типа (getChat) могут получить чужой response
+- ResponseWaiters использует только `requestType` как ключ — это недостаточно для параллельных запросов
+- **Решение:** Реализовать @extra matching (стандартный механизм TDLib) — см. ПРИОРИТЕТ 0 в TASKS.md
+
+### Файлы изменены
+- `Sources/TDLibAdapter/CTDLibFFI.swift` — pthread проверка
+- `Sources/TgClientModels/Responses/TDLibErrorResponse.swift` — @type в CodingKeys
+- `Tests/TestHelpers/MockTDLibFFI.swift` — NSLock + pthread + Thread.sleep
+- `Tests/TgClientUnitTests/.../TDLibErrorResponseTests.swift` — regression тест
+- `Tests/TgClientUnitTests/TDLibAdapter/TDLibClientTests.swift` — debug логи (временно)
+- `.claude/TESTING.md` — Rule #6
+- `.claude/TASKS.md` — новый ПРИОРИТЕТ 0
+
+---
+
+## [2025-11-27] - Рефакторинг модульной структуры
+
+### Выполнено
+**Создание модулей TGClientInterfaces и TgClientModels:**
+- ✅ Создан модуль `TGClientInterfaces` - базовые протоколы (TDLibRequest, TDLibResponse)
+- ✅ Создан модуль `TgClientModels` - 32 файла перемещено через git mv:
+  - 13 Request моделей (GetChatsRequest, LoadChatsRequest, GetChatHistoryRequest, etc)
+  - 12 Response моделей (ChatResponse, UserResponse, MessagesResponse, Update, etc)
+  - TDLibClientProtocol, MessageSourceProtocol
+  - SourceMessage, TDLibUpdate, TDLibRequestEncoder
+- ✅ Обновлены зависимости в Package.swift (граф: TGClientInterfaces → TgClientModels → TDLibAdapter/DigestCore)
+- ✅ Добавлены импорты во все файлы (Sources, Tests, TestHelpers)
+- ✅ Компиляция успешна: `swift build` завершается за 1.04s
+- ✅ Unit-тесты проходят: ~120 тестов ✔
+
+### Известные issue
+- ❌ E2E/Component тесты падают с `CTDLibFFI.send(): client not created` - требует отдельного исправления (не связано с рефакторингом)
+
+### Технические детали
+**Решение циклической зависимости:**
+- Изначально TGClientInterfaces → TgClientModels создавало цикл
+- Решение: TDLibClientProtocol и MessageSourceProtocol перенесены в TgClientModels (используют конкретные модели)
+- TGClientInterfaces остался минимальным (только TDLibRequest/TDLibResponse)
+
+**Итоговая архитектура модулей:**
+```
+TGClientInterfaces (базовые протоколы)
+    ↓
+TgClientModels (все Request/Response модели + протоколы высокого уровня)
+    ↓
+TDLibAdapter, DigestCore, TestHelpers (реализации)
+```
+
+### Git status
+- 32 файла staged (renamed)
+- Package.swift + файлы с импортами modified (не staged, ожидание 17:00 МСК для коммита)
+
+### Процедура рефакторинга (для будущих задач)
+Документирована в TASKS.md → "Процедура рефакторинга модулей (SwiftPM)" - 7 шагов с проверками после каждого.
+
+---
+
+## 2025-11-26 | Git Safety Rules + Процедуры рефакторинга
+
+**Контекст:**
+Критическая ошибка: `git reset --hard` без предупреждения удалил uncommitted changes из предыдущей сессии.
+
+**Решение:**
+
+1. **CLAUDE.md: Git Safety Rules**
+   - ⚠️ ЗАПРЕТ `git reset --hard`, `git clean -fd` без явного предупреждения
+   - Требование показывать `git status` и список потерь перед деструктивной операцией
+   - Предпочтение `git stash` вместо `git reset --hard` (stash можно восстановить)
+   - Правило: спрашивать пользователя что делать с unstaged/uncommitted изменениями
+
+2. **TASKS.md: Процедура рефакторинга модулей**
+   - Пошаговая инструкция для безопасного рефакторинга SwiftPM модулей
+   - 7 шагов от планирования до финальной проверки
+   - Правила: НИКОГДА не использовать `cd` во время git операций
+   - Всегда использовать `git mv` для tracked файлов
+   - Промежуточные коммиты после каждого этапа (не батч в конце!)
+
+**Результат:**
+- Документированы процедуры для предотвращения потери данных в будущем
+- Следующая сессия может начинаться с чистого листа
+
+---
+
 ## [2025-11-23] - WIP: Оптимизация сборки тестов + исправление архитектуры MockTDLibFFI
 
 **Проблема:** Медленная сборка тестов из-за DocC plugin (>30 сек), невозможность использовать TDLibClient в Component тестах
