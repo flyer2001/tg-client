@@ -1,3 +1,45 @@
+## 2025-11-29 | Сессия 12: DocC документация восстановлена
+
+**Статус:** ✅ Завершено
+
+**Цель:** Восстановить автоматическую генерацию и публикацию DocC документации в GitHub Actions
+
+### Проблема
+
+GitHub Actions workflow `docs.yml` падал с ошибкой:
+```
+error: Unknown subcommand or plugin name 'generate-documentation'
+```
+
+**Причина:** swift-docc-plugin был отключен в Package.swift для ускорения локальной разработки:
+- С DocC: >30 сек сборки тестов
+- Без DocC: 1.15 сек
+
+### Решение
+
+Добавлен автоматический шаг раскомментирования DocC plugin **только в CI окружении**:
+- Новый шаг "Enable DocC plugin in Package.swift" в workflow
+- Раскомментируются dependencies (swift-docc-plugin) и resources (TgClient.docc)
+- Package.swift в репозитории остаётся без изменений
+- Локальная разработка не затронута (быстрая сборка сохранена)
+
+### Результат
+
+✅ GitHub Actions успешно завершился (1m 30s)
+✅ Документация опубликована: https://flyer2001.github.io/tg-client/documentation/tgclient/
+✅ Автоматическое обновление при каждом push в main
+
+### Коммиты
+
+- `18d9d05` ci(docs): восстановить генерацию DocC в GitHub Actions
+
+### Инфраструктура
+
+- **.github/workflows/docs.yml:** добавлен шаг модификации Package.swift через sed
+- **.claude/TASKS.md:** задача завершена
+
+---
+
 - **2025-11-28 (сессия 11):** ✅ Релиз v0.2.0! False positive WARNING устранен (убрана генерация @extra из fire-and-forget запросов), MockTDLibFFI поддерживает optional @extra, WARNING → ERROR для потерянных waiters (DEADLOCK detection). Production логи почищены (logLevel = .warning, убраны шумные DEBUG логи). E2E тест disabled по умолчанию (.disabled() trait). Документация: добавлен Troubleshooting для зависаний сборки (DEPLOY.md, TESTING.md), актуализированы MVP.md + TASKS.md. 128 тестов GREEN на macOS + Linux, боевой клиент работает (macOS: 600 чатов, Linux: 801 чат, 28 сообщений) БЕЗ WARNING в логах.
 
 ## 2025-11-28 (сессия 10)
