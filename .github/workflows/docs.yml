@@ -78,6 +78,30 @@ jobs:
           echo "PKG_CONFIG_PATH=$HOME/tdlib-install/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
           echo "LD_LIBRARY_PATH=$HOME/tdlib-install/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
+      - name: Enable DocC plugin in Package.swift
+        run: |
+          # Удалить комментарии
+          sed -i '/DocC plugin временно отключен/d' Package.swift
+          sed -i '/Включить перед генерацией документации/d' Package.swift
+          sed -i '/DocC resources временно отключены/d' Package.swift
+
+          # Раскомментировать и исправить dependencies
+          sed -i 's|.package(url: "https://github.com/apple/swift-log", from: "1.6.4")|.package(url: "https://github.com/apple/swift-log", from: "1.6.4"),|' Package.swift
+          sed -i 's|// \.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")|.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")|' Package.swift
+
+          # Раскомментировать DocC resources в TgClient target
+          sed -i 's|path: "Sources/TgClient"|path: "Sources/TgClient",|' Package.swift
+          sed -i 's|^            // resources: \[$|            resources: [|' Package.swift
+          sed -i 's|^            //     \.copy|                .copy|' Package.swift
+          sed -i 's|^            // \]$|            ]|' Package.swift
+
+          # Проверить результат
+          echo "=== Modified Package.swift (dependencies section) ==="
+          grep -A 6 "dependencies: \[" Package.swift | head -10
+          echo ""
+          echo "=== Modified Package.swift (TgClient target resources) ==="
+          grep -A 8 'name: "TgClient"' Package.swift
+
       - name: Generate DoCC from tests
         run: |
           chmod +x ./scripts/generate-docc-from-tests.sh
