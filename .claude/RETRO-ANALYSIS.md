@@ -1345,4 +1345,290 @@ nonisolated(unsafe) let unsafeResponse = response
 
 ---
 
-_Следующий блок: #7 - Test Coverage и Concurrency_
+## Блок #7: Test Coverage и Concurrency
+
+### 📊 Наблюдения:
+
+**Количественная оценка тестов:**
+- **Всего тестов:** 129 (@Test методов)
+- **Test файлов:** 34 файла
+- **Async/await usage:** 90 строк в тестах
+- **Структура:**
+  - Unit Tests: 28 файлов (модели, кодирование, TDLibClient, ResponseWaiters)
+  - Component Tests: 4 файла (ChannelMessageSource, AuthenticationFlow, MockLogger)
+  - E2E Tests: 1 файл (FetchUnreadMessagesScenario)
+
+**Concurrency тесты (найдено 3 теста на параллельные запросы):**
+1. `parallelRequestsMatchByExtra()` - 2 параллельных getChat
+2. `parallelGetChatRequestsMatchByExtra()` - 100 параллельных getChat
+3. `parallelGetMeRequestsRaceCondition()` - 100 параллельных getMe
+
+**Thread Sanitizer:**
+- В коде: `--sanitize=thread` упоминается 10 раз в RETRO-ANALYSIS.md (предложения)
+- В CI: **НЕ используется** (.github/workflows/linux-build.yml: `swift test --skip TgClientE2ETests`)
+- **Вывод:** TSan предложен в блоках #1-5, но **НЕ внедрён**
+
+**Mock в Component тестах:**
+- ChannelMessageSourceTests: 4 упоминания MockTDLibFFI
+- AuthenticationFlowTests: 5 упоминаний MockTDLibFFI
+- **Проблема:** Component тесты используют Mock вместо реального TDLib
+
+**E2E тесты:**
+- `FetchUnreadMessagesScenarioTests.swift` - 1 файл
+- **В CI:** пропущены (`--skip TgClientE2ETests`)
+- **Причина:** требуют credentials
+
+**Контекст от пользователя (из RETROSPECTIVE.md):**
+1. "Нет тестов на параллельные запросы (10x getChatHistory одновременно)"
+2. "E2E тесты не проверяют race conditions"
+3. "Component тесты используют синхронный Mock вместо async реального поведения"
+4. Предложения:
+   - Concurrency Stress Tests (100 параллельных запросов)
+   - Thread Sanitizer в CI
+   - E2E тесты должны использовать реальный TDLib
+
+---
+
+### 🧪 Root Causes (гипотезы):
+
+#### 1. ❌ Есть concurrency тесты, но они используют Mock (не реальный TDLib)
+
+**Факты:**
+- Есть 3 теста на параллельные запросы (100 параллельных getChat/getMe)
+- НО: они используют MockTDLibFFI, а не реальный TDLib
+- MockTDLibFFI = синхронный (добавляет response в send(), читает в receive())
+
+**Проблема:**
+- Mock не воспроизводит реальное async поведение TDLib
+- Race conditions в реальном TDLib могут не проявиться в Mock
+
+**Цитата из PO:**
+> "Component тесты используют синхронный Mock вместо async реального поведения"
+
+#### 2. ❌ Thread Sanitizer предложен в блоках #1-5, но НЕ внедрён
+
+**Проблема:**
+- TSan упоминается 10 раз в RETRO-ANALYSIS.md (действия 1.4, 2.4, 5.4)
+- CI: `swift test` БЕЗ `--sanitize=thread`
+- Локально: никто не запускает TSan
+
+**Результат:**
+- Race conditions не обнаруживаются автоматически
+- Полагаемся на ручной дебаг (как в блоке #1)
+
+#### 3. ❌ E2E тесты пропущены в CI (требуют credentials)
+
+**Проблема:**
+- E2E тесты существуют (FetchUnreadMessagesScenarioTests)
+- НО: в CI пропущены (`--skip TgClientE2ETests`)
+- Причина: требуют реальные Telegram credentials
+
+**Результат:**
+- E2E regression suite не автоматизирована
+- Cascade changes (блок #3) не обнаруживаются автоматически
+
+#### 4. ❌ Нет Concurrency Stress Tests (1000+ параллельных запросов)
+
+**Факты:**
+- Есть `parallelGetChatRequestsMatchByExtra` - 100 параллельных
+- НО: это Unit тест на MockTDLibFFI, не stress test на реальном TDLib
+
+**Что нужно:**
+- Stress test: 1000+ параллельных getChatHistory() на реальном TDLib
+- С TSan для обнаружения race conditions
+- С проверкой memory leaks
+
+#### 5. ❌ Component тесты не покрывают async behavior (синхронный Mock)
+
+**Проблема:**
+- MockTDLibFFI синхронный: `send()` → сразу добавляет response → `receive()` читает
+- Реальный TDLib: `send()` → async обработка → `receive()` через некоторое время
+
+**Пример из кода MockTDLibFFI:**
+```swift
+// Комментарий: "race condition: MockTDLibFFI добавляет responses СИНХРОННО в send()"
+```
+
+**Результат:**
+- Component тесты не покрывают async timing issues
+- Реальные race conditions пропускаются
+
+---
+
+### 💡 Предлагаемые действия (черновик):
+
+#### Действие 7.1: Включить Thread Sanitizer в CI и локально (реализовать 1.4)
+
+**Гипотеза:** Если включить TSan, то автоматически обнаружим race conditions.
+
+**Решение:**
+- **CI (.github/workflows/linux-build.yml):**
+  ```yaml
+  - name: Run tests with Thread Sanitizer
+    run: swift test --sanitize=thread --skip TgClientE2ETests
+    timeout-minutes: 10
+  ```
+
+- **Локально:** документировать в SETUP.md
+  ```bash
+  # Concurrency компонент → обязательно TSan
+  swift test --sanitize=thread --filter TDLibClientTests
+  ```
+
+- **DEVELOPMENT.md:** правило "Concurrency код → TSan обязателен перед коммитом"
+
+**Метрика успеха (черновик):**
+- TSan включён в CI?
+- TSan обнаружил race conditions в существующем коде?
+- 0 race conditions пропущены TSan в следующих 3 компонентах
+
+---
+
+#### Действие 7.2: Concurrency Stress Tests на реальном TDLib (Integration Test)
+
+**Гипотеза:** Если делать stress test на реальном TDLib, то обнаружим race conditions которые Mock пропускает.
+
+**Решение:**
+- Создать Integration Test Suite (отдельная директория `Tests/TgClientIntegrationTests/`)
+- **Stress Test пример:**
+  ```swift
+  @Test func tdlibClient_parallelGetChatHistory_1000requests() async throws {
+      // Real TDLibClient (не Mock!)
+      let client = try TDLibClient()
+      try await client.authorize(...)
+
+      // 1000 параллельных запросов
+      try await withThrowingTaskGroup(of: [Message].self) { group in
+          for chatId in chatIds {  // 1000 chats
+              group.addTask {
+                  try await client.getChatHistory(chatId: chatId, limit: 10)
+              }
+          }
+      }
+
+      // Если TSan не ругается → OK
+      // Если memory leak → FAIL
+  }
+  ```
+
+- **Запуск:** локально (требует credentials), НЕ в CI
+
+**Метрика успеха (черновик):**
+- Integration Test создан?
+- Stress test с 1000 параллельными запросами прошёл без TSan warnings?
+
+---
+
+#### Действие 7.3: E2E Regression Suite автоматизирована (реализовать 3.2)
+
+**Гипотеза:** Если автоматизировать E2E тесты, то обнаружим cascade changes.
+
+**Решение:**
+- **CI:** использовать test credentials (TG_TEST_PHONE, TG_TEST_CODE из secrets)
+- **E2E Suite:**
+  - test_auth_phone_code.sh
+  - test_load_chats.sh
+  - test_get_chat_history.sh
+- **GitHub Actions:**
+  ```yaml
+  - name: Run E2E tests
+    run: swift test --filter TgClientE2ETests
+    env:
+      TG_PHONE: ${{ secrets.TG_TEST_PHONE }}
+      TG_CODE: ${{ secrets.TG_TEST_CODE }}
+  ```
+
+**Метрика успеха (черновик):**
+- E2E тесты запускаются в CI?
+- При следующем рефакторинге TDLibClient → E2E suite обнаружил регрессию?
+
+---
+
+#### Действие 7.4: Component тесты должны воспроизводить async timing (или использовать Real TDLib)
+
+**Гипотеза:** Если Mock воспроизводит async behavior, то не пропустим timing issues.
+
+**Решение (вариант 1): Async Mock:**
+```swift
+class MockTDLibFFI {
+    func send(_ request: String) {
+        Task {
+            try? await Task.sleep(for: .milliseconds(10))  // Simulate async
+            lock.lock()
+            responses.append(mockedResponse)
+            lock.unlock()
+        }
+    }
+}
+```
+
+**Решение (вариант 2): Integration Test вместо Component Test:**
+- Component тесты (ChannelMessageSourceTests) используют реальный TDLibClient
+- Требуют credentials → запускаются только локально
+
+**Метрика успеха (черновик):**
+- Mock воспроизводит async delay?
+- Или Component тесты переписаны на Integration тесты?
+
+---
+
+### 📏 Индикаторы успеха (общие для блока #7):
+
+1. **Thread Sanitizer включён:**
+   - Сейчас: НЕТ (предложен в блоках #1-5, не внедрён)
+   - Цель: ДА (CI + локально для concurrency компонентов)
+
+2. **Concurrency Stress Tests:**
+   - Сейчас: 100 параллельных (Mock)
+   - Цель: 1000+ параллельных (Real TDLib)
+
+3. **E2E Regression Suite:**
+   - Сейчас: пропущены в CI
+   - Цель: автоматизированы (test credentials)
+
+4. **Component тесты async behavior:**
+   - Сейчас: синхронный Mock
+   - Цель: async Mock или Integration Test
+
+---
+
+## Накопленный список действий (обновлён после блока #7)
+
+### Группа: Architecture & Design
+- **1.1** Architecture-First для concurrency/external API компонентов
+- **1.5** External API checklist (thread-safety анализ)
+- **2.1** Bug Severity Matrix для Swift Concurrency (P0/P1/P2/P3)
+- **2.2** Автоматические BLOCKER'ы (continuation leak, double resume, etc.)
+- **3.1** Spike/Research фаза для незнакомых external APIs
+- **3.4** Hybrid TDD для external APIs (Spike → Inside-Out → Outside-In)
+- **5.1** Decision Tree "Actor vs Lock vs OSAllocatedUnfairLock"
+- **5.2** Spike Checklist для C interop (blocking? thread-safe? sendable?)
+- **6.1** ADR пишется ДО реализации (Spike → ADR → Review → TDD)
+- **6.2** Lightweight ADR формат (DocC для простых, Full для critical)
+- **6.3** ADR Decision Checklist + верификация выводов (overnight review)
+
+### Группа: Testing & Mocking
+- **1.2** Mock boundary явно (FFI, network, filesystem - не high-level)
+- **1.4** Thread Sanitizer в CI и локально **(реализовать → 7.1)**
+- **3.2** E2E Regression тесты для критичных путей **(реализовать → 7.3)**
+- **3.3** Запрет на комментирование падающих тестов
+- **4.1** Decision Tree "Mock vs Integration vs Fake"
+- **4.2** Mock complexity limit: 100 строк
+- **4.3** Для простых APIs (OpenAI) → Integration Test или простой Mock (<50 строк)
+- **4.4** Ретроспектива решения Mock vs Integration для каждого API
+- **5.3** Mock должен использовать ту же concurrency primitive что Real
+- **5.4** @unchecked Sendable: SAFETY комментарий + concurrency тест + TSan
+- **7.1** Thread Sanitizer в CI + локально (реализовать 1.4)
+- **7.2** Concurrency Stress Tests на реальном TDLib (1000+ параллельных)
+- **7.3** E2E Regression Suite автоматизирована (test credentials в CI)
+- **7.4** Component тесты воспроизводят async timing (async Mock или Integration Test)
+
+### Группа: Code Review & Процессы
+- **1.3** Overnight Pause для критичных компонентов
+- **2.3** Checklist перед пометкой "не критично" (тест воспроизводящий проблему)
+- **2.4** Code Review Checklist для Concurrency кода (race conditions, blocking calls)
+- **6.4** Overnight review обязателен для ADR (верификация выводов)
+
+---
+
+_Следующий блок: #8 - Архитектурные решения: когда делать анализ?_
