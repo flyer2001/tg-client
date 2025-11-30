@@ -812,4 +812,267 @@ class MockOpenAI: OpenAIProtocol {
 
 ---
 
-_Следующий блок: #5 - Actor vs NSLock: неправильный дефолт выбор_
+## Блок #5: Actor vs NSLock: неправильный дефолт выбор
+
+### 📊 Наблюдения:
+
+**Количественная оценка "actor → lock" переделок:**
+- **ResponseWaiters:** actor (2aec395) → class + NSLock (7a6e20c)
+- **@unchecked Sendable:** 1 место (только TDLibClient)
+- **nonisolated(unsafe):** 2 использования (loggingConfigured флаг, response в ResponseWaiters)
+- **NSLock использование:** TDLibClient (stopLock, counterLock) + ResponseWaiters
+
+**Timeline переделки:**
+1. **Nov 21** (2aec395): ResponseWaiters создан как `actor`
+   - Комментарий: "Реализован как Swift actor для thread-safe доступа"
+2. **Nov 19** (7a6e20c): Переделан в `class` с NSLock
+   - Причина: "C interop с TDLib - actor не подходит для C interop"
+
+**Контекст от пользователя:**
+1. "MockTDClient был actor, а то что мокировали был class → несоответствие поведения"
+2. "Много wrappers чтобы не было проблем с компиляцией Swift 6"
+3. "Не получилось везде реализовать чистый structured concurrency, потому что C TDLib чихала на это"
+4. "Проблема: чтобы не использовать много wrappers для компиляции"
+5. "Расставленные wrappers потом нам не выстрелили в ногу"
+
+---
+
+### 🧪 Root Causes (гипотезы):
+
+#### 1. ❌ Actor-first подход БЕЗ анализа C interop constraints
+
+**Проблема:**
+- По умолчанию выбирали `actor` для thread safety
+- Не анализировали: "Это C API? Blocking calls? Можно ли actor?"
+- Результат: переделка actor → class + NSLock
+
+**Доказательство:**
+- ResponseWaiters: сначала actor, потом class (1 переделка)
+
+#### 2. ❌ Impedance mismatch: Swift Structured Concurrency vs C API
+
+**Проблема:**
+- **Swift Concurrency:** async/await, actor isolation, Sendable
+- **C TDLib:** blocking receive(), thread-unsafe, non-Sendable [String: Any]
+- **Результат:** wrappers, @unchecked Sendable, nonisolated(unsafe)
+
+**Цитата из кода:**
+```swift
+// SAFETY: Dictionary [String: Any] не Sendable, но:
+// - TDLib возвращает immutable JSON dictionary
+// - NSLock гарантирует thread-safe
+nonisolated(unsafe) let unsafeResponse = response
+```
+
+#### 3. ❌ Нет Decision Tree "когда actor, когда lock"
+
+**Проблема:**
+- Нет явных правил выбора concurrency primitive
+- Нет checklist: "C API? → lock, не actor"
+
+#### 4. ❌ MockTDClient actor vs Real class → несоответствие
+
+**Проблема:**
+- Mock был actor (для удобства async тестов)
+- Real был class (из-за C API constraints)
+- Несоответствие поведения → путаница
+
+#### 5. ❌ Накопление @unchecked Sendable wrappers
+
+**Проблема:**
+- Каждый wrapper = потенциальная проблема в будущем
+- "Расставленные wrappers потом нам не выстрелили в ногу"
+
+---
+
+### 💡 Предлагаемые действия (черновик):
+
+#### Действие 5.1: Decision Tree "Actor vs Lock vs OSAllocatedUnfairLock"
+
+**Гипотеза:** Если есть явное правило выбора concurrency primitive, не будет переделок.
+
+**Решение:**
+- Добавить в ARCHITECTURE.md Decision Tree:
+  ```markdown
+  ## Swift 6 Concurrency: Actor vs Lock Decision Tree
+
+  ### Используй Actor когда:
+  - ✅ Pure Swift код (не C interop)
+  - ✅ Async operations (suspend points OK)
+  - ✅ Sendable типы данных
+  - ✅ Не нужен immediate synchronous access
+  - Пример: бизнес-логика, state machines
+
+  ### Используй NSLock когда:
+  - ✅ C API interop (blocking calls)
+  - ✅ Non-Sendable типы ([String: Any])
+  - ✅ Synchronous immediate access нужен
+  - ✅ Hot path (critical performance)
+  - Пример: TDLibClient, ResponseWaiters
+
+  ### Используй OSAllocatedUnfairLock когда:
+  - ✅ Все что NSLock + нужна max performance
+  - ✅ Swift 6.0+ only
+  - ⚠️ Unfair (нет FIFO гарантий)
+  - Пример: high-frequency counters, caches
+  ```
+
+**Метрика успеха (черновик):**
+- При следующем concurrency компоненте → Decision Tree использован?
+- 0 переделок actor → lock
+
+---
+
+#### Действие 5.2: Spike для C interop: проверить constraints ДО выбора primitive
+
+**Гипотеза:** Если проверять C API constraints ДО выбора actor/lock, не будет переделок.
+
+**Решение:**
+- Расширить Spike фазу (действие 3.1) checklist для C interop:
+  ```markdown
+  ## Spike Checklist для C API
+
+  При интеграции с C library:
+  1. **Blocking calls?** (receive, accept, read) → lock, не actor
+  2. **Thread-safe?** Документация говорит что да?
+  3. **Sendable типы?** Если non-Sendable → wrapper нужен
+  4. **Actor isolation совместима?** Можно ли suspend в critical section?
+
+  Если хоть один ответ "НЕТ" → lock, не actor.
+  ```
+
+**Метрика успеха (черновик):**
+- При следующем C API → checklist заполнен ДО выбора primitive?
+
+---
+
+#### Действие 5.3: Mock должен имитировать Real primitive (actor = actor, class = class)
+
+**Гипотеза:** Если Mock использует ту же concurrency модель что Real, не будет несоответствия.
+
+**Решение:**
+- Правило в TESTING.md:
+  ```markdown
+  ## Mock Concurrency Model
+
+  Mock ДОЛЖЕН использовать ту же concurrency primitive что Real:
+  - Real = actor → Mock = actor
+  - Real = class + NSLock → Mock = class + NSLock
+
+  ❌ ЗАПРЕЩЕНО:
+  - Real = class, Mock = actor (несоответствие поведения)
+  ```
+
+**Метрика успеха (черновик):**
+- 0 случаев "Mock actor, Real class"
+
+---
+
+#### Действие 5.4: Аудит @unchecked Sendable + обязательные concurrency тесты
+
+**Гипотеза:** Если каждый @unchecked Sendable покрыт concurrency тестом, меньше риска.
+
+**Решение:**
+- Правило в DEVELOPMENT.md:
+  ```markdown
+  ## @unchecked Sendable: когда допустимо
+
+  ✅ ДОПУСТИМО когда:
+  1. Mutable state защищён lock/actor
+  2. SAFETY комментарий объясняет почему безопасно
+  3. **Есть concurrency тест доказывающий thread safety**
+  4. Нет альтернативы (C API, legacy code)
+
+  ❌ ЗАПРЕЩЕНО:
+  - "Просто чтобы скомпилировалось"
+  - Без SAFETY комментария
+  - **Без concurrency теста**
+
+  **Concurrency тест должен:**
+  - Параллельные вызовы (10+ threads/tasks одновременно)
+  - Thread Sanitizer включён (--sanitize=thread)
+  - Проверка race conditions, deadlocks
+
+  **Пример теста:**
+  ```swift
+  @Test func responseWaiters_threadSafety() async throws {
+      let waiters = ResponseWaiters()
+      await withTaskGroup(of: Void.self) { group in
+          for i in 0..<100 {
+              group.addTask {
+                  await waiters.addWaiter(...)
+              }
+          }
+      }
+      // Если TSan не ругается → OK
+  }
+  ```
+
+  **Code Review:** Каждый @unchecked Sendable требует:
+  - SAFETY комментарий
+  - Concurrency тест
+  - Обоснование почему нельзя использовать Sendable wrapper
+  ```
+
+**Текущий аудит:**
+- TDLibClient: @unchecked Sendable (есть ли concurrency тест? проверить)
+- ResponseWaiters: есть ResponseWaitersTests (проверить TSan coverage)
+
+**Метрика успеха (черновик):**
+- 100% @unchecked Sendable покрыты concurrency тестами
+- TSan включён для всех concurrency тестов
+
+---
+
+### 📏 Индикаторы успеха (общие для блока #5):
+
+1. **Переделки actor → lock:**
+   - Сейчас: 1 (ResponseWaiters)
+   - Цель: 0
+
+2. **Decision Tree использован:**
+   - Сейчас: не было правила
+   - Цель: 100% concurrency компонентов
+
+3. **@unchecked Sendable с тестом:**
+   - Сейчас: проверить (ResponseWaitersTests существует)
+   - Цель: 100% (все с concurrency тестом + TSan)
+
+4. **Mock/Real consistency:**
+   - Сейчас: OK (оба class)
+   - Цель: 100% соответствие
+
+---
+
+## Накопленный список действий (обновлён после блока #5)
+
+### Группа: Architecture & Design
+- **1.1** Architecture-First для concurrency/external API компонентов
+- **1.5** External API checklist (thread-safety анализ)
+- **2.1** Bug Severity Matrix для Swift Concurrency (P0/P1/P2/P3)
+- **2.2** Автоматические BLOCKER'ы (continuation leak, double resume, etc.)
+- **3.1** Spike/Research фаза для незнакомых external APIs
+- **3.4** Hybrid TDD для external APIs (Spike → Inside-Out → Outside-In)
+- **5.1** Decision Tree "Actor vs Lock vs OSAllocatedUnfairLock"
+- **5.2** Spike Checklist для C interop (blocking? thread-safe? sendable?)
+
+### Группа: Testing & Mocking
+- **1.2** Mock boundary явно (FFI, network, filesystem - не high-level)
+- **1.4** Thread Sanitizer в CI и локально
+- **3.2** E2E Regression тесты для критичных путей (auth, loadChats, getChatHistory)
+- **3.3** Запрет на комментирование падающих тестов
+- **4.1** Decision Tree "Mock vs Integration vs Fake"
+- **4.2** Mock complexity limit: 100 строк
+- **4.3** Для простых APIs (OpenAI) → Integration Test или простой Mock (<50 строк)
+- **4.4** Ретроспектива решения Mock vs Integration для каждого API
+- **5.3** Mock должен использовать ту же concurrency primitive что Real
+- **5.4** @unchecked Sendable: SAFETY комментарий + concurrency тест + TSan
+
+### Группа: Code Review & Процессы
+- **1.3** Overnight Pause для критичных компонентов
+- **2.3** Checklist перед пометкой "не критично" (тест воспроизводящий проблему)
+- **2.4** Code Review Checklist для Concurrency кода
+
+---
+
+_Следующий блок: #6 - ADR: избыточность и причины появления_
