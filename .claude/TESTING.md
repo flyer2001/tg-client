@@ -34,6 +34,34 @@
 Модель/encoder/decoder?     → Unit тест
 ```
 
+### Документация в тестах
+
+**Принцип:** тесты = источник знаний о внешних API, внутренних решениях и моделях.
+
+| Уровень | Что документировать | Пример |
+|---------|---------------------|--------|
+| **Unit** (внешний API) | Ссылки на API docs, примеры реальных JSON | [ChatTests.swift](../Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/ChatTests.swift) |
+| **Unit** (внутренняя модель) | Контракт, edge cases, причины решений | [ResponseWaitersTests.swift](../Tests/TgClientUnitTests/TDLibAdapter/ResponseWaitersTests.swift) |
+| **Component** | Ссылки на unit тесты/модели, незадокументированное поведение | [AuthenticationFlowTests.swift](../Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift) |
+| **E2E** | Пользовательский сценарий, ручная/полуручная проверка | `Tests/TgClientE2ETests/` или `scripts/manual_*.sh` |
+
+---
+
+## Research-First [RETRO-2024-11]
+
+**Когда:** новый API или новый метод существующего API (TDLib, HTTP, библиотека).
+
+| Шаг | Действие | Результат |
+|-----|----------|-----------|
+| 1. Spike | Документация + **throwaway код** для проверки реального поведения (≤30 мин) | "API работает так" |
+| 2. Architecture | Edge cases? Concurrency? Memory? | Проговорить вслух |
+| 3. ADR | Если >50 строк — записать в ARCHITECTURE.md | Документ решения |
+| 4. TDD | Только после шагов 1-3 | RED → GREEN → REFACTOR |
+
+**⚠️ Spike = код!** Реальное поведение API может расходиться с документацией.
+
+**Причина правила:** Пропуск spike → 9 дней cascade changes (Race Condition инцидент).
+
 ---
 
 ## TDD Workflow: Outside-In
