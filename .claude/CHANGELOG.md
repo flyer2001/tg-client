@@ -1,3 +1,35 @@
+## [2025-12-03] Сессия 21 — Груминг v0.3.0: SummaryGenerator
+
+**Цель:** Подготовить задачу для реализации AI-саммаризации
+
+**Выполнено:**
+- ✅ Груминг v0.3.0: SummaryGenerator (AI-саммари непрочитанных каналов)
+- ✅ User Story: пользователь получает саммари вместо чтения всех сообщений
+- ✅ Scope уточнён: только OpenAI API, без BotNotifier (фокус на одном компоненте)
+- ✅ Task Breakdown: 10 шагов Outside-In TDD
+- ✅ Новое правило: DocC документация User Story ПЕРЕД тестами (шаг 1.2)
+
+**Acceptance Criteria:**
+- Протокол `SummaryGeneratorProtocol` + реализация `OpenAISummaryGenerator`
+- Формат: Telegram Markdown (резюме + группировка по каналам + ссылки)
+- Лимит 4096 символов (Telegram API)
+- TDD: E2E → Component (real OpenAI) → Unit → Mock (в конце)
+- Structured logging
+
+**Задачи:**
+1. Spike: Research OpenAI API (Research-First обязателен!)
+2. **DocC документация** User Story ← контракт компонента
+3. E2E тест (real dependencies)
+4. Component тест → Implementation → Refactoring
+5. Mock только в конце
+
+**Документация:**
+- TASKS.md: добавлен груминг v0.3.0
+- Thread Sanitizer понижен до низкого приоритета
+
+---
+
+
 ## 2025-12-02 - Thread Sanitizer: Linux исследование [Sonnet]
 
 **Цель:** Проверить возможность TSan анализа на Linux
