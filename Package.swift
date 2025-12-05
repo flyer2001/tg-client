@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -76,7 +76,8 @@ let package = Package(
         .target(
             name: "DigestCore",
             dependencies: ["TGClientInterfaces", "TgClientModels"],
-            path: "Sources/DigestCore"
+            path: "Sources/DigestCore",
+            exclude: ["Generators/SummaryGenerator.md"]
         ),
         // Test targets
         .target(

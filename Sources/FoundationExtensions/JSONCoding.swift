@@ -64,3 +64,41 @@ extension JSONDecoder {
         return decoder
     }
 }
+
+// MARK: - OpenAI API
+
+extension JSONEncoder {
+    /// Централизованный encoder для OpenAI API.
+    ///
+    /// **Настройки:**
+    /// - `keyEncodingStrategy = .convertToSnakeCase` — автоматическая конвертация camelCase → snake_case
+    ///
+    /// **Использование:**
+    /// ```swift
+    /// let encoder = JSONEncoder.openAI()
+    /// let data = try encoder.encode(request)
+    /// ```
+    public static func openAI() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
+    }
+}
+
+extension JSONDecoder {
+    /// Централизованный decoder для OpenAI API.
+    ///
+    /// **Настройки:**
+    /// - `keyDecodingStrategy = .convertFromSnakeCase` — автоматическая конвертация snake_case → camelCase
+    ///
+    /// **Использование:**
+    /// ```swift
+    /// let decoder = JSONDecoder.openAI()
+    /// let response = try decoder.decode(ChatCompletionResponse.self, from: data)
+    /// ```
+    public static func openAI() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
+}
