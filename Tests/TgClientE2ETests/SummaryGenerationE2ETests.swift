@@ -44,9 +44,9 @@ struct SummaryGenerationE2ETests {
     /// - Для публичного канала есть ссылки на сообщения
     /// - Для приватного канала НЕТ ссылок
     ///
-    /// **⚠️ Disabled:** SwiftPM 6.2 Linux bug - `swift test` зависает на incremental build.
-    /// Будет запущен на macOS (см. GitHub swiftlang/swift-package-manager#9441)
-    @Test("Генерация дайджеста через OpenAI API", .disabled())
+    /// **⚠️ SwiftPM bug fixed:** Откат на Swift 6.0 решил проблему incremental builds.
+    /// Тест требует OPENAI_API_KEY в .env файле.
+    @Test("Генерация дайджеста через OpenAI API")
     func generateSummaryThroughOpenAI() async throws {
         // 0. Загрузка .env файла (для получения OPENAI_API_KEY)
         try? EnvFileLoader.loadDotEnv(from: ".env")
