@@ -132,9 +132,10 @@
 - Incremental builds: 2-3s (вместо зависания)
 
 **Следующие шаги:**
-- ⏳ Ожидать ответ мейнтейнера (следующая проверка: 2025-12-09)
-- ⏳ Опубликовать решение на StackOverflow когда будет upstream fix
-- ⏳ Вернуться на Swift 6.x после исправления в SwiftPM
+- ✅ Мейнтейнер ответил (2025-12-05): скептически, считает environment-specific
+- ✅ Репортер опроверг в Docker (issue OPEN, нет timeline fix)
+- ⏳ Workaround (Swift 6.0) остаётся до upstream fix
+- ⏳ Опубликовать решение на StackOverflow когда будет fix
 
 ---
 
