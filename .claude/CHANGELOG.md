@@ -1,3 +1,40 @@
+## [2025-12-05] Сессия 4 — Критичное исправление: правило "Mock только boundaries"
+
+**Выполнено:**
+- ✅ Добавлено правило "Mock только boundaries" в TESTING.md
+  - Новая секция "Правила мокирования" с таблицей примеров
+  - Ссылка на retro-2024-11-analysis.md (история проблемы)
+- ✅ Обновлена роль Testing Architect в ROLES.md
+  - Добавлено критичное правило #1 с ссылкой на TESTING.md
+- ✅ Выполнена первая проверка гипотез ретро (2025-12-05)
+  - Найден инцидент: чуть не создали MockSummaryGenerator
+  - Root cause: правило было в ретро, но не в активных гайдах
+  - Метрики: Spike 1/1 ✅, Mock >100 строк: 0 ✅
+- ✅ Добавлено явное напоминание в TASKS.md (следующая проверка: 2025-12-08)
+- ✅ GitHub issue #9441: статус обновлён (мейнтейнер ответил, issue OPEN)
+- ✅ Убран MockSummaryGenerator из scope v0.3.0
+  - TASKS.md: DigestOrchestrator будет использовать OpenAISummaryGenerator + MockHTTPClient
+  - MVP.md: удалено упоминание MockSummaryGenerator
+
+**Изменённые файлы:**
+- `.claude/TESTING.md` — секция "Правила мокирования" (14 строк)
+- `.claude/ROLES.md` — Testing Architect критичное правило #1
+- `.claude/TASKS.md` — напоминание ретро + статус GitHub issue
+- `.claude/MVP.md` — убраны упоминания MockSummaryGenerator
+- `CLAUDE.md` — усилена формулировка проверки ретро (ОБЯЗАТЕЛЬНО)
+- `.claude/archived/RETRO-RESULT.md` — отчёт за 2025-12-05
+
+**Решения/контекст:**
+- **Инцидент предотвращён:** Пользователь остановил ДО написания кода ("мы так уже делали с TDLibClient")
+- **Root cause:** Правило "Mock только boundaries" было в archived/retro-2024-11-analysis.md:101, но НЕ в TESTING.md
+- **Принцип:** Мокаем ТОЛЬКО внешние границы (FFI, network, filesystem), переиспользуем реальную логику
+  - TDLib: MockTDLibFFI (rawSend/rawReceive), НЕ MockTDLibClient
+  - HTTP: MockHTTPClient (send request), НЕ MockSummaryGenerator
+- **Проверка ретро:** Должна выполняться раз в 1-3 дня (добавлено напоминание в TASKS.md)
+
+**TODO:**
+- [ ] macOS: проверка Swift 6.0 + E2E тесты (отложено из-за SwiftPM bug)
+
 ## [2025-12-05] Сессия — SwiftPM Bug: Docker тест + ответ мейнтейнеру
 
 **Выполнено:**
