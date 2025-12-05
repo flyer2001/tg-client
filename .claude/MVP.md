@@ -147,8 +147,9 @@ try await tdlib.send(ViewMessagesRequest(chatId: channel.id, messageIds: message
 
 #### 2. SummaryGenerator (🚧 v0.3.0 в разработке)
 - **Протокол:** `SummaryGeneratorProtocol`
-- **Реализации:** `OpenAISummaryGenerator` (MVP), `MockSummaryGenerator` (tests)
+- **Реализация:** `OpenAISummaryGenerator` (MVP)
 - **Метод:** `generate(messages: [SourceMessage]) async throws -> String`
+- **Тесты:** Component тесты используют OpenAISummaryGenerator + MockHTTPClient (mock только network boundary)
 
 **Технические решения (spike 2025-12-03):**
 - Модель: `gpt-3.5-turbo` (~$0.006/дайджест для 100 сообщений)
@@ -174,8 +175,7 @@ try await tdlib.send(ViewMessagesRequest(chatId: channel.id, messageIds: message
 7. **Implementation → GREEN** - OpenAISummaryGenerator + URLSession
 8. **Unit тесты** - обработка ответа (4096 chars limit, разбивка)
 9. **Refactoring** - retry logic, logging
-10. **Mock** - MockSummaryGenerator для других модулей
-11. **Документация** - обновить ARCHITECTURE.md
+10. **Документация** - обновить ARCHITECTURE.md
 
 Детали: см. `.claude/TASKS.md` (текущая задача)
 

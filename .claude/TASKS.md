@@ -101,7 +101,7 @@
 ### 🎯 Следующие шаги
 
 **MVP tasks (осталось до завершения v0.3.0):**
-- ⏳ MockSummaryGenerator для DigestOrchestrator (Component тесты)
+- ⏳ DigestOrchestrator Component тесты (OpenAISummaryGenerator + MockHTTPClient)
 - ⏳ Retry logic (3x exponential backoff) - будущая версия
 - ⏳ Structured logging - будущая версия
 - ⏳ E2E проверка на macOS (отложено из-за SwiftPM bug)
