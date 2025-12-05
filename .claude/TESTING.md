@@ -34,6 +34,20 @@
 Модель/encoder/decoder?     → Unit тест
 ```
 
+### Правила мокирования
+
+**Принцип:** Mock ТОЛЬКО внешние boundaries (FFI, network, filesystem), НЕ high-level API.
+
+| Что мокаем | Правильно ✅ | Неправильно ❌ |
+|------------|-------------|----------------|
+| TDLib | MockTDLibFFI (rawSend/rawReceive) | MockTDLibClient (весь API) |
+| HTTP | MockHTTPClient (send request) | MockSummaryGenerator (логика) |
+| Filesystem | MockFileSystem (read/write) | MockConfig (парсинг) |
+
+**Причина:** Переиспользуем реальную логику (ResponseWaiters, JSON парсинг, error handling) → меньше дублирования, больше покрытие.
+
+**История:** [retro-2024-11-analysis.md](archived/retro-2024-11-analysis.md#блок-4-overhead-от-mockclient-дублирование-логики-real-клиента)
+
 ### Документация в тестах
 
 **Принцип:** тесты = источник знаний о внешних API, внутренних решениях и моделях.

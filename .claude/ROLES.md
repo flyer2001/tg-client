@@ -59,6 +59,7 @@
 - Mock-стратегии для внешних зависимостей (TDLib, AI API)
 
 **Критичные правила:**
+- ✅ Mock ТОЛЬКО boundaries (FFI, network, filesystem) - см. [TESTING.md#правила-мокирования](TESTING.md#правила-мокирования)
 - ✅ `confirmation()` для AsyncSequence событий
 - ✅ `withMainSerialExecutor` для детерминированных тестов
 - ❌ НИКОГДА `Task.sleep()` для ожидания результата
