@@ -320,3 +320,76 @@ struct JSONCodingTests {
         #expect(decoded == original)
     }
 }
+
+// MARK: - OpenAI API Tests
+
+/// Unit-тесты для OpenAI encoder/decoder (JSONCoding.swift).
+///
+/// **Цель:** Убедиться что `.openAI()` factory методы используют правильные стратегии кодирования.
+///
+/// **Что тестируем:**
+/// - `JSONEncoder.openAI()` использует `.convertToSnakeCase`
+/// - `JSONDecoder.openAI()` использует `.convertFromSnakeCase`
+/// - Round-trip тесты для гарантии совместимости
+@Suite("JSONEncoder.openAI() и JSONDecoder.openAI()")
+struct OpenAIJSONCodingTests {
+
+    // MARK: - Test Models
+
+    /// Простая модель для тестирования snake_case конвертации.
+    struct SimpleOpenAIModel: Codable, Equatable {
+        let maxTokens: Int
+        let modelName: String
+    }
+
+    // MARK: - Encoding Tests
+
+    @Test("Базовая конвертация camelCase → snake_case")
+    func encodeBasicSnakeCase() throws {
+        let model = SimpleOpenAIModel(maxTokens: 100, modelName: "gpt-3.5-turbo")
+        let encoder = JSONEncoder.openAI()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // Проверяем конвертацию camelCase → snake_case
+        #expect(result["max_tokens"] as? Int == 100, "maxTokens → max_tokens")
+        #expect(result["model_name"] as? String == "gpt-3.5-turbo", "modelName → model_name")
+
+        // Убеждаемся что camelCase ключей НЕТ
+        #expect(result["maxTokens"] == nil, "Не должно быть camelCase ключа")
+        #expect(result["modelName"] == nil, "Не должно быть camelCase ключа")
+    }
+
+    // MARK: - Decoding Tests
+
+    @Test("Базовая конвертация snake_case → camelCase")
+    func decodeBasicSnakeCase() throws {
+        let json = """
+        {
+            "max_tokens": 100,
+            "model_name": "gpt-3.5-turbo"
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.openAI()
+        let result = try decoder.decode(SimpleOpenAIModel.self, from: data)
+
+        #expect(result.maxTokens == 100, "max_tokens → maxTokens")
+        #expect(result.modelName == "gpt-3.5-turbo", "model_name → modelName")
+    }
+
+    // MARK: - Round-trip Tests
+
+    @Test("Round-trip: encode → decode должен вернуть исходные данные")
+    func roundTripSimpleModel() throws {
+        let original = SimpleOpenAIModel(maxTokens: 100, modelName: "gpt-3.5-turbo")
+        let encoder = JSONEncoder.openAI()
+        let decoder = JSONDecoder.openAI()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(SimpleOpenAIModel.self, from: data)
+
+        #expect(decoded == original, "Round-trip должен вернуть исходные данные")
+    }
+}
