@@ -43,18 +43,48 @@
 
 ## 📋 Текущая задача
 
-### v0.3.0: SummaryGenerator (Component тесты завершены ✅)
+### v0.3.0: DigestOrchestrator — ЗАВЕРШЁН ✅
 
 **Полный scope:** см. [MVP.md - SummaryGenerator](MVP.md#2-summarygenerator-в-разработке)
 
-**Стратегия:** Двойной цикл TDD (Research-First для моков)
-1. ✅ **Цикл 1 (Learning):** Реализация с реальным HTTP
-2. ✅ **Цикл 2 (Refactor):** HTTPClient абстракция
-3. ✅ **Цикл 3 (Testing):** Component тесты + Unit тесты
+**Стратегия:** Outside-In TDD с правилом "Mock только boundaries"
+1. ✅ **SummaryGenerator:** OpenAISummaryGenerator + HTTPClient абстракция
+2. ✅ **DigestOrchestrator:** Координация pipeline с логированием
+3. ✅ **E2E тест:** Включён (Swift 6.0 решил SwiftPM bug!)
+
+**Итого тестов:** 146 passed (было 128 в v0.2.0)
+- Component: 5 (DigestOrchestrator) + 6 (OpenAISummaryGenerator) = 11
+- Unit: 7 (Models + JSONCoding)
+- E2E: 1 (реальный OpenAI API)
 
 ---
 
-### ✅ Завершено (сессия 2025-12-05)
+### ✅ Завершено (сессия 2025-12-05 #2: DigestOrchestrator)
+
+**DigestOrchestrator реализация:**
+1. ✅ Component тест (RED) - DigestOrchestratorTests.swift (5 тестов)
+2. ✅ DigestOrchestrator.swift - координатор с логированием
+3. ✅ E2E тест включён - SummaryGenerationE2ETests (Swift 6.0 fix)
+4. ✅ Все тесты GREEN - 146/146 passed
+
+**Новые файлы:**
+- `Sources/DigestCore/Orchestrators/DigestOrchestrator.swift` - координатор pipeline
+- `Tests/TgClientComponentTests/DigestCore/DigestOrchestratorTests.swift` - Component тесты (5)
+
+**Изменённые файлы:**
+- `Tests/TgClientE2ETests/SummaryGenerationE2ETests.swift` - убран .disabled(), тест включён
+
+**Решения/контекст:**
+- **Правило мокирования соблюдено:** DigestOrchestrator использует реальный OpenAISummaryGenerator + MockHTTPClient (НЕ MockSummaryGenerator!)
+- **E2E работает на Linux:** Swift 6.0 решил проблему SwiftPM incremental build hang
+- **v0.3.0 Scope:** Только координация SummaryGenerator (MessageSource/BotNotifier интеграция — в v0.4.0)
+- **Actor isolation:** DigestOrchestrator = actor для thread-safe логирования
+
+**Тесты:** 5 Component + 1 E2E = 6 новых тестов
+
+---
+
+### ✅ Завершено (сессия 2025-12-05 #1: GitHub + Ретро)
 
 **Документация (критичное исправление):**
 1. ✅ **Правило "Mock только boundaries"** добавлено в TESTING.md + ROLES.md
@@ -121,15 +151,22 @@
 
 ### 🎯 Следующие шаги
 
-**MVP tasks (осталось до завершения v0.3.0):**
-- ⏳ DigestOrchestrator Component тесты (OpenAISummaryGenerator + MockHTTPClient)
-- ⏳ Retry logic (3x exponential backoff) - будущая версия
-- ⏳ Structured logging - будущая версия
-- ⏳ E2E проверка на macOS (отложено из-за SwiftPM bug)
+**v0.3.0 — ГОТОВ К РЕЛИЗУ:**
+- ✅ DigestOrchestrator Component тесты
+- ✅ E2E тест включён и работает
+- ⏳ Коммиты + CHANGELOG.md
+- ⏳ Git push
 
-**Перед v0.4.0:**
-- Документация: обновить CLAUDE.md (убрать упоминания про обязательность build-clean.sh)
-- Коммиты: разделить Sources/, Tests/, Documentation
+**v0.4.0 — Полный pipeline (планирование):**
+- MessageSource → DigestOrchestrator интеграция
+- BotNotifier реализация (Telegram Bot API)
+- StateManager (timestamp JSON)
+- E2E тест полного pipeline
+- Retry logic (3x exponential backoff)
+
+**Техдолг:**
+- Документация: обновить CLAUDE.md (убрать упоминания про обязательность build-clean.sh на Linux, т.к. Swift 6.0 fix)
+- Thread Sanitizer анализ (отложено до macOS)
 
 ---
 

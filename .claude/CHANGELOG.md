@@ -1,3 +1,39 @@
+## [2025-12-05] Сессия 6 — v0.3.0: DigestOrchestrator + E2E fix
+
+**Выполнено:**
+- ✅ DigestOrchestrator реализован (координатор pipeline с логированием)
+- ✅ Component тесты DigestOrchestrator (5 тестов: success, empty, error propagation)
+- ✅ E2E тест включён (SummaryGenerationE2ETests работает на Swift 6.0!)
+- ✅ Ответ мейнтейнеру SwiftPM (GitHub #9441) про Docker setup
+- ✅ Все тесты GREEN: 146/146 passed (+18 тестов с начала v0.3.0)
+
+**Новые файлы:**
+- `Sources/DigestCore/Orchestrators/DigestOrchestrator.swift` — координатор pipeline (actor, логирование)
+- `Tests/TgClientComponentTests/DigestCore/DigestOrchestratorTests.swift` — Component тесты (5)
+
+**Изменённые файлы:**
+- `Tests/TgClientE2ETests/SummaryGenerationE2ETests.swift` — убран .disabled(), E2E тест работает
+- `.claude/TASKS.md` — v0.3.0 отмечен как завершённый
+
+**Решения/контекст:**
+- **Правило мокирования соблюдено:** DigestOrchestrator Component тесты используют реальный OpenAISummaryGenerator + MockHTTPClient (boundary). НЕ создавали MockSummaryGenerator (high-level API).
+- **E2E на Linux работает:** Swift 6.0 решил проблему SwiftPM incremental build hang (issue #9441).
+- **v0.3.0 Scope:** DigestOrchestrator пока только координирует SummaryGenerator. Интеграция с MessageSource/BotNotifier — в v0.4.0.
+- **Actor isolation:** DigestOrchestrator = actor для thread-safe state и логирования.
+- **GitHub communication:** Ответили мейнтейнеру SwiftPM про Docker setup (official swift:6.2.1 image, same Ubuntu host).
+
+**Тесты:**
+- v0.2.0: 128 passed
+- v0.3.0: 146 passed (+18)
+  - DigestOrchestrator Component: 5
+  - OpenAISummaryGenerator Component: 6
+  - Models + JSONCoding Unit: 7
+  - E2E (OpenAI API): 1
+
+**v0.3.0 статус:** ✅ ГОТОВ К РЕЛИЗУ
+
+---
+
 ## [2025-12-05] Сессия 4 — Критичное исправление: правило "Mock только boundaries"
 
 **Выполнено:**
