@@ -145,9 +145,39 @@ try await tdlib.send(ViewMessagesRequest(chatId: channel.id, messageIds: message
 
 ⚠️ **Race condition:** между запросами кто-то может прочитать → фильтровать по `lastReadInboxMessageId`
 
-#### 2. SummaryGenerator
-- Протокол: `SummaryGeneratorProtocol`
-- Реализации: `OpenAISummaryGenerator` (MVP), `MockSummaryGenerator` (tests)
+#### 2. SummaryGenerator (🚧 v0.3.0 в разработке)
+- **Протокол:** `SummaryGeneratorProtocol`
+- **Реализации:** `OpenAISummaryGenerator` (MVP), `MockSummaryGenerator` (tests)
+- **Метод:** `generate(messages: [SourceMessage]) async throws -> String`
+
+**Технические решения (spike 2025-12-03):**
+- Модель: `gpt-3.5-turbo` (~$0.006/дайджест для 100 сообщений)
+- HTTP: URLSession, retry 3x с exponential backoff (1s, 2s, 4s)
+- Промпт: на русском, system message + user message
+- Лимит ответа: 3800 символов (резерв для Telegram 4096)
+- Errors: 401→fatal, 429/5xx→retry
+
+**Spike материалы (архив):**
+- Документация: `.claude/archived/spike-openai-api-2025-12-03.md`
+- Тестовый скрипт (базовый): `.claude/archived/openai-spike-test.sh`
+- Тестовый скрипт (русский промпт): `.claude/archived/openai-russian-prompt-test.sh`
+- Research библиотек (HTTP client, errors, streaming): `.claude/archived/openai-libraries-research-2025-12-04.md`
+
+**Task Breakdown (Outside-In TDD):**
+
+1. **Spike** ✅ - Research OpenAI API
+2. **DocC документация** - User Story + примеры
+3. **E2E тест (RED)** - ChannelMessageSource → SummaryGenerator
+4. **Протокол** - SummaryGeneratorProtocol
+5. **Component тест (RED)** - реальный HTTP к OpenAI
+6. **Unit тесты** - форматирование промпта (группировка каналов)
+7. **Implementation → GREEN** - OpenAISummaryGenerator + URLSession
+8. **Unit тесты** - обработка ответа (4096 chars limit, разбивка)
+9. **Refactoring** - retry logic, logging
+10. **Mock** - MockSummaryGenerator для других модулей
+11. **Документация** - обновить ARCHITECTURE.md
+
+Детали: см. `.claude/TASKS.md` (текущая задача)
 
 #### 3. BotNotifier
 - Протокол: `BotNotifierProtocol`

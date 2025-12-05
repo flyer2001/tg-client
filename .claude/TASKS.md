@@ -1,85 +1,140 @@
 # Задачи проекта
 
-> **Последнее обновление:** 2025-12-03
-> **Текущая версия:** v0.2.0 (MVP завершён, готовимся к v0.3.0)
+> **Последнее обновление:** 2025-12-05
+> **Текущая версия:** v0.3.0 (в разработке)
 
 ---
 
-## 📋 Следующие задачи (до v0.3.0)
+## 🚨 ПРИОРИТЕТ #1: Переезд на Swift 6.0 на macOS
 
-### 1. v0.3.0: SummaryGenerator (AI-саммари непрочитанных)
+**Статус:** Linux ✅ завершён | macOS ⏳ ожидает
 
-**User Story:**
-Как пользователь CLI-приложения
-Я хочу получать AI-саммари непрочитанных сообщений из каналов
-Чтобы быстро понять суть контента без чтения всех сообщений
+**Linux (завершено):**
+- ✅ Swift 6.2 → 6.0 downgrade
+- ✅ Package.swift: `swift-tools-version: 6.0`
+- ✅ Проверено: сборка, тесты, incremental builds работают
+- ✅ Отчёт SwiftPM мейнтейнеру: https://github.com/swiftlang/swift-package-manager/issues/9441#issuecomment-3616550867
 
-**Acceptance Criteria:**
-- ✅ Протокол `SummaryGeneratorProtocol` с `generate(messages:) async throws -> String`
-- ✅ Реализация `OpenAISummaryGenerator` (HTTP вызовы, без SDK)
-- ✅ Формат: Telegram Markdown (резюме + группировка по каналам + ссылки)
-- ✅ Обработка лимита 4096 символов (Telegram API)
-- ✅ Unit-тесты (форматирование)
-- ✅ Component-тест (real OpenAI API)
-- ✅ E2E тест (ChannelMessageSource → SummaryGenerator)
-- ✅ Structured logging (request/response/errors)
+**macOS (TODO на следующей сессии):**
+1. Установить Swift 6.0 toolchain на macOS
+2. Проверить сборку и тесты
+3. Запустить E2E тест `SummaryGenerationE2ETests` (отложен с Linux)
+4. Проверить TSan на macOS (отложен с Linux)
 
-**Task Breakdown (Outside-In TDD):**
+**Причина:** SwiftPM 6.1/6.2 зависает на incremental builds на Linux (регрессия между 6.0↔6.1).
 
-#### 1.1. Spike: Research OpenAI API ⚠️ Research-First
-- [ ] WebFetch документации `platform.openai.com/docs/api-reference/chat`
-- [ ] Quick prototype: `curl` или Swift playground
-- [ ] Зафиксировать: формат запроса, лимиты токенов, retry стратегию
+**Детали:** см. `.claude/archived/swiftpm-hang-testing-2025-12-05.md`
 
-#### 1.2. DocC документация User Story
-- [ ] Создать `SummaryGenerator.md` в Sources/DigestCore/Generators/
-- [ ] Описать User Story (что и зачем)
-- [ ] Документировать публичный контракт `SummaryGeneratorProtocol`
-- [ ] Примеры использования (code snippets)
-- [ ] Формат вывода (структура markdown)
+---
 
-#### 1.3. E2E тест (RED) — real dependencies
-- [ ] `Tests/TgClientE2ETests/SummaryGenerationE2ETests.swift`
-- [ ] Сценарий: ChannelMessageSource → SummaryGenerator → markdown
-- [ ] ⚠️ Real OpenAI API через `OPENAI_API_KEY` env
+## 📋 Текущая задача
 
-#### 1.4. Протокол SummaryGeneratorProtocol
-- [ ] `Sources/TGClientInterfaces/SummaryGeneratorProtocol.swift`
-- [ ] Метод: `generate(messages: [SourceMessage]) async throws -> String`
+### v0.3.0: SummaryGenerator (Component тесты завершены ✅)
 
-#### 1.5. Component тест (RED) — real HTTP
-- [ ] `Tests/DigestCoreTests/OpenAISummaryGeneratorTests.swift`
-- [ ] Тест с реальным OpenAI API (URLSession)
-- [ ] Assert: проверка структуры markdown (резюме, каналы, ссылки)
+**Полный scope:** см. [MVP.md - SummaryGenerator](MVP.md#2-summarygenerator-в-разработке)
 
-**Декомпозиция при разрастании (>150 строк):**
-- `OpenAISummaryGenerator_HappyPathTests.swift`
-- `OpenAISummaryGenerator_ErrorHandlingTests.swift`
-- `OpenAISummaryGenerator_FormattingTests.swift`
+**Стратегия:** Двойной цикл TDD (Research-First для моков)
+1. ✅ **Цикл 1 (Learning):** Реализация с реальным HTTP
+2. ✅ **Цикл 2 (Refactor):** HTTPClient абстракция
+3. ✅ **Цикл 3 (Testing):** Component тесты + Unit тесты
 
-#### 1.6. Implementation → GREEN
-- [ ] `Sources/DigestCore/Generators/OpenAISummaryGenerator.swift`
-- [ ] HTTP клиент: URLSession
-- [ ] Prompt engineering: system + user messages
-- [ ] Parsing: `choices[0].message.content`
-- [ ] Довести component тест до зелёного
+---
 
-#### 1.7. Unit тесты (детали реализации)
-- [ ] Форматирование markdown: группировка по каналам
-- [ ] Обрезка по 4096 символов
-- [ ] Escaping для Telegram Markdown
+### ✅ Завершено (сессия 2025-12-05)
 
-#### 1.8. Refactoring
-- [ ] Выделить HTTP retry logic (экспоненциальная задержка, 3 попытки)
-- [ ] Оптимизировать prompt
-- [ ] Structured logging: request/response/errors
+**Component тесты (Цикл 3):**
+1. ✅ MockHTTPClient - Result-based реализация с actor isolation
+2. ✅ OpenAIModels - вынесены в отдельный файл (Request/Response)
+3. ✅ JSONEncoder/Decoder.openAI() - централизованные кодеры
+4. ✅ Component тесты OpenAISummaryGenerator - 6 тестов (все GREEN)
+5. ✅ Unit тесты OpenAIModels - 3 roundtrip теста (все GREEN)
+6. ✅ Unit тесты JSONCoding - 3 теста для OpenAI API (все GREEN)
+7. ✅ OpenAIError - добавлен Equatable для Swift Testing
 
-#### 1.9. Mock (только в конце!)
-- [ ] `MockSummaryGenerator` для использования в других модулях
+**Файлы (новые):**
+- `Sources/DigestCore/Generators/OpenAIModels.swift` - модели OpenAI API
+- `Tests/TgClientComponentTests/DigestCore/OpenAISummaryGeneratorTests.swift` - Component тесты (6)
+- `Tests/TgClientUnitTests/DigestCore/OpenAIModelsTests.swift` - Unit тесты (3)
+- `Sources/FoundationExtensions/JSONCoding.swift` - добавлены .openAI() методы
+- `Tests/TgClientUnitTests/FoundationExtensions/JSONCodingTests.swift` - Unit тесты (3)
 
-#### 1.10. Документация (архитектура)
-- [ ] Обновить `ARCHITECTURE.md`: добавить SummaryGenerator в диаграмму
-- [ ] Обновить `MVP.md`: отметить SummaryGenerator как готовый
+**Файлы (изменённые):**
+- `Tests/TestHelpers/MockHTTPClient.swift` - реализован (Result-based + actor isolation)
+- `Sources/DigestCore/Generators/OpenAISummaryGenerator.swift` - использует JSONEncoder/Decoder.openAI()
+
+**Решения/контекст:**
+- **TDD цикл:** RED (Component) → GREEN (MockHTTPClient + Models) → Unit тесты → REFACTOR
+- **Без raw JSON:** Unit тесты используют roundtrip (encode → decode), документация в ссылках на API
+- **Actor isolation:** MockHTTPClient.setStubResult() вместо прямого доступа к var
+- **OpenAIError.Equatable:** для Swift Testing #expect(throws:)
+
+**Тесты:** 13 passed (6 Component + 7 Unit)
+
+---
+
+### ✅ Завершено (сессия 2025-12-04)
+
+**Цикл 1:**
+1. ✅ Spike - OpenAI API исследован + research библиотек
+2. ✅ DocC документация - SummaryGenerator.md (85 строк)
+3. ✅ E2E тест (RED) - SummaryGenerationE2ETests.swift
+4. ✅ SummaryGeneratorProtocol - интерфейс создан
+5. ✅ OpenAISummaryGenerator - реализация с URLSession
+6. ⏳ E2E → GREEN - **отложен до macOS** (SwiftPM bug)
+
+**Цикл 2:**
+7. ✅ HTTPClientProtocol + HTTPError (best practices)
+8. ✅ URLSessionHTTPClient - продакшн реализация
+9. ✅ MockHTTPClient - заглушка с TODO
+10. ✅ Refactor - inject HTTPClient в OpenAISummaryGenerator
+11. ✅ OpenAIError - добавлены unauthorized, rateLimited
+
+**Файлы:**
+- `Sources/DigestCore/HTTP/HTTPClientProtocol.swift`
+- `Sources/DigestCore/HTTP/URLSessionHTTPClient.swift`
+- `Sources/DigestCore/Generators/OpenAISummaryGenerator.swift` (refactored)
+- `Tests/TestHelpers/MockHTTPClient.swift` (заглушка)
+- `.claude/archived/openai-libraries-research-2025-12-04.md`
+
+---
+
+### 🎯 Следующие шаги
+
+**MVP tasks (осталось до завершения v0.3.0):**
+- ⏳ MockSummaryGenerator для DigestOrchestrator (Component тесты)
+- ⏳ Retry logic (3x exponential backoff) - будущая версия
+- ⏳ Structured logging - будущая версия
+- ⏳ E2E проверка на macOS (отложено из-за SwiftPM bug)
+
+**Перед v0.4.0:**
+- Документация: обновить CLAUDE.md (убрать упоминания про обязательность build-clean.sh)
+- Коммиты: разделить Sources/, Tests/, Documentation
+
+---
+
+### ✅ SwiftPM Bug Investigation - Завершён (2025-12-05)
+
+**Статус:** Регрессия локализована, отчёт отправлен, workaround применён
+
+**Результаты тестирования:**
+- ✅ Swift 6.2.1, 6.2, 6.1 → **зависают** на incremental builds (Planning build)
+- ✅ Swift 6.0, 5.10 → **работают** корректно
+- ✅ Регрессия между Swift 6.0 ↔ 6.1 (сентябрь-октябрь 2024)
+
+**Отчёт мейнтейнеру:**
+- **GitHub (1):** https://github.com/swiftlang/swift-package-manager/issues/9441#issuecomment-3616550867 (5 версий Swift)
+- **GitHub (2):** https://github.com/swiftlang/swift-package-manager/issues/9441#issuecomment-3617201398 (Docker тест + объяснение CI gap)
+- **Детали:** `.claude/archived/swiftpm-hang-testing-2025-12-05.md` (307 строк verbose логов)
+
+**Workaround (применён):**
+- Downgrade на Swift 6.0 на Linux
+- Package.swift: `swift-tools-version: 6.0`
+- Incremental builds: 2-3s (вместо зависания)
+
+**Следующие шаги:**
+- ⏳ Ожидать ответ мейнтейнера (следующая проверка: 2025-12-09)
+- ⏳ Опубликовать решение на StackOverflow когда будет upstream fix
+- ⏳ Вернуться на Swift 6.x после исправления в SwiftPM
 
 ---
 
