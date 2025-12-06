@@ -1,3 +1,29 @@
+## [2025-12-06] Сессия 7 — Планирование v0.4.0 + Release Checklist v0.3.0
+
+**Выполнено:**
+- Создан RFC для v0.4.0 (полный pipeline интеграция)
+- Определены архитектурные решения для BotNotifier, StateManager, retry logic
+- Создан Release Checklist v0.3.0 (готовность к релизу)
+
+**Новые файлы:**
+- `.claude/v0.4.0-pipeline-integration-rfc.md` — детальный план интеграции pipeline (BotNotifier, StateManager, DigestOrchestrator.runPipeline)
+
+**Изменённые файлы:**
+- `.claude/TASKS.md` — добавлен Release Checklist v0.3.0 (6 блоков задач: код/тесты, интеграция с реальными данными, документация, git/релиз)
+
+**Решения/контекст:**
+- **Error handling:** Partial success — пропускаем упавшие каналы, отправляем дайджест для успешных
+- **Checkpoint timing:** Атомарная запись StateManager ТОЛЬКО после BotNotifier.send + markAsRead
+- **Rollback strategy:** BotNotifier упал → НЕ помечать прочитанными → retry на следующем запуске
+- **Retry logic:** В каждом компоненте (SummaryGenerator, BotNotifier), только transient errors (timeout, 5xx)
+- **v0.3.0 scope:** Код готов, коммиты запушены. Перед релизом: E2E тест с OpenAI API, генерация первого дайджеста, проверка лимитов, обновление документации
+
+**TODO (следующая сессия):**
+- [ ] Обновить документацию (MVP.md "Текущая версия: 0.3.0", CLAUDE.md убрать упоминания build-clean.sh)
+- [ ] Запустить E2E тест с реальным OpenAI API
+- [ ] Генерировать первый дайджест на боевых каналах
+- [ ] Создать git tag v0.3.0 после успешной проверки
+
 ## [2025-12-05] Сессия 6 — v0.3.0: DigestOrchestrator + E2E fix
 
 **Выполнено:**
