@@ -1,3 +1,193 @@
+## [2025-12-07] Сессия 7 — Unit тесты для моделей ChatList/ChatPosition + баг-фиксы
+
+**Выполнено:**
+- Созданы Unit тесты для ChatList (11 тестов) с покрытием edge cases
+- Созданы Unit тесты для ChatPosition (13 тестов) с покрытием edge cases
+- Дополнены UpdateTests тестами для chatPosition case (+6 тестов)
+- Исправлен баг с декодированием Int64/Int32 - добавлены helpers во все модели
+- Исправлен конфликт convertFromSnakeCase + explicit CodingKeys
+- Добавлен public init для ChatPosition
+
+**Созданные файлы:**
+- `Tests/TgClientUnitTests/Models/ChatListTests.swift` - 11 тестов
+- `Tests/TgClientUnitTests/Models/ChatPositionTests.swift` - 13 тестов
+
+**Изменённые файлы:**
+- `Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/UpdateTests.swift` - +6 тестов для chatPosition
+- `Sources/TgClientModels/Responses/Update.swift` - import FoundationExtensions, используем decodeInt64/decodeInt32
+- `Sources/TgClientModels/Responses/ChatType.swift` - import FoundationExtensions, используем decodeInt64
+- `Sources/TgClientModels/Responses/Message.swift` - import FoundationExtensions, используем decodeInt64
+- `Sources/TgClientModels/Models/ChatPosition.swift` - public init, убран explicit mapping для isPinned
+- `Sources/TgClientModels/Requests/LoadChatsRequest.swift` - убран explicit mapping для chatFolderId
+- `.claude/TASKS.md` - отмечен Шаг 4 как завершённый, добавлен вопрос про DigestOrchestrator
+
+**Решения/контекст:**
+1. **Конфликт convertFromSnakeCase + explicit CodingKeys:** При использовании JSONDecoder.tdlib() НЕ нужны explicit mappings типа `case isPinned = "is_pinned"` - автоматическая конверсия snake_case ↔ camelCase работает корректно. Убрали explicit mappings из ChatPosition.isPinned и ChatList.chatFolderId.
+2. **Helper decodeInt64/decodeInt32 везде:** TDLib присылает Int64/Int32 как String для больших чисел (> 2^53). Добавили helpers во все модели: Update, ChatType, Message.
+3. **Public init для ChatPosition:** Упрощает создание инстансов в тестах без необходимости парсить JSON.
+4. **Вопрос про DigestOrchestrator:** Добавлен в TASKS.md - нужно обсудить необходимость дополнительного уровня абстракции.
+
+**Тесты:** 188/188 passed (было 146, добавили 42 включая helpers)
+
+**TODO:**
+- [ ] Шаг 5: Regression Component тесты - архивный канал НЕ попадает в fetchUnreadMessages()
+- [ ] Обсудить необходимость DigestOrchestrator (см. TASKS.md)
+
+
+## Сессия 2025-12-06 (bugfix архивных каналов - часть 1)
+
+**Задача:** Bugfix v0.3.0 - архивные каналы попадают в дайджест
+
+**Прогресс:** Шаги 1-3 из 8 завершены (модели + фильтрация + research)
+
+### Изменения
+
+**Новые файлы:**
+- `Sources/TgClientModels/Models/ChatPosition.swift` - модель позиции чата в списке TDLib
+- `Sources/FoundationExtensions/KeyedDecodingContainer+Int64.swift` - helpers для декодирования int64/int32 из String/Int
+- `Tests/TgClientUnitTests/FoundationExtensions/KeyedDecodingContainerInt64Tests.swift` - 12 Unit тестов (все GREEN)
+
+**Изменённые файлы:**
+- `Sources/TgClientModels/Requests/LoadChatsRequest.swift`:
+  - Расширен enum `ChatList`: добавлен `case folder(id: Int32)`, `Hashable`, `Decodable`
+  - Использует `decodeInt32` helper для безопасного декодирования folder_id
+- `Sources/TgClientModels/Responses/ChatResponse.swift`:
+  - Добавлено поле `positions: [ChatPosition]` (опционально в updateNewChat)
+  - Обновлён DEBUG init
+- `Sources/TgClientModels/Responses/Update.swift`:
+  - Добавлен `case chatPosition(chatId:, position:)` для updateChatPosition
+- `Sources/DigestCore/Sources/ChannelMessageSource.swift`:
+  - `ChatCollector`: переделан на словарь `[Int64: ChatResponse]` для мержинга positions
+  - Добавлен метод `updatePosition(chatId:, position:)` для обновления позиций
+  - `loadAllChats()`: слушает `updateChatPosition`, мержит positions
+  - Фильтрация архивных: `!chat.positions.contains { $0.list == .archive }`
+  - Логирование количества отфильтрованных чатов
+
+### Research: Обнаруженные edge cases от TDLib
+
+В ходе manual E2E тестирования обнаружены критичные особенности TDLib API:
+
+1. **order=0** - означает "убрать чат из списка" (игнорировать)
+2. **chatListFolder без chat_folder_id** - удалённая папка (всегда с order=0)
+3. **isPinned может отсутствовать** - требуется `decodeIfPresent` с default=false
+4. **order приходит как String** - большие числа > 2^53 (пример: "9221294784512000005")
+5. **chat_folder_id может быть String или Int** - создан helper `decodeInt32`
+6. **Чат может иметь несколько positions** - в разных списках одновременно
+7. **Все чаты имеют позицию в .main** - даже архивные (фильтрация безопасна)
+
+**Созданы helpers:**
+- `KeyedDecodingContainer.decodeInt64(forKey:)` - декодирует Int64 из String/Int/Int64
+- `KeyedDecodingContainer.decodeInt32(forKey:)` - декодирует Int32 из String/Int/Int32
+- Оба helper'а проверяют наличие ключа и бросают правильный `DecodingError`
+
+### Тесты
+
+**Unit тесты (12 новых, все GREEN):**
+- `KeyedDecodingContainerInt64Tests`: 5 тестов для decodeInt64
+- `KeyedDecodingContainerInt32Tests`: 5 тестов для decodeInt32
+- Тесты для keyNotFound: 2 теста
+
+**Компиляция:** ✅ без ошибок и warning
+
+### Следующие шаги
+
+**Шаг 4:** Unit тесты на модели ChatList/ChatPosition/Update (с edge cases)
+**Шаг 5:** Regression Component тесты (архивный канал не попадает)
+**Шаг 6:** TSan проверка (ChatCollector data races)
+**Шаг 7:** Проверка всех тестов GREEN
+**Шаг 8:** Мини-рефлексия Bugfix процесса
+
+### Документация
+
+- `.claude/TASKS.md` - обновлён статус bugfix (Шаги 1-3 ✅, детальное описание edge cases)
+- `.claude/retro-v0.3.0-questions.md` - добавлены 4 кейса для ретро:
+  1. Создание дубликата ChatList без Grep поиска
+  2. Manual E2E обнаружил order как String (Research-First работает)
+  3. TDD для external API: когда писать Unit тесты для моделей
+  4. Нужна ли библиотека "TDLib JSON examples" для тестов
+
+### Коммиты
+
+(Коммиты будут сделаны в следующей сессии после завершения Unit тестов)
+
+---
+
+
+## [2025-12-06] Сессия 7 — Release Checklist v0.3.0 + Bugfix Investigation
+
+**Выполнено:**
+- ✅ Cross-platform fix: `#if os(Linux)` для `import FoundationNetworking` (6 файлов)
+- ✅ EnvFileLoader перенесён в production код (Sources/FoundationExtensions/)
+- ✅ Pipeline v0.3.0 протестирован на реальных данных (TDLib → OpenAI → Digest)
+- ✅ E2E тест `SummaryGenerationE2ETests` запущен с реальным OpenAI API (работает)
+- ✅ Создан файл ретро: `.claude/retro-v0.3.0-questions.md` (2 вопроса для анализа)
+- ⚠️ **Обнаружен критичный баг:** Архивные каналы попадают в дайджест
+
+**Изменённые файлы:**
+- `Sources/DigestCore/HTTP/HTTPClientProtocol.swift` — добавлен `#if os(Linux)` для FoundationNetworking
+- `Sources/DigestCore/HTTP/URLSessionHTTPClient.swift` — добавлен `#if os(Linux)`
+- `Sources/DigestCore/Generators/OpenAISummaryGenerator.swift` — добавлен `#if os(Linux)`
+- `Tests/TestHelpers/MockHTTPClient.swift` — добавлен `#if os(Linux)`
+- `Tests/TgClientComponentTests/DigestCore/OpenAISummaryGeneratorTests.swift` — добавлен `#if os(Linux)`
+- `Tests/TgClientComponentTests/DigestCore/DigestOrchestratorTests.swift` — добавлен `#if os(Linux)`
+- `Sources/FoundationExtensions/EnvFileLoader.swift` — перенесён из Tests/, сделан public
+- `Sources/App/main.swift` — добавлена загрузка .env, mini-pipeline с дайджестом
+- `.claude/MVP.md` — обновлена версия на 0.3.0
+- `.claude/TASKS.md` — актуализированы задачи, добавлен план Bugfix
+- `.claude/retro-v0.3.0-questions.md` — создан файл ретро
+
+**Результаты тестирования:**
+- macOS: 146/146 тестов GREEN (Swift 6.1.2)
+- E2E тест OpenAI API: работает (6 сек, 469 chars дайджест, gpt-3.5-turbo)
+- Pipeline на реальных данных: 7 → 2 → 1 сообщение (после выхода из чатов)
+- Дайджест качество: русский язык, группировка по каналам, ссылки, emoji
+
+**Обнаруженные проблемы:**
+
+**1. Cross-platform баг (исправлен):**
+- `import FoundationNetworking` не работает на macOS (модуль не существует)
+- Решение: `#if os(Linux)` для условного импорта
+- Причина: URLSession на Linux вынесен в отдельный модуль, на macOS уже в Foundation
+
+**2. Архивные каналы в дайджесте (критичный баг):**
+- **Проблема:** `loadChats(chatList: .main)` возвращает архивные каналы
+- **Причина:** TDLib присылает `updateNewChat` БЕЗ поля `positions` (пустое)
+  - Реальные позиции приходят в `updateChatPosition` (который мы НЕ декодируем)
+  - Слушаем только `updateNewChat` → теряем информацию о списках (.main, .archive, .folder)
+- **Детали расследования:**
+  - Добавлены debug логи в `TDLibClient.receive()` для анализа RAW JSON
+  - Обнаружено: `updateChatPosition` приходит отдельно с полями `list`, `order`, `is_pinned`
+  - TDLib НЕ присылает `chatListArchive` в логах → но архивные чаты попали в результат
+  - Вывод: `Update` enum не декодирует `updateChatPosition` → попадает в `.unknown`
+- **Решение:** Декодировать `updateChatPosition`, мержить positions, фильтровать архивные
+- **План bugfix:** см. TASKS.md "🐛 КРИТИЧНЫЙ BUGFIX" (8 шагов)
+
+**Решения/контекст:**
+- **Swift 6.0 vs 6.1/6.2:** SwiftPM баг (incremental build hang) только на Linux, на macOS работает
+- **Workaround публикация:** Отложено до проверки на macOS (успешно), опубликуем на форумах после релиза
+- **EnvFileLoader:** Теперь в production коде, используется в main.swift для .env загрузки
+- **Процесс Bugfix:** Выбран подход "Fix → E2E → Unit → Regression → TSan" (вместо TDD Red→Green)
+- **Ретро v0.3.0:** 2 вопроса добавлены:
+  1. Дублирование Mock вместо boundary (повторный инцидент)
+  2. Пропущена валидация TDLib API (Research-First не применён)
+
+**Следующие шаги (Bugfix архивных каналов):**
+1. Создать модели: `ChatList`, `ChatPosition`, добавить в `Update.chatPosition`
+2. Добавить `ChatResponse.positions` поле
+3. Слушать `updateChatPosition` в `ChannelMessageSource.loadAllChats()`
+4. Мержить positions в ChatCollector
+5. Фильтровать чаты с `.archive` в positions
+6. E2E manual test → Unit тесты → Regression test → TSan → Рефлексия процесса
+
+**TODO (перед релизом v0.3.0):**
+- [ ] Bugfix: архивные каналы (8 шагов в TASKS.md)
+- [ ] TSan проверка (Thread Sanitizer на Unit тестах)
+- [ ] Удалить debug логи из TDLibClient.swift (строки 294-322)
+- [ ] Git tag v0.3.0
+- [ ] Обновить CLAUDE.md (после bugfix)
+- [ ] Ретроспектива через 3 дня (см. retro-v0.3.0-questions.md)
+
+
 ## [2025-12-06] Сессия 7 — Планирование v0.4.0 + Release Checklist v0.3.0
 
 **Выполнено:**
