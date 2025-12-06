@@ -1,5 +1,6 @@
 import TGClientInterfaces
 import Foundation
+import FoundationExtensions
 
 /// Тип чата в TDLib.
 ///
@@ -36,15 +37,15 @@ extension ChatType: Codable {
 
         switch type {
         case "chatTypePrivate":
-            let userId = try container.decode(Int64.self, forKey: .userId)
+            let userId = try container.decodeInt64(forKey: .userId)
             self = .private(userId: userId)
 
         case "chatTypeBasicGroup":
-            let basicGroupId = try container.decode(Int64.self, forKey: .basicGroupId)
+            let basicGroupId = try container.decodeInt64(forKey: .basicGroupId)
             self = .basicGroup(basicGroupId: basicGroupId)
 
         case "chatTypeSupergroup":
-            let supergroupId = try container.decode(Int64.self, forKey: .supergroupId)
+            let supergroupId = try container.decodeInt64(forKey: .supergroupId)
             // TDLib возвращает is_channel как Int (0/1), не Bool
             let isChannel: Bool
             if let boolValue = try? container.decode(Bool.self, forKey: .isChannel) {
@@ -63,8 +64,8 @@ extension ChatType: Codable {
             self = .supergroup(supergroupId: supergroupId, isChannel: isChannel)
 
         case "chatTypeSecret":
-            let secretChatId = try container.decode(Int64.self, forKey: .secretChatId)
-            let userId = try container.decode(Int64.self, forKey: .userId)
+            let secretChatId = try container.decodeInt64(forKey: .secretChatId)
+            let userId = try container.decodeInt64(forKey: .userId)
             self = .secret(secretChatId: secretChatId, userId: userId)
 
         default:

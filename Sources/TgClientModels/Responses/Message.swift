@@ -1,5 +1,6 @@
 import TGClientInterfaces
 import Foundation
+import FoundationExtensions
 
 /// Сообщение из Telegram (из TDLib getChatHistory).
 ///
@@ -37,8 +38,8 @@ public struct Message: Sendable, Codable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(Int64.self, forKey: .id)
-        self.chatId = try container.decode(Int64.self, forKey: .chatId)
+        self.id = try container.decodeInt64(forKey: .id)
+        self.chatId = try container.decodeInt64(forKey: .chatId)
         self.date = try container.decode(Int32.self, forKey: .date)
         self.content = try container.decode(MessageContent.self, forKey: .content)
     }

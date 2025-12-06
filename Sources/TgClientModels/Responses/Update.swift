@@ -1,5 +1,6 @@
 import TGClientInterfaces
 import Foundation
+import FoundationExtensions
 
 /// Update от TDLib (уведомления о событиях).
 ///
@@ -16,6 +17,9 @@ public enum Update: Sendable, Equatable {
     /// Входящие сообщения прочитаны или изменился счётчик непрочитанных.
     case chatReadInbox(chatId: Int64, lastReadInboxMessageId: Int64, unreadCount: Int32)
 
+    /// Позиция чата в списке изменилась.
+    case chatPosition(chatId: Int64, position: ChatPosition)
+
     /// Неизвестный тип update (для совместимости с будущими версиями TDLib).
     case unknown(type: String)
 }
@@ -29,6 +33,7 @@ extension Update: Codable {
         case chatId
         case lastReadInboxMessageId
         case unreadCount
+        case position
     }
 
     public init(from decoder: Decoder) throws {
@@ -41,14 +46,19 @@ extension Update: Codable {
             self = .newChat(chat: chat)
 
         case "updateChatReadInbox":
-            let chatId = try container.decode(Int64.self, forKey: .chatId)
-            let lastReadInboxMessageId = try container.decode(Int64.self, forKey: .lastReadInboxMessageId)
-            let unreadCount = try container.decode(Int32.self, forKey: .unreadCount)
+            let chatId = try container.decodeInt64(forKey: .chatId)
+            let lastReadInboxMessageId = try container.decodeInt64(forKey: .lastReadInboxMessageId)
+            let unreadCount = try container.decodeInt32(forKey: .unreadCount)
             self = .chatReadInbox(
                 chatId: chatId,
                 lastReadInboxMessageId: lastReadInboxMessageId,
                 unreadCount: unreadCount
             )
+
+        case "updateChatPosition":
+            let chatId = try container.decodeInt64(forKey: .chatId)
+            let position = try container.decode(ChatPosition.self, forKey: .position)
+            self = .chatPosition(chatId: chatId, position: position)
 
         default:
             // Неизвестный тип — сохраняем для обратной совместимости
@@ -69,6 +79,11 @@ extension Update: Codable {
             try container.encode(chatId, forKey: .chatId)
             try container.encode(lastReadInboxMessageId, forKey: .lastReadInboxMessageId)
             try container.encode(unreadCount, forKey: .unreadCount)
+
+        case .chatPosition(let chatId, let position):
+            try container.encode("updateChatPosition", forKey: .type)
+            try container.encode(chatId, forKey: .chatId)
+            try container.encode(position, forKey: .position)
 
         case .unknown(let type):
             try container.encode(type, forKey: .type)
