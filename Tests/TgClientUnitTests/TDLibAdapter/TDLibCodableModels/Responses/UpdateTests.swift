@@ -134,4 +134,177 @@ struct UpdateTests {
 
         #expect(type == "updateSomethingNew")
     }
+
+    // MARK: - updateChatPosition тесты
+
+    /// Тест декодирования updateChatPosition с chatListMain.
+    @Test("Декодирование updateChatPosition с chatListMain")
+    func decodeUpdateChatPositionMain() throws {
+        // Реальный JSON от TDLib
+        let json = """
+        {
+            "@type": "updateChatPosition",
+            "chat_id": 123456789,
+            "position": {
+                "list": {"@type": "chatListMain"},
+                "order": "9221294784512000005",
+                "is_pinned": false
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(Update.self, from: data)
+
+        // Проверяем что декодировалось правильно
+        guard case .chatPosition(let chatId, let position) = decoded else {
+            Issue.record("Expected .chatPosition, got \(decoded)")
+            return
+        }
+
+        #expect(chatId == 123456789)
+        #expect(position.list == .main)
+        #expect(position.order == 9221294784512000005)
+        #expect(position.isPinned == false)
+    }
+
+    /// Тест декодирования updateChatPosition с chatListArchive.
+    @Test("Декодирование updateChatPosition с chatListArchive")
+    func decodeUpdateChatPositionArchive() throws {
+        let json = """
+        {
+            "@type": "updateChatPosition",
+            "chat_id": "987654321",
+            "position": {
+                "list": {"@type": "chatListArchive"},
+                "order": "9221294784512000000",
+                "is_pinned": true
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(Update.self, from: data)
+
+        guard case .chatPosition(let chatId, let position) = decoded else {
+            Issue.record("Expected .chatPosition, got \(decoded)")
+            return
+        }
+
+        #expect(chatId == 987654321)
+        #expect(position.list == .archive)
+        #expect(position.order == 9221294784512000000)
+        #expect(position.isPinned == true)
+    }
+
+    /// Тест декодирования updateChatPosition с chatListFolder.
+    @Test("Декодирование updateChatPosition с chatListFolder")
+    func decodeUpdateChatPositionFolder() throws {
+        let json = """
+        {
+            "@type": "updateChatPosition",
+            "chat_id": "111222333",
+            "position": {
+                "list": {"@type": "chatListFolder", "chat_folder_id": 456},
+                "order": "9221294784512000001",
+                "is_pinned": false
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(Update.self, from: data)
+
+        guard case .chatPosition(let chatId, let position) = decoded else {
+            Issue.record("Expected .chatPosition, got \(decoded)")
+            return
+        }
+
+        #expect(chatId == 111222333)
+        #expect(position.list == .folder(id: 456))
+        #expect(position.order == 9221294784512000001)
+        #expect(position.isPinned == false)
+    }
+
+    /// Тест edge case: updateChatPosition с order=0 (чат удалён из списка).
+    @Test("Edge case: updateChatPosition с order=0")
+    func decodeUpdateChatPositionOrderZero() throws {
+        let json = """
+        {
+            "@type": "updateChatPosition",
+            "chat_id": "444555666",
+            "position": {
+                "list": {"@type": "chatListMain"},
+                "order": "0",
+                "is_pinned": false
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(Update.self, from: data)
+
+        guard case .chatPosition(let chatId, let position) = decoded else {
+            Issue.record("Expected .chatPosition, got \(decoded)")
+            return
+        }
+
+        #expect(chatId == 444555666)
+        #expect(position.order == 0)
+        #expect(position.list == .main)
+    }
+
+    /// Тест edge case: updateChatPosition с chatListFolder БЕЗ chat_folder_id → должен бросить error.
+    @Test("Edge case: updateChatPosition с chatListFolder без folder_id → fail")
+    func decodeUpdateChatPositionFolderMissingId() throws {
+        // TDLib присылает chatListFolder без chat_folder_id для удалённых папок
+        let json = """
+        {
+            "@type": "updateChatPosition",
+            "chat_id": "777888999",
+            "position": {
+                "list": {"@type": "chatListFolder"},
+                "order": "0",
+                "is_pinned": false
+            }
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder.tdlib().decode(Update.self, from: data)
+        }
+    }
+
+    /// Roundtrip тест для updateChatPosition.
+    @Test("Roundtrip: updateChatPosition")
+    func roundtripUpdateChatPosition() throws {
+        // Создаём ChatPosition через JSON (т.к. нет публичного init)
+        let positionJSON = """
+        {
+            "list": {"@type": "chatListMain"},
+            "order": "9221294784512000005",
+            "is_pinned": false
+        }
+        """
+        let positionData = positionJSON.data(using: .utf8)!
+        let position = try JSONDecoder.tdlib().decode(ChatPosition.self, from: positionData)
+
+        let original = Update.chatPosition(chatId: 123456789, position: position)
+
+        // Roundtrip: encode → decode
+        let data = try original.toTDLibData()
+        let decoded = try JSONDecoder.tdlib().decode(Update.self, from: data)
+
+        guard case .chatPosition(let chatId, let decodedPosition) = decoded else {
+            Issue.record("Expected .chatPosition, got \(decoded)")
+            return
+        }
+
+        #expect(chatId == 123456789)
+        #expect(decodedPosition.list == position.list)
+        #expect(decodedPosition.order == position.order)
+        #expect(decodedPosition.isPinned == position.isPinned)
+    }
 }
