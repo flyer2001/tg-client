@@ -19,23 +19,47 @@
 
 ---
 
-## 🚨 ПРИОРИТЕТ #1: Переезд на Swift 6.0 на macOS
+## ✅ ЗАВЕРШЕНО: SwiftPM Bug Investigation + Community Response
 
-**Статус:** Linux ✅ завершён | macOS ⏳ ожидает
+**Статус:** ✅ Полная диагностика завершена, отчёты отправлены
 
 **Linux (завершено):**
 - ✅ Swift 6.2 → 6.0 downgrade
 - ✅ Package.swift: `swift-tools-version: 6.0`
 - ✅ Проверено: сборка, тесты, incremental builds работают
-- ✅ Отчёт SwiftPM мейнтейнеру: https://github.com/swiftlang/swift-package-manager/issues/9441#issuecomment-3616550867
+- ✅ Отчёт SwiftPM мейнтейнеру: https://github.com/swiftlang/swift-package-manager/issues/9441
+
+**Диагностика (2025-12-07):**
+- ✅ strace test на Linux (KVM) - обнаружен livelock в epoll_wait()
+- ✅ strace test на macOS (Docker Desktop) - НЕ воспроизводится
+- ✅ lldb backtrace получен (bare metal Swift 6.2.1) - **корневая причина найдена!**
+- ✅ Системная информация собрана для хостера
+- ✅ Ответы отправлены в Swift Forums + GitHub Issue
+
+**Ключевые находки:**
+1. **Root cause: flock() deadlock** - SwiftPM зависает на `FileLock.lock()` в `Lock.swift:146`
+2. **НЕ epoll issue** - strace был misleading, настоящая проблема в file locking
+3. **KVM-specific issue** - проблема воспроизводится только на KVM virtualization
+4. **НЕ network issue** - strace показал отсутствие GitHub вызовов
+5. **Окружение:** Ubuntu 24.04.3, kernel 6.8.0-60, KVM, 1 CPU core, 961Mi RAM
+
+**lldb backtrace (критичный thread #2):**
+```
+frame #0: libc.so.6`flock + 11
+frame #1: swift-package`FileLock.lock(type=, blocking=) at Lock.swift:146:16
+frame #2: swift-package`SwiftCommandState.acquireLockIfNeeded() at SwiftCommandState.swift:1103:39
+```
+
+**Community Response:**
+- Swift Forums: https://forums.swift.org/t/83562 - KVM virtualization гипотеза
+- GitHub Issue: 3 комментария (strace + lldb backtrace + flock analysis)
+- Хостер: отчёт + strace logs (swiftpm-strace.log.gz, 170KB)
 
 **macOS (TODO на следующей сессии):**
 1. Установить Swift 6.0 toolchain на macOS
 2. Проверить сборку и тесты
 3. Запустить E2E тест `SummaryGenerationE2ETests` (отложен с Linux)
 4. Проверить TSan на macOS (отложен с Linux)
-
-**Причина:** SwiftPM 6.1/6.2 зависает на incremental builds на Linux (регрессия между 6.0↔6.1).
 
 **Детали:** см. `.claude/archived/swiftpm-hang-testing-2025-12-05.md`
 
