@@ -39,6 +39,7 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
     private let updatesCollectionTimeout: Duration
     private let maxParallelHistoryRequests: Int
     private let maxLoadChatsBatches: Int
+    private let maxChatHistoryLimit: Int
 
     /// Инициализирует ChannelMessageSource с настраиваемыми параметрами производительности.
     ///
@@ -49,13 +50,15 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
     ///   - updatesCollectionTimeout: Время ожидания updates после последнего loadChats() (default: 5 сек)
     ///   - maxParallelHistoryRequests: Лимит параллельных getChatHistory() запросов (default: 5)
     ///   - maxLoadChatsBatches: Максимальное количество batches для loadChats (защита от зависания, default: 20 = 2000 чатов)
+    ///   - maxChatHistoryLimit: Максимальное количество сообщений для getChatHistory (default: 100)
     public init(
         tdlib: TDLibClientProtocol,
         logger: Logger,
         loadChatsPaginationDelay: Duration = .seconds(2),
         updatesCollectionTimeout: Duration = .seconds(5),
         maxParallelHistoryRequests: Int = 5,
-        maxLoadChatsBatches: Int = 20
+        maxLoadChatsBatches: Int = 20,
+        maxChatHistoryLimit: Int = 100
     ) {
         self.tdlib = tdlib
         self.logger = logger
@@ -63,6 +66,7 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         self.updatesCollectionTimeout = updatesCollectionTimeout
         self.maxParallelHistoryRequests = maxParallelHistoryRequests
         self.maxLoadChatsBatches = maxLoadChatsBatches
+        self.maxChatHistoryLimit = maxChatHistoryLimit
     }
 
     public func fetchUnreadMessages() async throws -> [SourceMessage] {
@@ -78,6 +82,7 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
             guard case .supergroup(_, let isChannel) = chat.chatType else {
                 return false
             }
+
             return isChannel && chat.unreadCount > 0
         }
 
@@ -98,15 +103,24 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
                 // Добавляем новую задачу
                 group.addTask {
                     do {
+                        // Вычисляем параметры getChatHistory в зависимости от lastReadInboxMessageId
+                        let (fromMessageId, offset, limit): (Int64, Int32, Int32) = if channel.lastReadInboxMessageId == 0 {
+                            // Канал никогда не читали → берём последние N сообщений
+                            (0, 0, min(channel.unreadCount, Int32(self.maxChatHistoryLimit)))
+                        } else {
+                            // Берём N сообщений ПОСЛЕ lastRead
+                            (channel.lastReadInboxMessageId, -min(channel.unreadCount, Int32(self.maxChatHistoryLimit) - 1), min(channel.unreadCount, Int32(self.maxChatHistoryLimit)))
+                        }
+
                         let messagesResponse = try await self.tdlib.getChatHistory(
                             chatId: channel.id,
-                            fromMessageId: 0,
-                            offset: 0,
-                            limit: 100
+                            fromMessageId: fromMessageId,
+                            offset: offset,
+                            limit: limit
                         )
 
                         // Конвертируем TDLib Message → SourceMessage
-                        return messagesResponse.messages.compactMap { message -> SourceMessage? in
+                        let sourceMessages = messagesResponse.messages.compactMap { message -> SourceMessage? in
                             guard case .text(let formattedText) = message.content else {
                                 return nil  // Пропускаем неподдерживаемые типы
                             }
@@ -119,6 +133,8 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
                                 link: nil  // TODO: формирование ссылок (username из Supergroup info)
                             )
                         }
+
+                        return sourceMessages
                     } catch {
                         // Partial success: логируем ошибку, продолжаем с остальными
                         self.logger.error("Failed to fetch history for chat \(channel.id): \(error)")
@@ -161,8 +177,15 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         // Начинаем слушать updates в фоне (ПЕРЕД loadChats)
         let collectionTask = Task {
             for await update in self.tdlib.updates {
-                if case .newChat(let chat) = update {
+                switch update {
+                case .newChat(let chat):
                     await collector.add(chat)
+
+                case .chatPosition(let chatId, let position):
+                    await collector.updatePosition(chatId: chatId, position: position)
+
+                default:
+                    break
                 }
             }
         }
@@ -202,10 +225,21 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         // Останавливаем сбор
         collectionTask.cancel()
 
-        let chats = await collector.getAll()
-        logger.info("Collected \(chats.count) chats from \(loadedBatches) batches")
+        let allChats = await collector.getAll()
+        logger.info("Collected \(allChats.count) chats from \(loadedBatches) batches")
 
-        return chats
+        // Фильтруем каналы для дайджеста
+        // ЛОГИКА: Включаем каналы из .main и .folder, исключаем только .archive (без folder/main)
+        // Приоритет: folder > archive (чат в folder + archive → ВКЛЮЧИТЬ)
+        let relevantChats = allChats.filter { chat in
+            let hasFolder = chat.positions.contains { if case .folder = $0.list { return true } else { return false } }
+            let hasMain = chat.positions.contains { $0.list == .main }
+            return hasFolder || hasMain
+        }
+
+        logger.info("Filtered to \(relevantChats.count) relevant chats (removed \(allChats.count - relevantChats.count) archive-only)")
+
+        return relevantChats
     }
 }
 
@@ -215,13 +249,33 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
 ///
 /// Используется в `loadAllChats()` для безопасной мутации из разных Task'ов.
 private actor ChatCollector {
-    private var chats: [ChatResponse] = []
+    private var chats: [Int64: ChatResponse] = [:]
 
     func add(_ chat: ChatResponse) {
-        chats.append(chat)
+        chats[chat.id] = chat
+    }
+
+    func updatePosition(chatId: Int64, position: ChatPosition) {
+        guard let chat = chats[chatId] else { return }
+
+        // Удаляем старую позицию для этого списка (если есть)
+        var updatedPositions = chat.positions.filter { $0.list != position.list }
+
+        // Добавляем новую позицию
+        updatedPositions.append(position)
+
+        // Обновляем чат с новыми позициями
+        chats[chatId] = ChatResponse(
+            id: chat.id,
+            type: chat.chatType,
+            title: chat.title,
+            unreadCount: chat.unreadCount,
+            lastReadInboxMessageId: chat.lastReadInboxMessageId,
+            positions: updatedPositions
+        )
     }
 
     func getAll() -> [ChatResponse] {
-        return chats
+        return Array(chats.values)
     }
 }
