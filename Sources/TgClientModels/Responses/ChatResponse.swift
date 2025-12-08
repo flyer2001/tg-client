@@ -22,6 +22,9 @@ public struct ChatResponse: TDLibResponse, Sendable, Equatable {
     /// ID последнего прочитанного входящего сообщения
     public let lastReadInboxMessageId: Int64
 
+    /// Позиции чата в списках (может быть пустым в updateNewChat)
+    public let positions: [ChatPosition]
+
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case id
@@ -29,16 +32,18 @@ public struct ChatResponse: TDLibResponse, Sendable, Equatable {
         case title
         case unreadCount
         case lastReadInboxMessageId
+        case positions
     }
 
     #if DEBUG
     /// Инициализатор для создания чата программно (например, в тестах).
-    public init(id: Int64, type: ChatType, title: String, unreadCount: Int32, lastReadInboxMessageId: Int64) {
+    public init(id: Int64, type: ChatType, title: String, unreadCount: Int32, lastReadInboxMessageId: Int64, positions: [ChatPosition] = []) {
         self.id = id
         self.chatType = type
         self.title = title
         self.unreadCount = unreadCount
         self.lastReadInboxMessageId = lastReadInboxMessageId
+        self.positions = positions
     }
     #endif
 }

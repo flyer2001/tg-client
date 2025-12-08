@@ -1,5 +1,7 @@
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 
 /// Продакшн реализация HTTP клиента через URLSession.
 public actor URLSessionHTTPClient: HTTPClientProtocol {

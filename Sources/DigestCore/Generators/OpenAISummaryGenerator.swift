@@ -1,5 +1,7 @@
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 import TgClientModels
 import Logging
 import FoundationExtensions

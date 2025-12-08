@@ -23,7 +23,11 @@ public struct ChatPosition: Sendable, Equatable, Hashable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         list = try container.decode(ChatList.self, forKey: .list)
         order = try container.decodeInt64(forKey: .order)
-        isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+
+        // По спецификации TDLib is_pinned обязательное поле (bool, required).
+        // Однако на практике TDLib может не присылать это поле → используем default=false.
+        // См. ChatPositionTests: "Edge case: is_pinned отсутствует → default=false"
+        isPinned = (try? container.decodeBool(forKey: .isPinned)) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {

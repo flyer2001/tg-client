@@ -1,5 +1,7 @@
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 
 /// Ошибки HTTP клиента.
 public enum HTTPError: Error {
