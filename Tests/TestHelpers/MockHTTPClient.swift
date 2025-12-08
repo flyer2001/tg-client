@@ -1,5 +1,7 @@
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 @testable import DigestCore
 
 /// Мок HTTP клиента для Component тестов.

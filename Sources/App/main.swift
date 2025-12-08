@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import TDLibAdapter
 import DigestCore
+import FoundationExtensions
 
 @main
 struct TGClient {
@@ -13,6 +14,9 @@ struct TGClient {
     }
 
     static func main() async {
+        // Загрузка .env файла (если существует)
+        try? EnvFileLoader.loadDotEnv()
+
         // Настройка логгера: только warning, error, critical
         var logger = Logger(label: "tg-client")
         logger.logLevel = .warning
@@ -86,8 +90,9 @@ struct TGClient {
             maxLoadChatsBatches: 20
         )
 
+        let messages: [SourceMessage]
         do {
-            let messages = try await messageSource.fetchUnreadMessages()
+            messages = try await messageSource.fetchUnreadMessages()
 
             print("\n✅ fetchUnreadMessages() completed!")
             print("   Total messages: \(messages.count)")
@@ -106,6 +111,43 @@ struct TGClient {
             }
         } catch {
             print("   ⚠️ Failed to fetch unread messages: \(error)")
+            exit(1)
+        }
+
+        // 🧪 Test DigestOrchestrator + OpenAISummaryGenerator (v0.3.0 pipeline)
+        print("\n🧪 Testing DigestOrchestrator.generateDigest()...")
+
+        guard !messages.isEmpty else {
+            print("   ℹ️  No unread messages to generate digest. Skipping.")
+            print("\n✅ All tests completed successfully!")
+            return
+        }
+
+        // Проверяем OPENAI_API_KEY
+        guard let openaiKey = env["OPENAI_API_KEY"], !openaiKey.isEmpty else {
+            print("   ⚠️  OPENAI_API_KEY not found. Skipping digest generation.")
+            print("   Set OPENAI_API_KEY in .env file to test AI digest.")
+            print("\n✅ All tests completed successfully!")
+            return
+        }
+
+        var digestLogger = Logger(label: "DigestOrchestrator")
+        digestLogger.logLevel = .info
+
+        let httpClient = URLSessionHTTPClient()
+        let summaryGenerator = OpenAISummaryGenerator(apiKey: openaiKey, httpClient: httpClient, logger: digestLogger)
+        let orchestrator = DigestOrchestrator(summaryGenerator: summaryGenerator, logger: digestLogger)
+
+        do {
+            let digest = try await orchestrator.generateDigest(from: messages)
+
+            print("\n✅ Digest generated successfully!")
+            print("   Length: \(digest.count) chars")
+            print("\n" + String(repeating: "=", count: 60))
+            print(digest)
+            print(String(repeating: "=", count: 60))
+        } catch {
+            print("   ⚠️ Failed to generate digest: \(error)")
             exit(1)
         }
 

@@ -140,7 +140,11 @@ struct ChatPositionTests {
 
     @Test("Edge case: is_pinned отсутствует → default=false")
     func decodeIsPinnedMissing() throws {
-        // Реальный кейс от TDLib - поле is_pinned опционально
+        // По спецификации TDLib is_pinned - обязательное поле (bool, required):
+        // https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1chat_position.html
+        //
+        // Однако на практике TDLib может не присылать это поле.
+        // В таком случае используем default=false (стандартное значение для "не закреплён").
         let json = """
         {
             "list": {"@type": "chatListMain"},
@@ -151,7 +155,7 @@ struct ChatPositionTests {
         let data = json.data(using: .utf8)!
         let decoded = try JSONDecoder.tdlib().decode(ChatPosition.self, from: data)
 
-        #expect(decoded.isPinned == false) // default
+        #expect(decoded.isPinned == false) // default при отсутствии поля
     }
 
     @Test("Edge case: is_pinned = true")
@@ -168,6 +172,40 @@ struct ChatPositionTests {
         let decoded = try JSONDecoder.tdlib().decode(ChatPosition.self, from: data)
 
         #expect(decoded.isPinned == true)
+    }
+
+    @Test("Edge case: is_pinned = 1 (Int format from TDLib)")
+    func decodeIsPinnedAsInt1() throws {
+        // Real TDLib может присылать Boolean как Int: 1 = true
+        let json = """
+        {
+            "list": {"@type": "chatListMain"},
+            "order": "9221294784512000005",
+            "is_pinned": 1
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(ChatPosition.self, from: data)
+
+        #expect(decoded.isPinned == true)
+    }
+
+    @Test("Edge case: is_pinned = 0 (Int format from TDLib)")
+    func decodeIsPinnedAsInt0() throws {
+        // Real TDLib может присылать Boolean как Int: 0 = false
+        let json = """
+        {
+            "list": {"@type": "chatListMain"},
+            "order": "9221294784512000005",
+            "is_pinned": 0
+        }
+        """
+
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder.tdlib().decode(ChatPosition.self, from: data)
+
+        #expect(decoded.isPinned == false)
     }
 
     // MARK: - Roundtrip тесты

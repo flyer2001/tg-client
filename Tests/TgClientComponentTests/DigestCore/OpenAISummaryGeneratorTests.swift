@@ -1,6 +1,8 @@
 import Testing
 import Foundation
+#if os(Linux)
 import FoundationNetworking
+#endif
 import Logging
 @testable import DigestCore
 @testable import TgClientModels
