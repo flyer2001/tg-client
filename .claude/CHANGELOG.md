@@ -1,3 +1,63 @@
+## [2025-12-12] Сессия: v0.4.0 Research-First + E2E тест viewMessages
+
+**Выполнено:**
+- ✅ Spike test viewMessages API (TDLib) — успешно подтверждено
+  - Response: OkResponse (идемпотентен)
+  - Синхронизация мгновенная (unreadCount обновился сразу)
+  - Проверено в реальном Telegram клиенте
+- ✅ E2E тест создан: Tests/TgClientE2ETests/MarkAsReadE2ETests.swift
+  - Сценарий: fetch → mark → verify
+  - Падает с инструкцией если нет непрочитанных
+- ✅ Баг исправлен: main.swift не читал TDLIB_DATABASE_ENCRYPTION_KEY
+  - Sources/App/main.swift:28,43 — добавлено чтение из env
+- ✅ User Story документы созданы:
+  - Sources/TgClient/TgClient.docc/E2E-Scenarios/GenerateSummary.md (v0.3.0)
+  - Sources/TgClient/TgClient.docc/E2E-Scenarios/MarkAsRead.md (v0.4.0)
+- ✅ RFC v0.4.0 пересмотрен: pipeline последовательный (не параллельный)
+  - MVP.md:291-301 — обоснование последовательности
+- ✅ TESTING.md чеклист усилен:
+  - User Story первым в TDD workflow
+  - E2E Test добавлен в чеклист
+- ✅ Команды /endtask и /endsession обновлены:
+  - Добавлена секция "Роль" (ссылка на ROLES.md)
+  - Добавлена секция "Файлы для чтения"
+
+**Инциденты задокументированы:**
+- retro-v0.4.0-questions.md — 2 инцидента:
+  1. Нарушение TDD (пропущен User Story документ) — исправлено чеклистом
+  2. TDLIB_DATABASE_ENCRYPTION_KEY не документирован — задача в BACKLOG
+
+**Изменённые файлы:**
+- `Sources/App/main.swift` — чтение encryption key из env
+- `Tests/TgClientE2ETests/MarkAsReadE2ETests.swift` — E2E тест (новый)
+- `Sources/TgClient/TgClient.docc/E2E-Scenarios/` — 2 User Story документа (новые)
+- `.claude/MVP.md` — RFC v0.4.0 пересмотрен
+- `.claude/TESTING.md` — чеклист усилен
+- `.claude/BACKLOG.md` — задача про encryption key валидацию
+- `.claude/archived/retro-v0.4.0-questions.md` — 2 инцидента
+- `.claude/commands/{endtask,endsession}.md` — роль + файлы
+
+**Следующая сессия:**
+Задача #1.4: Component Test (RED) для MarkAsReadService
+
+## [2025-12-11] - Актуализация документации + инцидент TDD
+
+**Выполнено:**
+- Восстановлены пропущенные E2E User Story документы (v0.3.0: GenerateSummary.md, v0.4.0: MarkAsRead.md)
+- Убрано упоминание версии из TgClient.md (чтобы не проверять руками при каждом релизе)
+- Обновлены ссылки на Component/Unit тесты в GenerateSummary.md
+
+**Инцидент TDD (2025-12-11):**
+- **Проблема:** Начали реализацию v0.4.0 без User Story документа → нарушение TDD процесса
+- **Root Cause:** Нет чеклиста "перед началом новой версии"
+- **Корректирующее действие:** Добавить чеклист в TESTING.md (задача #0 в TASKS.md)
+- Зафиксировано в `.claude/archived/retro-v0.4.0-questions.md`
+
+**Критично для следующей сессии:**
+- ⚠️ Пересмотреть RFC v0.4.0 (MVP.md § v0.4.0): параллельный pipeline → **последовательный** (BotNotifier → MarkAsRead)
+- Завершить задачу #0 (добавить чеклист в TESTING.md)
+- Только потом начинать v0.4.0 реализацию
+
 ## [2025-12-11] - Подготовка к v0.4.0: Усиление процессов + Груминг
 
 **Усиление процессов (ретро v0.3.0):**

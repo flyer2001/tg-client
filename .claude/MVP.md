@@ -288,17 +288,17 @@ DIGEST_STATE_DIR=~/.tdlib
 
 #### Архитектура
 
-**Pipeline integration (параллельное выполнение):**
+**Pipeline integration (последовательное выполнение):**
 
 ```
-                    ┌──→ BotNotifier (async)
-SummaryGenerator ───┤
-                    └──→ MarkAsReadService (async)
-                              │
-                         await both
+SummaryGenerator → BotNotifier → MarkAsReadService
+      (1)              (2)             (3)
 ```
 
-**Преимущества:** Ускорение на ~2-5 сек (параллельная отправка + mark-as-read).
+**Обоснование последовательности:**
+- Помечаем прочитанным ТОЛЬКО после успешной отправки дайджеста пользователю
+- Если BotNotifier.send() упадёт → сообщения останутся непрочитанными → пользователь получит дайджест в следующий раз
+- Защита от потери информации при сбоях отправки
 
 **MarkAsReadService API:**
 

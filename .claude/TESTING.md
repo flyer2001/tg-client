@@ -110,12 +110,15 @@ RED → GREEN → REFACTOR
 ### Быстрый чек-лист
 
 ```
-☐ E2E сценарий (DoCC)
-☐ Component Test (RED)
+☐ User Story документ (E2E-Scenarios/*.md) — что делаем, зачем, как проверить
+☐ Research-First (если External API — см. ниже)
+☐ Architecture-First (если concurrency — см. ниже)
+☐ E2E Test (RED) — автоматизированный full scenario
+☐ Component Test (RED) — детали компонентов
 ☐ Models + Unit Tests → GREEN
-☐ Implementation → Component Test GREEN
+☐ Implementation → GREEN (E2E + Component тесты)
 ☐ REFACTOR
-☐ E2E validation (manual)
+☐ E2E validation (manual — если что-то не автоматизировано)
 ```
 
 **Подробный алгоритм:** [TESTING-PATTERNS.md#декомпозиция-тестов](TESTING-PATTERNS.md#декомпозиция-тестов)

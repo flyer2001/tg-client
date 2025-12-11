@@ -26,31 +26,38 @@
 
 ## 📋 Текущие задачи
 
-### 1. Реализация v0.4.0: Mark as Read 🔥 ТЕКУЩАЯ ЗАДАЧА
+### 0. Генерация DocC документации 📝 ОПЦИОНАЛЬНО
+
+**Приоритет:** 🟢 Низкий (не блокирует разработку)
+
+**Задачи:**
+- [ ] Сгенерировать DocC: `swift package generate-documentation`
+- [ ] Проверить что все 4 E2E сценария видны
+
+---
+
+### 1. Реализация v0.4.0: Mark as Read 🔥 СЛЕДУЮЩАЯ ЗАДАЧА
 
 **RFC:** [MVP.md § v0.4.0](MVP.md#v040-mark-as-read)
 
-**Контекст завершённого груминга:**
-- ✅ Architecture-First анализ (7 блоков)
-- ✅ Retry Strategy вынесена в BACKLOG
-- ✅ Все решения задокументированы в RFC
+**Контекст:**
+- Spike test viewMessages успешен → Response = OkResponse, идемпотентен
+- E2E тест создан: Tests/TgClientE2ETests/MarkAsReadE2ETests.swift
+- Временная модель ViewMessagesRequest в E2E тесте (нужно переместить в Sources/)
 
-**Task Breakdown (TDD: Outside-In):**
+**Следующие шаги (TDD: Outside-In):**
 
-1. [ ] **DocC документация** — User Story для MarkAsReadService 🎯 **СЛЕДУЮЩАЯ СЕССИЯ**
-2. [ ] **Component Test (RED)** — MarkAsReadService happy path
-3. [ ] **Models + Unit Tests** — ViewMessagesRequest: Codable
-4. [ ] **MarkAsReadService implementation** → Component Test GREEN
-5. [ ] **Component Tests (edge cases)** — empty, partial failure, timeout, cancellation
-6. [ ] **TSan validation** — `swift test --sanitize=thread --filter MarkAsReadServiceTests`
-7. [ ] **DigestOrchestrator integration** — параллельное выполнение BotNotifier + MarkAsRead
-8. [ ] **CLI флаг** — `--mark-as-read` / `--no-mark-as-read`
-9. [ ] **E2E manual test** — реальный TDLib на dev окружении
-10. [ ] **Документация** — обновить ARCHITECTURE.md (pipeline diagram)
+1. [ ] **Component Test (RED)** — MarkAsReadService happy path 🎯 **ШАГ 1**
+2. [ ] **Models + Unit Tests** — ViewMessagesRequest: Codable
+3. [ ] **MarkAsReadService implementation** → Component Test GREEN
+4. [ ] **Component Tests (edge cases)** — empty, partial failure, timeout, cancellation
+5. [ ] **TSan validation** — `swift test --sanitize=thread --filter MarkAsReadServiceTests`
+6. [ ] **DigestOrchestrator integration** — последовательный pipeline
+7. [ ] **CLI флаг** — `--mark-as-read` / `--no-mark-as-read`
+8. [ ] **E2E validation** — включить и запустить E2E тест
+9. [ ] **Документация** — ARCHITECTURE.md (pipeline diagram)
 
 **Acceptance Criteria:** См. [MVP.md § Acceptance Criteria](MVP.md#acceptance-criteria)
-
-**Примечание:** Все задачи берутся из [MVP.md § Task Breakdown](MVP.md#task-breakdown-tdd-outside-in) последовательно.
 
 ---
 
