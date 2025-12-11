@@ -263,6 +263,305 @@ DIGEST_STATE_DIR=~/.tdlib
 
 ---
 
+## 🚀 Version Roadmap
+
+### v0.4.0: Mark as Read
+
+**Статус:** 🎯 Planning (груминг 2025-12-11)
+
+**Цель:** Отметка сообщений как прочитанных после успешной генерации и отправки дайджеста.
+
+#### Scope
+
+**Обязательные фичи:**
+- [ ] TDLib `viewMessages` API интеграция
+- [ ] Parallel mark-as-read для N чатов (TaskGroup)
+- [ ] CLI флаг `--mark-as-read` / `--no-mark-as-read` (default: ON)
+- [ ] Concurrency limit (maxParallelMarkAsReadRequests = 20)
+- [ ] Structured logging (начало, прогресс, итог, ошибки)
+- [ ] Partial failure handling (1 чат failed → остальные помечаем)
+
+**НЕ входит в scope v0.4.0:**
+- ❌ Retry strategy (отдельная задача в BACKLOG)
+- ❌ Unsupported content tracking ("⚠️ Пропущено 3 фото" → v0.6.0)
+- ❌ Rate limits research (используем консервативный лимит 20)
+
+#### Архитектура
+
+**Pipeline integration (параллельное выполнение):**
+
+```
+                    ┌──→ BotNotifier (async)
+SummaryGenerator ───┤
+                    └──→ MarkAsReadService (async)
+                              │
+                         await both
+```
+
+**Преимущества:** Ускорение на ~2-5 сек (параллельная отправка + mark-as-read).
+
+**MarkAsReadService API:**
+
+```swift
+actor MarkAsReadService {
+    init(
+        tdlib: TDLibClient,
+        maxParallelRequests: Int = 20,
+        timeout: Duration = .seconds(2)
+    )
+
+    /// Отметить сообщения как прочитанные для указанных чатов
+    /// - Returns: Map [chatId: Result] (успех/ошибка для каждого чата)
+    func markAsRead(_ messages: [ChatId: [MessageId]]) async -> [ChatId: Result<Void, Error>]
+}
+```
+
+**Параллелизм (переиспользование паттерна из ChannelMessageSource):**
+
+```swift
+withThrowingTaskGroup(of: (ChatId, Result<Void, Error>).self) { group in
+    var activeTasksCount = 0
+
+    for (chatId, messageIds) in messages {
+        // Ограничиваем параллелизм
+        while activeTasksCount >= maxParallelRequests {
+            _ = try await group.next()
+            activeTasksCount -= 1
+        }
+
+        group.addTask {
+            do {
+                try await tdlib.sendAndWait(
+                    ViewMessagesRequest(
+                        chatId: chatId,
+                        messageIds: messageIds,
+                        forceRead: true
+                    )
+                )
+                return (chatId, .success(()))
+            } catch {
+                logger.error("Failed to mark chat \(chatId) as read", error: error)
+                return (chatId, .failure(error))
+            }
+        }
+        activeTasksCount += 1
+    }
+
+    // Собираем результаты
+    var results: [ChatId: Result<Void, Error>] = [:]
+    while let (chatId, result) = try await group.next() {
+        results[chatId] = result
+    }
+    return results
+}
+```
+
+#### TDLib API: viewMessages
+
+**Документация:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
+
+**Параметры:**
+- `chat_id` (Int53): ID чата
+- `message_ids` ([Int53]): массив ID сообщений
+- `source` (MessageSource?): null → auto-detect
+- `force_read` (Bool): `true` → отметить даже если чат закрыт
+
+**Поведение:**
+- Идемпотентен (повторный вызов безопасен)
+- Локальный API (не network request)
+- Timeout: 2 секунды (как у sendAndWait)
+
+**Response:** `Ok` (пустой success marker)
+
+**Errors:** Стандартные TDLib ошибки через `TDLibErrorResponse`
+
+#### Новые модели (TDD: Outside-In)
+
+**1. ViewMessagesRequest: Codable**
+```swift
+struct ViewMessagesRequest: Codable, Sendable {
+    let chatId: Int64
+    let messageIds: [Int64]
+    let forceRead: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case type = "@type"
+        case chatId = "chat_id"
+        case messageIds = "message_ids"
+        case forceRead = "force_read"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode("viewMessages", forKey: .type)
+        try container.encode(chatId, forKey: .chatId)
+        try container.encode(messageIds, forKey: .messageIds)
+        try container.encode(forceRead, forKey: .forceRead)
+    }
+}
+```
+
+**2. Response:** Переиспользуем существующий `Ok` (уже есть в TDLib моделях)
+
+#### Testing стратегия
+
+**Уровни тестирования:**
+
+| Уровень | Mock Strategy | TSan |
+|---------|---------------|------|
+| **Unit** | ViewMessagesRequest encoding | ❌ |
+| **Component** | MockTDLibFFI (boundary) | ✅ ОБЯЗАТЕЛЬНО |
+| **E2E** | Real TDLib (manual) | ✅ |
+
+**Edge cases (КРИТИЧНЫЕ для Component тестов):**
+- ✅ Empty input (0 чатов)
+- ✅ Single chat success
+- ✅ Partial failure (3/5 чатов success)
+- ✅ All chats failed
+- ✅ Timeout (viewMessages зависает)
+- ✅ Task cancellation (Task.cancel в середине)
+- ✅ Large batch (100 чатов → проверка concurrency limit)
+
+**TSan проверка:**
+```bash
+swift test --sanitize=thread --filter MarkAsReadServiceTests
+```
+
+#### Стратегия отметки прочитанным (v0.4.0 MVP)
+
+**Правило:** Помечаем ВСЕ чаты, по которым получили summary от AI.
+
+**Логика:**
+1. `MessageSource.fetchUnreadMessages()` → получили сообщения из N чатов
+2. `SummaryGenerator.generate()` → получили summary (успех)
+3. `BotNotifier.send()` → отправили хотя бы 1 часть (успех)
+4. **→ Помечаем ВСЕ N чатов как прочитанные**
+
+**Почему не учитываем unsupported content (фото/видео) в v0.4.0:**
+- Усложняет: требует metadata tracking
+- Сложнее тестировать
+- Отложено в v0.6.0 (добавим "⚠️ Пропущено 3 фото")
+
+#### CLI интеграция
+
+**ArgumentParser:**
+```swift
+@main
+struct TgClientCommand: AsyncParsableCommand {
+    @Flag(name: .long, help: "Mark messages as read after successful digest")
+    var markAsRead: Bool = true // default ON
+
+    func run() async throws {
+        let orchestrator = DigestOrchestrator(
+            markAsRead: markAsRead, // передаём через init
+            maxParallelMarkAsRead: 20
+        )
+        try await orchestrator.run()
+    }
+}
+```
+
+**Использование:**
+```bash
+swift run tg-client                    # markAsRead = true (default)
+swift run tg-client --mark-as-read     # markAsRead = true (явно)
+swift run tg-client --no-mark-as-read  # markAsRead = false (dry-run)
+```
+
+**Документация для пользователя:**
+- README.md: секция "CLI Options"
+- `--help` output (автоматически через ArgumentParser)
+
+#### Logging
+
+**Структура логов:**
+
+```swift
+// Начало
+logger.info("Marking \(chatCount) chats as read", metadata: [
+    "chat_count": chatCount,
+    "max_parallel": maxParallelRequests
+])
+
+// Прогресс (per chat)
+logger.debug("Marking chat as read", metadata: [
+    "chat_id": chatId,
+    "message_count": messageIds.count
+])
+
+// Итог (summary)
+logger.info("Mark-as-read completed", metadata: [
+    "success_count": successCount,
+    "failed_count": failedCount,
+    "duration_ms": durationMs
+])
+
+// Ошибки (per chat)
+logger.error("Failed to mark chat as read", metadata: [
+    "chat_id": chatId,
+    "error": error.localizedDescription
+])
+```
+
+#### Task Breakdown (TDD: Outside-In)
+
+**Prerequisite:**
+1. ✅ Research TDLib `viewMessages` docs (WebFetch) — DONE
+2. ✅ Architecture-First анализ (7 блоков) — DONE
+3. [ ] TSan учения (перед реализацией) — см. BACKLOG
+
+**Implementation (TDD order):**
+
+1. **DocC документация** — User Story
+2. **Component Test (RED)** — MarkAsReadService happy path
+3. **Models** — ViewMessagesRequest: Codable + Unit Tests
+4. **MarkAsReadService implementation** → Component Test GREEN
+5. **Component Tests (edge cases)** — empty, partial failure, timeout, cancellation
+6. **TSan validation** — `swift test --sanitize=thread`
+7. **DigestOrchestrator integration** — параллельное выполнение BotNotifier + MarkAsRead
+8. **CLI флаг** — `--mark-as-read` / `--no-mark-as-read`
+9. **E2E manual test** — реальный TDLib на dev окружении
+10. **Документация** — обновить ARCHITECTURE.md (pipeline diagram)
+
+#### Acceptance Criteria
+
+**Функциональные:**
+- [ ] Помечает N чатов как прочитанные параллельно
+- [ ] Partial failure: 1 чат failed → остальные успешно
+- [ ] CLI флаг `--no-mark-as-read` → пропускает mark-as-read
+- [ ] Timeout 2 секунды для каждого viewMessages
+- [ ] Concurrency limit 20 работает корректно
+
+**Технические:**
+- [ ] TSan: 0 data races
+- [ ] Component тесты: 7 edge cases покрыты
+- [ ] Логирование: начало, прогресс, итог, ошибки
+- [ ] ARCHITECTURE.md: диаграмма pipeline обновлена
+
+**Non-functional:**
+- [ ] Performance: mark-as-read для 50 чатов < 5 секунд
+- [ ] Параллельное выполнение с BotNotifier → ускорение ~2-5 сек
+
+---
+
+### v0.5.0: BotNotifier (Telegram Bot API)
+
+**Статус:** 📝 Planned
+
+**Scope:** TBD (см. BACKLOG.md)
+
+---
+
+### v0.6.0: Unsupported Content Tracking
+
+**Статус:** 📝 Planned
+
+**Scope:**
+- "⚠️ Пропущено 3 фото, 1 видео" в summary
+- Умная стратегия mark-as-read (не помечать чаты с unsupported content)
+
+---
+
 ## 📋 После релиза новой версии
 
 - [ ] Ревизия BACKLOG.md — актуализировать после каждого релиза

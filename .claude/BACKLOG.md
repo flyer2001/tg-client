@@ -115,6 +115,104 @@ Build Plugin закомментирован (тормозит сборку). Н�
 #### Кодогенерация из TL схемы
 Ручная типизация TDLib API не масштабируется. Генератор из `td_api.tl`.
 
+#### Thread Sanitizer (TSan) учения + Swift 6.2 concurrency флаги
+
+**Проблема:** TSan по умолчанию выключен, нет практического опыта отладки concurrency ошибок.
+
+**Цель:** Получить доверие к TSan как инструменту обнаружения race conditions.
+
+**План учений:**
+1. Сознательно написать плохой код с известными проблемами:
+   - Race condition (одновременная запись в shared state)
+   - Deadlock (взаимная блокировка двух actors)
+   - Livelock (бесконечное переключение состояний)
+2. Запустить `swift test --sanitize=thread`
+3. Проверить что TSan ловит **все** проблемы
+4. Зафиксировать примеры в документации
+
+**Дополнительно: Swift 6.2 concurrency флаги** (источник: [massicotte.org/what-settings](https://www.massicotte.org/blog/what-settings/))
+- [ ] Проверить `NonisolatedNonsendingByDefault` — меняет дефолт для nonisolated методов
+- [ ] Проверить `InferIsolatedConformances` — автовывод изоляции для conformances
+- [ ] Оценить влияние на наш код с actors (TDLibClient, DigestOrchestrator)
+
+**Когда:** v0.4.0 (перед реализацией mark-as-read с параллелизмом)
+
+**Метрика успеха:** 3/3 намеренных ошибок обнаружены TSan
+
+**Связь с ретро:** Гипотеза 1.4 из retro-2024-11-analysis.md переходит в "Проверена"
+
+#### Retry Strategy (Best Practice)
+
+**Проблема:** TDLib/network вызовы могут временно падать (timeout, rate limit, transient errors). Сейчас fail-fast → снижает надёжность.
+
+**Цель:** Централизованная retry логика с best practices.
+
+**Research вопросы:**
+1. **Какие ошибки retry?**
+   - ✅ Timeout, network errors, rate limits (429)
+   - ❌ Authentication errors, invalid parameters (400)
+2. **Exponential backoff:**
+   - Стандартная схема: 1s, 2s, 4s (max 3 attempts)
+   - Jitter: добавить случайность (±20%) → избежать thundering herd
+3. **Idempotency:**
+   - Проверить что TDLib методы идемпотентны (viewMessages, getChatHistory)
+4. **Влияние на pipeline:**
+   - Retry внутри TaskGroup → не блокирует другие tasks
+   - Timeout per attempt (не total timeout)
+5. **Testing:**
+   - Mock transient errors → проверить retry
+   - TSan: нет data races в retry логике
+6. **Observability:**
+   - Логировать каждую попытку (attempt 1/3)
+
+**Архитектура (варианты):**
+
+a) **Централизованный (в TDLibClient.sendAndWait)**
+```swift
+extension TDLibClient {
+    func sendAndWait<T>(..., retryPolicy: RetryPolicy = .noRetry) async throws -> T
+}
+```
+**Плюсы:** Переиспользование
+**Минусы:** Не все методы нужно retry
+
+b) **Локальный (в каждом сервисе)**
+```swift
+func markAsRead(...) async throws {
+    try await retry(maxAttempts: 3) {
+        try await client.sendAndWait(...)
+    }
+}
+```
+**Плюсы:** Контроль где применяется
+**Минусы:** Дублирование
+
+c) **Hybrid:** `RetryPolicy` protocol + extension
+```swift
+protocol RetryPolicy {
+    func shouldRetry(error: Error, attempt: Int) -> Bool
+    func delay(for attempt: Int) -> Duration
+}
+
+extension TDLibClient {
+    func sendAndWaitWithRetry<T>(..., policy: RetryPolicy) async throws -> T
+}
+```
+
+**Когда:** После v0.4.0 MVP (не блокирует mark-as-read).
+
+**Estimate:** ~1-2 дня (research + design + implementation + testing).
+
+**Метрика успеха:**
+- 3+ TDLib методов покрыты retry
+- TSan: 0 data races
+- Component тесты: transient error → успех после retry
+
+**Риски:**
+- Deadlock если retry блокирует actor re-entrancy
+- Бесконечные зависания если timeout некорректен
+- Thundering herd без jitter
+
 #### CI/CD
 - GitHub Actions: автоматические релизы
 - Semantic versioning + auto CHANGELOG

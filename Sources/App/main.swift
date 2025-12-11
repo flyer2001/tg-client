@@ -25,6 +25,7 @@ struct TGClient {
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
         let apiHash = env["TELEGRAM_API_HASH"] ?? ""
         let stateDir = env["TDLIB_STATE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tdlib").path
+        let databaseEncryptionKey = env["TDLIB_DATABASE_ENCRYPTION_KEY"] ?? ""
         try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
 
         guard apiId > 0, !apiHash.isEmpty else {
@@ -38,7 +39,8 @@ struct TGClient {
             apiId: apiId,
             apiHash: apiHash,
             stateDir: stateDir,
-            logPath: stateDir + "/tdlib.log"
+            logPath: stateDir + "/tdlib.log",
+            databaseEncryptionKey: databaseEncryptionKey
         )
 
         // ВАЖНО: Настройка TDLib логирования должна быть ДО создания клиента
