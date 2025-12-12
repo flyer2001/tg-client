@@ -117,6 +117,7 @@ struct TGClient {
         }
 
         // 🧪 Test DigestOrchestrator + OpenAISummaryGenerator (v0.3.0 pipeline)
+        // 🔄 v0.4.0: Добавлен retry (3x, exponential backoff) для временных ошибок OpenAI
         print("\n🧪 Testing DigestOrchestrator.generateDigest()...")
 
         guard !messages.isEmpty else {
@@ -148,9 +149,73 @@ struct TGClient {
             print("\n" + String(repeating: "=", count: 60))
             print(digest)
             print(String(repeating: "=", count: 60))
+
+            // TODO v0.5.0: Добавить BotNotifier.send(digest)
+            // Целевой порядок: fetch → digest → **SEND** → markAsRead
+            // Текущий порядок (v0.4.0): fetch → digest → markAsRead (временное решение)
+            // Риск: если крашнем после digest, пользователь НЕ получит дайджест
+            // Решение v0.5.0: помечаем прочитанным ТОЛЬКО после успешной отправки через бота
         } catch {
             print("   ⚠️ Failed to generate digest: \(error)")
             exit(1)
+        }
+
+        // 🧪 Test MarkAsReadService (v0.4.0 pipeline)
+        // ⚠️ ВРЕМЕННОЕ РЕШЕНИЕ v0.4.0: markAsRead ПОСЛЕ digest (без BotNotifier)
+        // TODO v0.5.0: Переместить ПОСЛЕ BotNotifier.send(digest)
+        print("\n🧪 Testing MarkAsReadService.markAsRead()...")
+
+        // Группируем сообщения по chatId для markAsRead
+        let messagesByChatId = Dictionary(grouping: messages, by: { $0.chatId })
+            .mapValues { $0.map { $0.messageId } }
+
+        print("   Chats to mark as read: \(messagesByChatId.count)")
+
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: какие чаты будем отмечать
+        print("\n   📋 Chats to mark as read:")
+        let sortedChats = messagesByChatId.sorted { $0.value.count > $1.value.count }
+        for (chatId, messageIds) in sortedChats {
+            // Находим название канала
+            let channelTitle = messages.first(where: { $0.chatId == chatId })?.channelTitle ?? "Unknown"
+            print("      [\(chatId)] \(channelTitle): \(messageIds.count) messages")
+        }
+
+        var markAsReadLogger = Logger(label: "MarkAsReadService")
+        markAsReadLogger.logLevel = .info
+
+        let markAsReadService = MarkAsReadService(
+            tdlib: td,
+            logger: markAsReadLogger,
+            maxParallelRequests: 20,
+            timeout: .seconds(2)
+        )
+
+        let results = await markAsReadService.markAsRead(messagesByChatId)
+
+        // Анализируем результаты
+        let successCount = results.values.filter {
+            if case .success = $0 { return true }
+            return false
+        }.count
+
+        let failureCount = results.count - successCount
+
+        if failureCount == 0 {
+            print("   ✅ All \(successCount) chats marked as read successfully!")
+        } else {
+            print("   ⚠️  Marked \(successCount)/\(results.count) chats as read (\(failureCount) failed)")
+        }
+
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: результаты markAsRead
+        print("\n   📊 MarkAsRead results:")
+        for (chatId, result) in results.sorted(by: { $0.key < $1.key }) {
+            let channelTitle = messages.first(where: { $0.chatId == chatId })?.channelTitle ?? "Unknown"
+            switch result {
+            case .success:
+                print("      ✅ [\(chatId)] \(channelTitle)")
+            case .failure(let error):
+                print("      ❌ [\(chatId)] \(channelTitle): \(error)")
+            }
         }
 
         print("\n✅ All tests completed successfully!")

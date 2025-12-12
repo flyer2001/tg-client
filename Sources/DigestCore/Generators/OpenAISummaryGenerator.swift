@@ -148,4 +148,12 @@ public enum OpenAIError: Error, LocalizedError, Equatable {
             return "Invalid response from OpenAI API"
         }
     }
+
+    /// Проверка на server error (5xx) для retry логики
+    public var is5xx: Bool {
+        if case .httpError(let statusCode) = self {
+            return statusCode >= 500 && statusCode < 600
+        }
+        return false
+    }
 }

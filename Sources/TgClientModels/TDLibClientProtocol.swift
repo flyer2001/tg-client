@@ -82,6 +82,11 @@ public protocol TDLibClientProtocol: Sendable {
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat_history.html
     func getChatHistory(chatId: Int64, fromMessageId: Int64, offset: Int32, limit: Int32) async throws -> MessagesResponse
 
+    /// Отмечает сообщения как просмотренные.
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
+    func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool) async throws
+
     // MARK: - Updates
 
     /// AsyncStream для получения updates от TDLib.

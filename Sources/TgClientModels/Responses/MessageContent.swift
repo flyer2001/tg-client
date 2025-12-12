@@ -3,22 +3,46 @@ import Foundation
 
 /// Содержимое сообщения (контент).
 ///
-/// **MVP:** Поддерживаем только текстовые сообщения, остальные типы = unsupported.
+/// **v0.4.0:** Поддерживаем текстовые сообщения и медиа с caption (фото, видео, аудио, голосовые).
 ///
 /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_message_content.html
 public enum MessageContent: Sendable, Codable, Equatable {
     /// Текстовое сообщение.
     case text(FormattedText)
 
-    /// Неподдерживаемый тип контента (для MVP: фото, видео, стикеры и т.д.).
+    /// Фото с подписью (caption может быть nil).
+    ///
+    /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_photo.html
+    case photo(caption: FormattedText?)
+
+    /// Видео с подписью (caption может быть nil).
+    ///
+    /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_video.html
+    case video(caption: FormattedText?)
+
+    /// Голосовое сообщение с подписью (caption может быть nil).
+    ///
+    /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_voice.html
+    case voice(caption: FormattedText?)
+
+    /// Аудиофайл с подписью (caption может быть nil).
+    ///
+    /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message_audio.html
+    case audio(caption: FormattedText?)
+
+    /// Неподдерживаемый тип контента (стикеры, документы, видео-кружки и т.д.).
     case unsupported
 
     private enum CodingKeys: String, CodingKey {
         case type = "@type"
     }
 
-    private enum ContentType: String, Codable {
-        case messageText = "messageText"
+    private enum TextKeys: String, CodingKey {
+        case text
+    }
+
+    private enum CaptionKeys: String, CodingKey {
+        case caption
     }
 
     public init(from decoder: Decoder) throws {
@@ -31,8 +55,30 @@ public enum MessageContent: Sendable, Codable, Equatable {
             let textContainer = try decoder.container(keyedBy: TextKeys.self)
             let formattedText = try textContainer.decode(FormattedText.self, forKey: .text)
             self = .text(formattedText)
+
+        case "messagePhoto":
+            // Декодируем caption (может быть nil)
+            let captionContainer = try decoder.container(keyedBy: CaptionKeys.self)
+            let caption = try? captionContainer.decode(FormattedText.self, forKey: .caption)
+            self = .photo(caption: caption)
+
+        case "messageVideo":
+            let captionContainer = try decoder.container(keyedBy: CaptionKeys.self)
+            let caption = try? captionContainer.decode(FormattedText.self, forKey: .caption)
+            self = .video(caption: caption)
+
+        case "messageVoice":
+            let captionContainer = try decoder.container(keyedBy: CaptionKeys.self)
+            let caption = try? captionContainer.decode(FormattedText.self, forKey: .caption)
+            self = .voice(caption: caption)
+
+        case "messageAudio":
+            let captionContainer = try decoder.container(keyedBy: CaptionKeys.self)
+            let caption = try? captionContainer.decode(FormattedText.self, forKey: .caption)
+            self = .audio(caption: caption)
+
         default:
-            // Все остальные типы (messagePhoto, messageVideo, etc.) → unsupported
+            // Все остальные типы (messageDocument, messageSticker, messageVideoNote, etc.) → unsupported
             self = .unsupported
         }
     }
@@ -45,12 +91,37 @@ public enum MessageContent: Sendable, Codable, Equatable {
             try container.encode("messageText", forKey: .type)
             var textContainer = encoder.container(keyedBy: TextKeys.self)
             try textContainer.encode(formattedText, forKey: .text)
+
+        case .photo(let caption):
+            try container.encode("messagePhoto", forKey: .type)
+            if let caption = caption {
+                var captionContainer = encoder.container(keyedBy: CaptionKeys.self)
+                try captionContainer.encode(caption, forKey: .caption)
+            }
+
+        case .video(let caption):
+            try container.encode("messageVideo", forKey: .type)
+            if let caption = caption {
+                var captionContainer = encoder.container(keyedBy: CaptionKeys.self)
+                try captionContainer.encode(caption, forKey: .caption)
+            }
+
+        case .voice(let caption):
+            try container.encode("messageVoice", forKey: .type)
+            if let caption = caption {
+                var captionContainer = encoder.container(keyedBy: CaptionKeys.self)
+                try captionContainer.encode(caption, forKey: .caption)
+            }
+
+        case .audio(let caption):
+            try container.encode("messageAudio", forKey: .type)
+            if let caption = caption {
+                var captionContainer = encoder.container(keyedBy: CaptionKeys.self)
+                try captionContainer.encode(caption, forKey: .caption)
+            }
+
         case .unsupported:
             try container.encode("messageUnsupported", forKey: .type)
         }
-    }
-
-    private enum TextKeys: String, CodingKey {
-        case text
     }
 }

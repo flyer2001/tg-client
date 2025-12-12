@@ -78,6 +78,27 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         logger.info("Loaded \(allChats.count) chats from TDLib")
 
         // Шаг 2: Фильтруем каналы с непрочитанными
+        logger.info("🔍 Filtering unread channels from \(allChats.count) chats...")
+
+        // DEBUG: Анализ типов чатов
+        let chatsByType = Dictionary(grouping: allChats, by: { chat -> String in
+            switch chat.chatType {
+            case .supergroup(_, let isChannel):
+                return isChannel ? "channel" : "supergroup"
+            case .basicGroup:
+                return "basicGroup"
+            case .private:
+                return "private"
+            case .secret:
+                return "secret"
+            }
+        })
+
+        for (type, chats) in chatsByType {
+            let unreadCount = chats.filter { $0.unreadCount > 0 }.count
+            logger.info("   - \(type): \(chats.count) total, \(unreadCount) with unread")
+        }
+
         let unreadChannels = allChats.filter { chat in
             guard case .supergroup(_, let isChannel) = chat.chatType else {
                 return false
@@ -103,14 +124,22 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
                 // Добавляем новую задачу
                 group.addTask {
                     do {
-                        // Вычисляем параметры getChatHistory в зависимости от lastReadInboxMessageId
-                        let (fromMessageId, offset, limit): (Int64, Int32, Int32) = if channel.lastReadInboxMessageId == 0 {
-                            // Канал никогда не читали → берём последние N сообщений
-                            (0, 0, min(channel.unreadCount, Int32(self.maxChatHistoryLimit)))
-                        } else {
-                            // Берём N сообщений ПОСЛЕ lastRead
-                            (channel.lastReadInboxMessageId, -min(channel.unreadCount, Int32(self.maxChatHistoryLimit) - 1), min(channel.unreadCount, Int32(self.maxChatHistoryLimit)))
-                        }
+                        // FIX v0.4.0: ВСЕГДА используем fromMessageId=0 для получения последних N сообщений
+                        // Причина: fromMessageId=lastRead с offset=-N возвращает УЖЕ прочитанные сообщения
+                        // после того как lastRead обновился через viewMessages
+                        let limit = min(channel.unreadCount, Int32(self.maxChatHistoryLimit))
+                        let (fromMessageId, offset): (Int64, Int32) = (0, 0)
+
+                        // 🔍 ЛОГИРОВАНИЕ: запрос getChatHistory
+                        self.logger.info("→ getChatHistory", metadata: [
+                            "chatId": .stringConvertible(channel.id),
+                            "title": .string(channel.title),
+                            "unreadCount": .stringConvertible(channel.unreadCount),
+                            "lastRead": .stringConvertible(channel.lastReadInboxMessageId),
+                            "fromMessageId": .stringConvertible(fromMessageId),
+                            "offset": .stringConvertible(offset),
+                            "limit": .stringConvertible(limit)
+                        ])
 
                         let messagesResponse = try await self.tdlib.getChatHistory(
                             chatId: channel.id,
@@ -119,16 +148,58 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
                             limit: limit
                         )
 
+                        // 🔍 ЛОГИРОВАНИЕ: ответ getChatHistory
+                        self.logger.info("← getChatHistory", metadata: [
+                            "chatId": .stringConvertible(channel.id),
+                            "totalMessages": .stringConvertible(messagesResponse.messages.count),
+                            "messageIds": .string(messagesResponse.messages.map { String($0.id) }.joined(separator: ", "))
+                        ])
+
+                        // 🔍 ЛОГИРОВАНИЕ: типы контента для ВСЕХ сообщений
+                        let contentTypes = messagesResponse.messages.map { msg -> String in
+                            switch msg.content {
+                            case .text: return "text"
+                            case .photo: return "photo"
+                            case .video: return "video"
+                            case .voice: return "voice"
+                            case .audio: return "audio"
+                            case .unsupported: return "unsupported"
+                            }
+                        }.joined(separator: ", ")
+                        self.logger.info("📦 Content types", metadata: [
+                            "chatId": .stringConvertible(channel.id),
+                            "types": .string(contentTypes)
+                        ])
+
                         // Конвертируем TDLib Message → SourceMessage
-                        let sourceMessages = messagesResponse.messages.compactMap { message -> SourceMessage? in
-                            guard case .text(let formattedText) = message.content else {
-                                return nil  // Пропускаем неподдерживаемые типы
+                        // SPIKE FIX v0.4.0: Возвращаем ВСЕ сообщения (включая unsupported) для viewMessages
+                        let sourceMessages = messagesResponse.messages.map { message -> SourceMessage in
+                            // Извлекаем текст из text или caption (photo/video/voice/audio)
+                            let content: String
+                            switch message.content {
+                            case .text(let formattedText):
+                                content = formattedText.text
+
+                            case .photo(let caption),
+                                 .video(let caption),
+                                 .voice(let caption),
+                                 .audio(let caption):
+                                // Извлекаем caption если есть, иначе пустая строка
+                                content = caption?.text ?? ""
+
+                            case .unsupported:
+                                // Unsupported: пустой content (для viewMessages, но НЕ для дайджеста)
+                                self.logger.debug("Unsupported message will be marked as read but skipped in digest", metadata: [
+                                    "chatId": .stringConvertible(channel.id),
+                                    "messageId": .stringConvertible(message.id)
+                                ])
+                                content = ""
                             }
 
                             return SourceMessage(
                                 chatId: message.chatId,
                                 messageId: message.id,
-                                content: formattedText.text,
+                                content: content,
                                 channelTitle: channel.title,
                                 link: nil  // TODO: формирование ссылок (username из Supergroup info)
                             )
@@ -151,6 +222,15 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
             }
 
             self.logger.info("Fetched \(allMessages.count) unread messages from \(unreadChannels.count) channels")
+
+            // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: какие сообщения получили
+            let messagesByChannel = Dictionary(grouping: allMessages) { $0.channelTitle }
+            logger.info("📨 Messages by channel:")
+            for (channelTitle, messages) in messagesByChannel.sorted(by: { $0.value.count > $1.value.count }) {
+                let chatId = messages.first?.chatId ?? 0
+                logger.info("  [\(chatId)] \(channelTitle): \(messages.count) messages")
+            }
+
             return allMessages
         }
     }
@@ -238,6 +318,47 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         }
 
         logger.info("Filtered to \(relevantChats.count) relevant chats (removed \(allChats.count - relevantChats.count) archive-only)")
+
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: какие каналы нашли
+        let channels = relevantChats.filter {
+            if case .supergroup(_, isChannel: true) = $0.chatType { return true }
+            return false
+        }
+        let channelsWithUnread = channels.filter { $0.unreadCount > 0 }
+
+        logger.info("📊 Channel breakdown:", metadata: [
+            "total_channels": .stringConvertible(channels.count),
+            "channels_with_unread": .stringConvertible(channelsWithUnread.count),
+            "total_unread_count": .stringConvertible(channelsWithUnread.reduce(0) { $0 + $1.unreadCount })
+        ])
+
+        // Логируем топ-10 каналов с непрочитанными
+        if !channelsWithUnread.isEmpty {
+            let top10 = channelsWithUnread.sorted { $0.unreadCount > $1.unreadCount }.prefix(10)
+            logger.info("📋 Top channels with unread messages:")
+            for (idx, chat) in top10.enumerated() {
+                logger.info("  \(idx + 1). [\(chat.id)] \(chat.title): \(chat.unreadCount) unread")
+            }
+        }
+
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: ВСЕ каналы (isChannel: true) для отладки фильтрации
+        logger.info("🔍 Детальный список ВСЕХ каналов (isChannel: true):")
+        let sortedChannels = channels.sorted { $0.title < $1.title }
+        for channel in sortedChannels {
+            let positionsStr = channel.positions.map { pos in
+                switch pos.list {
+                case .main: return "main"
+                case .archive: return "archive"
+                case .folder(let id): return "folder(\(id))"
+                }
+            }.joined(separator: ", ")
+
+            logger.info("  [\(channel.id)] \(channel.title)", metadata: [
+                "unread": .stringConvertible(channel.unreadCount),
+                "positions": .string(positionsStr.isEmpty ? "none" : positionsStr),
+                "lastRead": .stringConvertible(channel.lastReadInboxMessageId)
+            ])
+        }
 
         return relevantChats
     }

@@ -60,6 +60,27 @@ extension TDLibClient: TDLibClientProtocol {
         )
     }
 
+    public func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool) async throws {
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: запрос viewMessages
+        appLogger.info("🔍 TDLibClient.viewMessages REQUEST", metadata: [
+            "chatId": .stringConvertible(chatId),
+            "messageIds": .string(messageIds.map { String($0) }.joined(separator: ", ")),
+            "messageCount": .stringConvertible(messageIds.count),
+            "forceRead": .stringConvertible(forceRead)
+        ])
+
+        let response = try await sendAndWait(
+            ViewMessagesRequest(chatId: chatId, messageIds: messageIds, forceRead: forceRead),
+            expecting: OkResponse.self
+        )
+
+        // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: ответ OkResponse
+        appLogger.info("🔍 TDLibClient.viewMessages RESPONSE OK", metadata: [
+            "chatId": .stringConvertible(chatId),
+            "responseType": .string(response.type)
+        ])
+    }
+
     // MARK: - Updates
 
     /// AsyncStream для получения updates от TDLib.
