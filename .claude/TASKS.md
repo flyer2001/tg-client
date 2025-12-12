@@ -224,14 +224,72 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 
 ---
 
-### 7. Ретроспектива v0.4.0 🔍 СЛЕДУЮЩАЯ ЗАДАЧА
+### 7. Code Review перед релизом v0.4.0 🔥 САМАЯ ПРИОРИТЕТНАЯ
 
-**Приоритет:** 🔥 Высокий (после релиза)
+**Приоритет:** 🔴 **КРИТИЧНЫЙ** (утром, перед push)
+
+**Цель:** Финальная проверка кода на свежую голову перед публикацией релиза
+
+**Роль:** Senior Code Reviewer ([ROLES.md](ROLES.md))
+
+**План проверки:**
+- [ ] **Прочитать все 4 коммита** (diff каждого коммита):
+  - `6333bb7` feat: mark-as-read + media support (10 files, +652/-41)
+  - `0b7fda1` test: mark-as-read + media support + retry (14 files, +1575/-71)
+  - `beeb5da` docs: актуализация v0.4.0 (7 files, +995/-48)
+  - `800fa41` docs: задачи SwiftPM PR #9493 merged и ретроспектива v0.4.0 (1 file)
+
+- [ ] **Проверить новые файлы:**
+  - `Sources/DigestCore/Sources/MarkAsReadService.swift` — actor, concurrency safety, timeout
+  - `Sources/FoundationExtensions/RetryHelpers.swift` — exponential backoff, cancellation
+  - `Sources/TgClientModels/Requests/ViewMessagesRequest.swift` — Codable correctness
+  - `Tests/TgClientComponentTests/DigestCore/MarkAsReadFlowTests.swift` — 4 edge cases
+  - `Tests/TgClientUnitTests/.../MessageContentTests.swift` — 12 тестов
+  - `Tests/TgClientUnitTests/.../RetryHelpersTests.swift` — 11 тестов
+
+- [ ] **Проверить критичные изменения:**
+  - `main.swift` — pipeline flow (fetch → digest → markAsRead)
+  - `MessageContent.swift` — новые cases (photo/video/voice/audio)
+  - `DigestOrchestrator.swift` — retry логика
+  - `ChannelMessageSource.swift` — caption extraction
+
+- [ ] **Проверить cleanup:**
+  - ✅ openChat/closeChat удалены из TDLibClient+HighLevelAPI.swift?
+  - ✅ openChat/closeChat удалены из TDLibClientProtocol.swift?
+  - ✅ Spike verification блок удалён из main.swift?
+  - ✅ Временные модели удалены из MarkAsReadE2ETests.swift?
+
+- [ ] **Документация:**
+  - `.env.example` — обновлён комментарий про encryption key (кратен 16 байт)
+  - DocC — проверить генерацию доков на новые тесты
+  - CHANGELOG.md — релизные ноты корректны
+
+**После review:**
+- [ ] Если ОК → `git push origin main`
+- [ ] Если найдены проблемы → фикс → amend коммиты → повторный review
+
+**Команды для review:**
+```bash
+# Посмотреть все изменения
+git log --oneline -4
+git diff HEAD~4..HEAD --stat
+
+# Diff каждого коммита
+git show 6333bb7
+git show 0b7fda1
+git show beeb5da
+git show 800fa41
+```
+
+---
+
+### 8. Ретроспектива v0.4.0 🔍 ПОСЛЕ РЕЛИЗА
+
+**Приоритет:** 🟡 Средний (после push)
 
 **Цель:** Провести ретроспективу релиза v0.4.0 для анализа процесса и выводов
 
 **План:**
-- [ ] **Code review на свежую голову** (утром после релиза)
 - [ ] **Проверка метрик** из `.claude/archived/retro-v0.4.0-questions.md`:
   - Research-First: 100%?
   - Mock только boundaries: 100%?
@@ -249,7 +307,7 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 - [ ] **Обновить `.claude/archived/retro-v0.4.0-questions.md`** с финальными выводами
 - [ ] **Append в `.claude/archived/RETRO-RESULT.md`** (дата 2025-12-12)
 
-**Триггер:** После финализации v0.4.0 релиза (коммиты созданы, перед push)
+**Триггер:** После публикации релиза (git push выполнен)
 
 **Документы:**
 - `.claude/archived/retro-v0.4.0-questions.md` — гипотезы и вопросы
