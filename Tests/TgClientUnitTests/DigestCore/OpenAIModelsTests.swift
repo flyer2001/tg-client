@@ -72,4 +72,48 @@ struct OpenAIModelsTests {
 
         #expect(decoded.choices.isEmpty)
     }
+
+    // MARK: - OpenAIError.is5xx Tests
+
+    @Test("OpenAIError.is5xx: 500 Internal Server Error")
+    func is5xxServerError500() {
+        let error = OpenAIError.httpError(statusCode: 500)
+        #expect(error.is5xx == true)
+    }
+
+    @Test("OpenAIError.is5xx: 502 Bad Gateway")
+    func is5xxBadGateway() {
+        let error = OpenAIError.httpError(statusCode: 502)
+        #expect(error.is5xx == true)
+    }
+
+    @Test("OpenAIError.is5xx: 503 Service Unavailable")
+    func is5xxServiceUnavailable() {
+        let error = OpenAIError.httpError(statusCode: 503)
+        #expect(error.is5xx == true)
+    }
+
+    @Test("OpenAIError.is5xx: 429 Rate Limited (НЕ 5xx)")
+    func is5xxRateLimited() {
+        let error = OpenAIError.httpError(statusCode: 429)
+        #expect(error.is5xx == false)
+    }
+
+    @Test("OpenAIError.is5xx: 401 Unauthorized (НЕ 5xx)")
+    func is5xxUnauthorized() {
+        let error = OpenAIError.httpError(statusCode: 401)
+        #expect(error.is5xx == false)
+    }
+
+    @Test("OpenAIError.is5xx: rateLimited enum case (НЕ httpError)")
+    func is5xxRateLimitedCase() {
+        let error = OpenAIError.rateLimited
+        #expect(error.is5xx == false)
+    }
+
+    @Test("OpenAIError.is5xx: emptyResponse (НЕ httpError)")
+    func is5xxEmptyResponse() {
+        let error = OpenAIError.emptyResponse
+        #expect(error.is5xx == false)
+    }
 }

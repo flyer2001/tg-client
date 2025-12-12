@@ -103,8 +103,8 @@ struct DigestOrchestratorTests {
         #expect(digest.isEmpty)
     }
 
-    @Test("OpenAI unauthorized → пробрасывает OpenAIError.unauthorized")
-    func propagatesUnauthorizedError() async throws {
+    @Test("OpenAI unauthorized → fail-fast БЕЗ retry")
+    func failFastOnUnauthorizedError() async throws {
         // Arrange
         let mockHTTPClient = MockHTTPClient()
         let errorData = """
@@ -139,26 +139,36 @@ struct DigestOrchestratorTests {
             )
         ]
 
-        // Act & Assert
+        // Act & Assert: 401 → fail-fast, НЕ retry
         await #expect(throws: OpenAIError.unauthorized) {
             try await orchestrator.generateDigest(from: messages)
         }
+
+        // Проверяем что был только 1 вызов (НЕТ retry)
+        #expect(await mockHTTPClient.callCount == 1)
     }
 
-    @Test("OpenAI rate limited → пробрасывает OpenAIError.rateLimited")
-    func propagatesRateLimitError() async throws {
-        // Arrange
-        let mockHTTPClient = MockHTTPClient()
-        let errorData = """
-        {
-            "error": {
-                "message": "Rate limit exceeded",
-                "type": "rate_limit_exceeded"
-            }
-        }
-        """.data(using: .utf8)!
+    // MARK: - Retry Tests
 
-        await mockHTTPClient.setStubResult(.failure(HTTPError.clientError(statusCode: 429, data: errorData)))
+    @Test("Retry: 500 на 1й попытке → success на 2й")
+    func retryServerErrorThenSuccess() async throws {
+        // Arrange: 500 → success
+        let mockHTTPClient = MockHTTPClient()
+        let successResponse = ChatCompletionResponse(
+            choices: [
+                ChatCompletionResponse.Choice(
+                    message: ChatCompletionResponse.Choice.Message(
+                        content: "Digest content"
+                    )
+                )
+            ]
+        )
+        let successData = try JSONEncoder().encode(successResponse)
+
+        await mockHTTPClient.setStubQueue([
+            .failure(HTTPError.serverError(statusCode: 500, data: Data())),
+            .success(successData)
+        ])
 
         let summaryGenerator = OpenAISummaryGenerator(
             apiKey: "test-key",
@@ -168,14 +178,204 @@ struct DigestOrchestratorTests {
 
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)  // Быстрые тесты
         )
 
         let messages = [
             SourceMessage(
                 chatId: 1,
                 messageId: 1,
-                content: "Test message",
+                content: "Test",
+                channelTitle: "Test",
+                link: nil
+            )
+        ]
+
+        // Act
+        let digest = try await orchestrator.generateDigest(from: messages)
+
+        // Assert
+        #expect(digest == "Digest content")
+        #expect(await mockHTTPClient.callCount == 2)  // 1 fail + 1 success
+    }
+
+    @Test("Retry: 429 rate limit → success на 2й")
+    func retryRateLimitThenSuccess() async throws {
+        // Arrange: 429 → success
+        let mockHTTPClient = MockHTTPClient()
+        let successResponse = ChatCompletionResponse(
+            choices: [
+                ChatCompletionResponse.Choice(
+                    message: ChatCompletionResponse.Choice.Message(
+                        content: "Digest content"
+                    )
+                )
+            ]
+        )
+        let successData = try JSONEncoder().encode(successResponse)
+        let rateLimitError = """
+        {"error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}}
+        """.data(using: .utf8)!
+
+        await mockHTTPClient.setStubQueue([
+            .failure(HTTPError.clientError(statusCode: 429, data: rateLimitError)),
+            .success(successData)
+        ])
+
+        let summaryGenerator = OpenAISummaryGenerator(
+            apiKey: "test-key",
+            httpClient: mockHTTPClient,
+            logger: Logger(label: "test")
+        )
+
+        let orchestrator = DigestOrchestrator(
+            summaryGenerator: summaryGenerator,
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)
+        )
+
+        let messages = [
+            SourceMessage(
+                chatId: 1,
+                messageId: 1,
+                content: "Test",
+                channelTitle: "Test",
+                link: nil
+            )
+        ]
+
+        // Act
+        let digest = try await orchestrator.generateDigest(from: messages)
+
+        // Assert
+        #expect(digest == "Digest content")
+        #expect(await mockHTTPClient.callCount == 2)
+    }
+
+    @Test("Retry: 503 → 502 → success на 3й")
+    func retryMultipleServerErrorsThenSuccess() async throws {
+        // Arrange: 503 → 502 → success
+        let mockHTTPClient = MockHTTPClient()
+        let successResponse = ChatCompletionResponse(
+            choices: [
+                ChatCompletionResponse.Choice(
+                    message: ChatCompletionResponse.Choice.Message(
+                        content: "Digest content"
+                    )
+                )
+            ]
+        )
+        let successData = try JSONEncoder().encode(successResponse)
+
+        await mockHTTPClient.setStubQueue([
+            .failure(HTTPError.serverError(statusCode: 503, data: Data())),
+            .failure(HTTPError.serverError(statusCode: 502, data: Data())),
+            .success(successData)
+        ])
+
+        let summaryGenerator = OpenAISummaryGenerator(
+            apiKey: "test-key",
+            httpClient: mockHTTPClient,
+            logger: Logger(label: "test")
+        )
+
+        let orchestrator = DigestOrchestrator(
+            summaryGenerator: summaryGenerator,
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)
+        )
+
+        let messages = [
+            SourceMessage(
+                chatId: 1,
+                messageId: 1,
+                content: "Test",
+                channelTitle: "Test",
+                link: nil
+            )
+        ]
+
+        // Act
+        let digest = try await orchestrator.generateDigest(from: messages)
+
+        // Assert
+        #expect(digest == "Digest content")
+        #expect(await mockHTTPClient.callCount == 3)  // 2 fails + 1 success
+    }
+
+    @Test("Retry: 400 bad request → fail-fast БЕЗ retry")
+    func failFastOn400Error() async throws {
+        // Arrange: 400 → НЕ retry
+        let mockHTTPClient = MockHTTPClient()
+        let badRequestError = """
+        {"error": {"message": "Invalid request", "type": "invalid_request_error"}}
+        """.data(using: .utf8)!
+
+        await mockHTTPClient.setStubResult(.failure(HTTPError.clientError(statusCode: 400, data: badRequestError)))
+
+        let summaryGenerator = OpenAISummaryGenerator(
+            apiKey: "test-key",
+            httpClient: mockHTTPClient,
+            logger: Logger(label: "test")
+        )
+
+        let orchestrator = DigestOrchestrator(
+            summaryGenerator: summaryGenerator,
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)
+        )
+
+        let messages = [
+            SourceMessage(
+                chatId: 1,
+                messageId: 1,
+                content: "Test",
+                channelTitle: "Test",
+                link: nil
+            )
+        ]
+
+        // Act & Assert
+        await #expect(throws: OpenAIError.httpError(statusCode: 400)) {
+            try await orchestrator.generateDigest(from: messages)
+        }
+
+        // Проверяем что был только 1 вызов (НЕТ retry для 400)
+        #expect(await mockHTTPClient.callCount == 1)
+    }
+
+    @Test("Retry: 429 → 429 → 429 → exhausted")
+    func rateLimitExhaustsRetries() async throws {
+        // Arrange: 3 раза 429
+        let mockHTTPClient = MockHTTPClient()
+        let rateLimitError = """
+        {"error": {"message": "Rate limit exceeded", "type": "rate_limit_error"}}
+        """.data(using: .utf8)!
+
+        await mockHTTPClient.setStubQueue([
+            .failure(HTTPError.clientError(statusCode: 429, data: rateLimitError)),
+            .failure(HTTPError.clientError(statusCode: 429, data: rateLimitError)),
+            .failure(HTTPError.clientError(statusCode: 429, data: rateLimitError))
+        ])
+
+        let summaryGenerator = OpenAISummaryGenerator(
+            apiKey: "test-key",
+            httpClient: mockHTTPClient,
+            logger: Logger(label: "test")
+        )
+
+        let orchestrator = DigestOrchestrator(
+            summaryGenerator: summaryGenerator,
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)
+        )
+
+        let messages = [
+            SourceMessage(
+                chatId: 1,
+                messageId: 1,
+                content: "Test",
                 channelTitle: "Test",
                 link: nil
             )
@@ -185,13 +385,20 @@ struct DigestOrchestratorTests {
         await #expect(throws: OpenAIError.rateLimited) {
             try await orchestrator.generateDigest(from: messages)
         }
+
+        // Проверяем что было 3 попытки
+        #expect(await mockHTTPClient.callCount == 3)
     }
 
-    @Test("OpenAI server error → пробрасывает OpenAIError.httpError")
-    func propagatesServerError() async throws {
-        // Arrange
+    @Test("Retry: 500 → 500 → 500 → exhausted")
+    func serverErrorExhaustsRetries() async throws {
+        // Arrange: все 3 попытки → 500 error
         let mockHTTPClient = MockHTTPClient()
-        await mockHTTPClient.setStubResult(.failure(HTTPError.serverError(statusCode: 500, data: Data())))
+        await mockHTTPClient.setStubQueue([
+            .failure(HTTPError.serverError(statusCode: 500, data: Data())),
+            .failure(HTTPError.serverError(statusCode: 500, data: Data())),
+            .failure(HTTPError.serverError(statusCode: 500, data: Data()))
+        ])
 
         let summaryGenerator = OpenAISummaryGenerator(
             apiKey: "test-key",
@@ -201,7 +408,8 @@ struct DigestOrchestratorTests {
 
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            baseDelay: .milliseconds(100)
         )
 
         let messages = [
@@ -214,9 +422,12 @@ struct DigestOrchestratorTests {
             )
         ]
 
-        // Act & Assert
+        // Act & Assert: все 3 retry exhausted
         await #expect(throws: OpenAIError.httpError(statusCode: 500)) {
             try await orchestrator.generateDigest(from: messages)
         }
+
+        // Проверяем что было 3 попытки
+        #expect(await mockHTTPClient.callCount == 3)
     }
 }

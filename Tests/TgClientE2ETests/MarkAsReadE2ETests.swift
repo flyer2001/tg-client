@@ -7,6 +7,8 @@ import Logging
 @testable import DigestCore
 @testable import TestHelpers
 
+// MARK: - E2E Tests
+
 /// E2E тест для сценария отметки сообщений как прочитанных.
 ///
 /// **User Story:** <doc:MarkAsRead>
@@ -24,12 +26,18 @@ import Logging
 @Suite("E2E: Отметка сообщений как прочитанных")
 struct MarkAsReadE2ETests {
 
-    /// E2E тест: отметка сообщений как прочитанных через viewMessages API.
+    /// E2E тест: отметка сообщений как прочитанных через openChat → viewMessages → closeChat.
+    ///
+    /// **Spike Test для v0.4.0:** Проверка требования TDLib — openChat перед viewMessages.
+    /// Источник: [TDLib Issue #1513](https://github.com/tdlib/td/issues/1513)
     ///
     /// **Сценарий:**
     /// 1. Получить непрочитанные сообщения (fetchUnreadMessages)
-    /// 2. Пометить первый чат как прочитанный (viewMessages)
-    /// 3. Проверить что чат исчез из непрочитанных (fetchUnreadMessages повторно)
+    /// 2. Открыть чат (openChat)
+    /// 3. Пометить сообщения прочитанными (viewMessages)
+    /// 4. Закрыть чат (closeChat)
+    /// 5. Проверить что чат исчез из непрочитанных (fetchUnreadMessages повторно)
+    /// 6. **⚠️ КРИТИЧНО:** Manual UI verification в Telegram клиенте (badge должен исчезнуть!)
     ///
     /// **Предусловия:**
     /// - Пользователь авторизован в TDLib
@@ -77,10 +85,10 @@ struct MarkAsReadE2ETests {
 
         print("📝 Testing with chat: \(chatTitle) (\(messageIds.count) unread messages)")
 
-        // 4. Помечаем прочитанным через viewMessages
+        // 4. Помечаем прочитанным через viewMessages (forceRead=true)
+        print("✓ Marking messages as read...")
         let request = ViewMessagesRequest(chatId: chatId, messageIds: messageIds, forceRead: true)
         let response = try await tdlib.sendAndWait(request, expecting: OkResponse.self)
-
         #expect(response.type == "ok", "viewMessages should return Ok response")
 
         // Небольшая задержка для синхронизации TDLib state
@@ -94,37 +102,18 @@ struct MarkAsReadE2ETests {
         #expect(!chatIdsAfter.contains(chatId),
                 "Chat \(chatId) should be marked as read and removed from unread list")
 
-        print("✅ Chat '\(chatTitle)' successfully marked as read")
+        print("✅ Chat '\(chatTitle)' marked as read (API test passed)")
         print("   Unread chats before: \(messagesByChatId.count)")
         print("   Unread chats after: \(Dictionary(grouping: unreadAfter, by: { $0.chatId }).count)")
-    }
-}
 
-// MARK: - Temporary Models для Spike
-
-/// Временная модель ViewMessagesRequest для spike тестирования.
-///
-/// **Будет заменена на полноценную модель в Sources/TgClientModels после spike.**
-///
-/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
-struct ViewMessagesRequest: TDLibRequest, Sendable {
-    let type = "viewMessages"
-
-    let chatId: Int64
-    let messageIds: [Int64]
-    let forceRead: Bool
-
-    // Только @type требует явного маппинга, остальное через .convertToSnakeCase
-    enum CodingKeys: String, CodingKey {
-        case type = "@type"
-        case chatId
-        case messageIds
-        case forceRead
-    }
-
-    init(chatId: Int64, messageIds: [Int64], forceRead: Bool) {
-        self.chatId = chatId
-        self.messageIds = messageIds
-        self.forceRead = forceRead
+        // ⚠️ КРИТИЧНО: Manual UI Verification
+        print("")
+        print("⚠️  MANUAL UI VERIFICATION REQUIRED:")
+        print("   1. Откройте Telegram Desktop или Mobile клиент")
+        print("   2. Найдите канал '\(chatTitle)'")
+        print("   3. Проверьте: unread badge = 0? (сообщения помечены прочитанными)")
+        print("   4. Если badge остался → spike test НЕ УСПЕШЕН!")
+        print("")
+        print("   Spike успешен ТОЛЬКО если badge исчез в UI клиенте.")
     }
 }

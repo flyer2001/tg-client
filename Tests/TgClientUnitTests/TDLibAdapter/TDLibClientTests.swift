@@ -259,4 +259,64 @@ struct TDLibClientTests {
             #expect(userId > 0, "Request #\(index) получил некорректный userId=\(userId)")
         }
     }
+
+    /// 50 параллельных viewMessages запросов матчатся по @extra.
+    ///
+    /// **Проверяет:**
+    /// - ResponseWaiters корректно матчит параллельные viewMessages запросы по @extra
+    /// - Нет race condition при параллельных запросах
+    /// - Каждый запрос получает success (Ok response)
+    ///
+    /// **Given:** MockTDLibFFI с 50 замоканными viewMessages → Ok responses
+    /// **When:** 50 параллельных viewMessages запросов для разных чатов
+    /// **Then:** Все 50 запросов успешно завершаются (Ok response)
+    @Test("50 параллельных viewMessages запросов матчатся по @extra")
+    func parallelViewMessagesRequestsMatchByExtra() async throws {
+        print("\n🧪 TEST START: parallelViewMessagesRequestsMatchByExtra")
+        let mockFFI = MockTDLibFFI()
+
+        // Мокаем 50 responses viewMessages → Ok
+        for _ in 1...50 {
+            mockFFI.mockResponse(
+                forRequestType: "viewMessages",
+                return: .success(OkResponse())
+            )
+        }
+
+        let logger = Logger(label: "test")
+        let client = TDLibClient(ffi: mockFFI, appLogger: logger)
+        client.startUpdatesLoop()
+
+        // 50 параллельных запросов для разных чатов
+        let chatIds: [Int64] = (1...50).map { Int64($0 * 100) }  // 100, 200, ... 5000
+
+        let results: [Int64] = try await withThrowingTaskGroup(of: Int64.self) { group in
+            for chatId in chatIds {
+                group.addTask {
+                    // viewMessages для этого чата
+                    try await client.viewMessages(
+                        chatId: chatId,
+                        messageIds: [chatId + 1, chatId + 2],
+                        forceRead: true
+                    )
+                    return chatId
+                }
+            }
+
+            var collected: [Int64] = []
+            for try await chatId in group {
+                collected.append(chatId)
+            }
+            return collected
+        }
+
+        // ASSERT: все 50 запросов успешно завершились
+        #expect(results.count == 50, "Ожидали 50 успешных viewMessages, получили \(results.count)")
+
+        // ASSERT: все chatIds присутствуют в результатах
+        let resultSet = Set(results)
+        for chatId in chatIds {
+            #expect(resultSet.contains(chatId), "viewMessages для chatId=\(chatId) не завершился")
+        }
+    }
 }

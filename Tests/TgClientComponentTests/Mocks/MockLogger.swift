@@ -7,6 +7,9 @@ import Logging
 ///
 /// Захватывает все логи в память для последующей проверки в тестах.
 ///
+/// **Thread Safety:**
+/// NSLock защищает `messages` array от concurrent access.
+///
 /// **Использование:**
 /// ```swift
 /// let mockLogger = MockLogger()
@@ -28,8 +31,18 @@ public final class MockLogger: @unchecked Sendable {
         public let message: String
     }
 
-    /// Все захваченные логи (публичный для прямой проверки в тестах)
-    public var messages: [LogMessage] = []
+    /// Lock для защиты shared mutable state (messages array)
+    private let lock = NSLock()
+
+    /// Все захваченные логи (thread-safe доступ через lock)
+    private var _messages: [LogMessage] = []
+
+    /// Thread-safe accessor для messages
+    public var messages: [LogMessage] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _messages
+    }
 
     public init() {}
 
@@ -45,7 +58,9 @@ public final class MockLogger: @unchecked Sendable {
 
     /// Записывает лог-сообщение (используется внутренне LogHandler)
     func log(level: Logger.Level, message: String) {
-        messages.append(LogMessage(level: level, message: message))
+        lock.lock()
+        defer { lock.unlock() }
+        _messages.append(LogMessage(level: level, message: message))
     }
 }
 

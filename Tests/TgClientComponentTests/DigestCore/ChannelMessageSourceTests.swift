@@ -613,4 +613,141 @@ struct ChannelMessageSourceTests {
         #expect(messages.count == 3)
         #expect(messages.allSatisfy { $0.chatId == 888 })
     }
+
+    /// Mix типов контента: text, photo, video, voice, audio, unsupported.
+    ///
+    /// **Given:** Канал "Mixed Media" с 6 сообщениями разных типов
+    ///
+    /// **When:** Вызываем `messageSource.fetchUnreadMessages()`
+    ///
+    /// **Then:**
+    /// - Text message → content = "Text message"
+    /// - Photo с caption → content = "Photo caption"
+    /// - Video БЕЗ caption → content = ""
+    /// - Voice с caption → content = "Voice note"
+    /// - Audio с caption → content = "Audio title"
+    /// - Unsupported (sticker) → content = ""
+    @Test("fetchUnreadMessages: mix типов контента (text/photo/video/voice/audio/unsupported)")
+    func fetchUnreadMessagesMixedContentTypes() async throws {
+
+        // Given: TDLibClient с MockTDLibFFI
+        let mockFFI = MockTDLibFFI()
+        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
+        let tdlibClient = TDLibClient(
+            ffi: mockFFI,
+            appLogger: logger,
+            authorizationPollTimeout: 0.1,
+            maxAuthorizationAttempts: 10,
+            authorizationTimeout: 5
+        )
+
+        // Запускаем TDLib background loop для обработки updates
+        tdlibClient.startUpdatesLoop()
+
+        // 1. Канал "Mixed Media" с unreadCount=6
+        let mixedChannel = ChatResponse(
+            id: 555,
+            type: .supergroup(supergroupId: 55, isChannel: true),
+            title: "Mixed Media",
+            unreadCount: 6,
+            lastReadInboxMessageId: 0,
+            positions: []
+        )
+        mockFFI.queueUpdate(.newChat(chat: mixedChannel))
+
+        // Добавляем updateChatPosition с .main
+        let mainPosition = ChatPosition(list: .main, order: 9999999999, isPinned: false)
+        mockFFI.queueUpdate(.chatPosition(chatId: 555, position: mainPosition))
+
+        // 2. Mock сообщения разных типов
+        let textMessage = Message(
+            id: 1001,
+            chatId: 555,
+            date: 1700000001,
+            content: .text(FormattedText(text: "Text message", entities: nil))
+        )
+
+        let photoMessage = Message(
+            id: 1002,
+            chatId: 555,
+            date: 1700000002,
+            content: .photo(caption: FormattedText(text: "Photo caption", entities: nil))
+        )
+
+        let videoMessage = Message(
+            id: 1003,
+            chatId: 555,
+            date: 1700000003,
+            content: .video(caption: nil)  // Видео БЕЗ caption
+        )
+
+        let voiceMessage = Message(
+            id: 1004,
+            chatId: 555,
+            date: 1700000004,
+            content: .voice(caption: FormattedText(text: "Voice note", entities: nil))
+        )
+
+        let audioMessage = Message(
+            id: 1005,
+            chatId: 555,
+            date: 1700000005,
+            content: .audio(caption: FormattedText(text: "Audio title", entities: nil))
+        )
+
+        let unsupportedMessage = Message(
+            id: 1006,
+            chatId: 555,
+            date: 1700000006,
+            content: .unsupported  // Sticker/Document/etc
+        )
+
+        mockFFI.mockResponse(
+            forRequestType: "getChatHistory",
+            return: .success(MessagesResponse(
+                totalCount: 6,
+                messages: [textMessage, photoMessage, videoMessage, voiceMessage, audioMessage, unsupportedMessage]
+            ))
+        )
+
+        // When: Вызываем fetchUnreadMessages()
+        let messageSource = ChannelMessageSource(
+            tdlib: tdlibClient,
+            logger: logger,
+            loadChatsPaginationDelay: .milliseconds(10),
+            updatesCollectionTimeout: .milliseconds(50),
+            maxParallelHistoryRequests: 5,
+            maxLoadChatsBatches: 5
+        )
+
+        let messages = try await messageSource.fetchUnreadMessages()
+
+        // Then: Получили 6 сообщений с правильным извлечением caption
+        #expect(messages.count == 6)
+
+        // Text message
+        let text = messages.first(where: { $0.messageId == 1001 })
+        #expect(text?.content == "Text message")
+        #expect(text?.channelTitle == "Mixed Media")
+
+        // Photo с caption
+        let photo = messages.first(where: { $0.messageId == 1002 })
+        #expect(photo?.content == "Photo caption")
+
+        // Video БЕЗ caption → пустая строка
+        let video = messages.first(where: { $0.messageId == 1003 })
+        #expect(video?.content == "")
+
+        // Voice с caption
+        let voice = messages.first(where: { $0.messageId == 1004 })
+        #expect(voice?.content == "Voice note")
+
+        // Audio с caption
+        let audio = messages.first(where: { $0.messageId == 1005 })
+        #expect(audio?.content == "Audio title")
+
+        // Unsupported → пустая строка (но присутствует для viewMessages)
+        let unsupported = messages.first(where: { $0.messageId == 1006 })
+        #expect(unsupported?.content == "")
+    }
 }

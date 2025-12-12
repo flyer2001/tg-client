@@ -6,35 +6,63 @@ import FoundationNetworking
 
 /// Мок HTTP клиента для Component тестов.
 ///
-/// **Дизайн:** Result-based stubbing - один stub на тест.
+/// **Дизайн:**
+/// - Single-stub: `setStubResult()` для простых тестов
+/// - Queue-based: `setStubQueue()` для retry сценариев (v0.4.0)
 ///
 /// **Использование:**
 /// ```swift
+/// // Простой тест:
 /// let mockClient = MockHTTPClient()
-/// mockClient.stubResult = .success(validResponseData)
-/// // или
-/// mockClient.stubResult = .failure(HTTPError.clientError(statusCode: 401, data: errorData))
-/// ```
+/// await mockClient.setStubResult(.success(validResponseData))
 ///
-/// **Будущие улучшения:**
-/// - Queue-based: `[Result<Data, Error>]` для retry сценариев (v0.4.0+)
-/// - Closure-based: `(URLRequest) -> Result` для сложных сценариев
+/// // Retry тест:
+/// await mockClient.setStubQueue([
+///     .failure(HTTPError.serverError(statusCode: 500, data: Data())),
+///     .failure(HTTPError.serverError(statusCode: 503, data: Data())),
+///     .success(validResponseData)  // success на 3й попытке
+/// ])
+/// ```
 public actor MockHTTPClient: HTTPClientProtocol {
-    /// Stub результата HTTP запроса.
-    ///
-    /// **ВАЖНО:** Обязательно установить перед вызовом `send()`.
+    /// Stub результата HTTP запроса (single-stub mode).
     private var stubResult: Result<Data, Error>?
+
+    /// Queue результатов для retry сценариев (queue mode).
+    private var stubQueue: [Result<Data, Error>] = []
+
+    /// Счётчик вызовов send().
+    private var _callCount: Int = 0
 
     public init() {}
 
-    /// Устанавливает stub результат (для actor isolation).
+    /// Устанавливает stub результат (single-stub mode).
     public func setStubResult(_ result: Result<Data, Error>) {
         self.stubResult = result
+        self.stubQueue = []  // Очищаем queue при переключении в single-stub
+    }
+
+    /// Устанавливает очередь результатов для retry сценариев (queue mode).
+    public func setStubQueue(_ queue: [Result<Data, Error>]) {
+        self.stubQueue = queue
+        self.stubResult = nil  // Очищаем single-stub при переключении в queue
+    }
+
+    /// Возвращает количество вызовов send().
+    public var callCount: Int {
+        _callCount
     }
 
     public func send(request: URLRequest) async throws -> Data {
+        _callCount += 1
+
+        // Queue mode: берём следующий результат из очереди
+        if !stubQueue.isEmpty {
+            return try stubQueue.removeFirst().get()
+        }
+
+        // Single-stub mode
         guard let result = stubResult else {
-            fatalError("MockHTTPClient: stubResult not configured. Set stubResult before calling send().")
+            fatalError("MockHTTPClient: stubResult not configured. Set stubResult or stubQueue before calling send().")
         }
         return try result.get()
     }
