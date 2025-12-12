@@ -40,6 +40,52 @@
 
 ---
 
+## Pipeline Flow & Error Handling
+
+### Sequential Pipeline (v0.4.0 → v0.5.0)
+
+```
+main.swift:
+  1. TDLib auth ────────────────► fail-fast ✗
+  2. getMe() ───────────────────► fail-fast ✗
+  3. fetchUnreadMessages() ─────► partial success ⚠ (внутри)
+                                  fail-fast ✗ (если 0 сообщений)
+  4. generateDigest() ──────────► retry 3x ↻ (1s, 2s, 4s)
+                                  fail-fast ✗ (после retry)
+  5. [v0.5.0] BotNotifier.send()► fail-fast ✗
+  6. markAsRead() ──────────────► partial success ⚠
+                                  graceful degradation
+```
+
+**Легенда:**
+- ✗ Fail-fast (ошибка → exit(1), НЕ помечаем прочитанным)
+- ⚠ Partial success (продолжаем при частичных ошибках)
+- ↻ Retry (exponential backoff)
+
+### Error Handling Strategies
+
+| Этап | Стратегия | Обоснование |
+|------|-----------|-------------|
+| **Auth/getMe** | Fail-fast | Критично для всего pipeline |
+| **fetchUnreadMessages** | Partial success (внутри)<br>Fail-fast (наружу) | Один канал упал → продолжаем с остальными<br>0 сообщений → нет смысла продолжать |
+| **generateDigest** | Retry 3x → Fail-fast | AI может временно упасть (rate limit, 5xx)<br>Retry увеличивает reliability |
+| **BotNotifier.send** | Fail-fast (v0.5.0) | Пользователь должен получить digest |
+| **markAsRead** | Partial success | Digest уже отправлен → не критично<br>Упавшие чаты логируем |
+
+### Ключевые решения
+
+**Retry для AI, но НЕ для TDLib:**
+- OpenAI: временные ошибки (429 rate limit, 5xx) → retry помогает
+- TDLib: partial success достаточен (упавший чат → попадёт в следующий запуск)
+
+**markAsRead ПОСЛЕ BotNotifier:**
+- v0.4.0 временно: после generateDigest (BotNotifier ещё не реализован)
+- v0.5.0 цель: fetch → digest → **send** → markAsRead
+
+**Детали реализации:** См. `.claude/TASKS.md` § Pipeline Architecture v0.4.0
+
+---
+
 ## Модули MVP
 
 | Модуль | Ответственность |

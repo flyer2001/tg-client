@@ -265,37 +265,53 @@ DIGEST_STATE_DIR=~/.tdlib
 
 ## 🚀 Version Roadmap
 
-### v0.4.0: Mark as Read
+### v0.4.0: Mark as Read + Retry Strategy
 
-**Статус:** 🎯 Planning (груминг 2025-12-11)
+**Статус:** 🚧 В разработке (2025-12-12)
 
-**Цель:** Отметка сообщений как прочитанных после успешной генерации и отправки дайджеста.
+**Цель:** Отметка сообщений как прочитанных + retry strategy для временных ошибок OpenAI.
 
 #### Scope
 
 **Обязательные фичи:**
-- [ ] TDLib `viewMessages` API интеграция
-- [ ] Parallel mark-as-read для N чатов (TaskGroup)
-- [ ] CLI флаг `--mark-as-read` / `--no-mark-as-read` (default: ON)
-- [ ] Concurrency limit (maxParallelMarkAsReadRequests = 20)
-- [ ] Structured logging (начало, прогресс, итог, ошибки)
-- [ ] Partial failure handling (1 чат failed → остальные помечаем)
+- [x] TDLib `viewMessages` API интеграция ✅
+- [x] Parallel mark-as-read для N чатов (TaskGroup) ✅
+- [x] Concurrency limit (maxParallelMarkAsReadRequests = 20) ✅
+- [x] Structured logging (начало, прогресс, итог, ошибки) ✅
+- [x] Partial failure handling (1 чат failed → остальные помечаем) ✅
+- [x] **Retry strategy для DigestOrchestrator** ✅ (добавлено в v0.4.0)
+  - Exponential backoff: 1s → 2s → 4s
+  - Retry для: TimeoutError, 429 rate limit, 5xx server errors
+  - Fail-fast для: 401, 400, emptyResponse
 
 **НЕ входит в scope v0.4.0:**
-- ❌ Retry strategy (отдельная задача в BACKLOG)
+- ❌ CLI флаг `--mark-as-read` / `--no-mark-as-read` (отложено в v0.6.0)
+- ❌ BotNotifier implementation (отложено в v0.5.0)
 - ❌ Unsupported content tracking ("⚠️ Пропущено 3 фото" → v0.6.0)
-- ❌ Rate limits research (используем консервативный лимит 20)
 
 #### Архитектура
 
-**Pipeline integration (последовательное выполнение):**
+**Целевой pipeline (v0.5.0):**
 
 ```
-SummaryGenerator → BotNotifier → MarkAsReadService
-      (1)              (2)             (3)
+fetch → digest (retry 3x) → **BotNotifier** → markAsRead
+  (1)        (2)                 (3)              (4)
 ```
 
-**Обоснование последовательности:**
+**Текущий pipeline (v0.4.0 временное решение):**
+
+```
+fetch → digest (retry 3x) → markAsRead
+  (1)        (2)              (3)
+```
+
+**⚠️ Временное решение v0.4.0:**
+- markAsRead идёт ПОСЛЕ digest (БЕЗ BotNotifier)
+- **Риск:** Если приложение крашнется после digest, пользователь НЕ получит дайджест
+- **Mitigation:** Пользователь запустит снова → получит дайджест (сообщения остались unread)
+- **Решение v0.5.0:** BotNotifier → markAsRead ПОСЛЕ успешной отправки
+
+**Обоснование последовательности (целевой v0.5.0):**
 - Помечаем прочитанным ТОЛЬКО после успешной отправки дайджеста пользователю
 - Если BotNotifier.send() упадёт → сообщения останутся непрочитанными → пользователь получит дайджест в следующий раз
 - Защита от потери информации при сбоях отправки
@@ -559,6 +575,71 @@ logger.error("Failed to mark chat as read", metadata: [
 **Scope:**
 - "⚠️ Пропущено 3 фото, 1 видео" в summary
 - Умная стратегия mark-as-read (не помечать чаты с unsupported content)
+
+---
+
+### v0.7.0: Voice & Video Note Transcription
+
+**Статус:** 📝 Planned
+
+**Цель:** Добавить текст из голосовых сообщений и видео-кружков в дайджест.
+
+**Prerequisites:**
+- ✅ v0.4.0: messageVoice/messageAudio/messagePhoto/messageVideo с caption
+
+**Scope:**
+
+1. **Premium Status Check:**
+   - Проверка `user.isPremium` через `getMe()`
+   - Логирование Premium статуса при старте
+   - Если НЕ Premium → skip транскрипция (fallback: caption или пустая строка)
+
+2. **Telegram Premium Transcription API:**
+   - Метод: `messages.transcribeAudio` (TDLib)
+   - Стоимость: **бесплатно для Premium** (без лимитов)
+   - Поддержка: messageVoice + messageVideoNote
+   - Cache: Telegram server-side (повторные запросы мгновенные)
+
+3. **MessageContent Enum Update:**
+   ```swift
+   case voice(caption: FormattedText?, transcription: String?)
+   case videoNote(transcription: String?)  // NEW: video circles
+   ```
+
+4. **ChannelMessageSource Logic:**
+   - Если `isPremium` && messageVoice → `transcribeAudio()`
+   - Если `isPremium` && messageVideoNote → `transcribeAudio()`
+   - Иначе → caption или ""
+
+5. **Error Handling:**
+   - Если `transcribeAudio` fails → content = caption ?? ""
+   - Логирование: "Transcription failed: chatId=X, messageId=Y, error=Z"
+   - Retry: нет (TDLib кэширует, повторный вызов быстрый)
+
+**User Story:**
+- Как пользователь с Telegram Premium
+- Я хочу видеть текст из голосовых сообщений в дайджесте
+- Чтобы не слушать каждое голосовое вручную
+
+**Acceptance Criteria:**
+- [ ] Premium статус проверяется через `getMe()` при старте
+- [ ] Voice messages транскрибируются если Premium
+- [ ] VideoNote messages транскрибируются если Premium
+- [ ] Транскрипция добавляется в `SourceMessage.content`
+- [ ] Логирование: "Transcribing voice: chatId=X, messageId=Y, duration=Z sec"
+- [ ] Error handling: если transcribeAudio fails → fallback на caption
+- [ ] Component тест с mock transcription response
+
+**Alternative (Fallback для non-Premium):**
+- OpenAI Whisper API: $0.006/минута
+- Процесс: download .ogg/.mp4 → Whisper API → transcription
+- Настройка через env: `OPENAI_WHISPER_ENABLED=true`
+- **Decision:** Отложено, приоритет на Premium пользователей
+
+**Technical Notes:**
+- Accuracy: ~85% (Google Speech Recognition)
+- Telegram кэширует транскрипцию навсегда (повторные запросы бесплатны)
+- Rate limits: Premium без лимитов
 
 ---
 

@@ -1,3 +1,202 @@
+## [2025-12-12] v0.4.0 РЕЛИЗ — Mark as Read + Media Support
+
+**Функциональность:**
+- ✅ Mark as Read: viewMessages для N чатов параллельно (concurrency limit=20)
+- ✅ Media Support: photo/video/voice/audio с caption в дайджесте
+- ✅ Retry strategy для OpenAI (exponential backoff: 1s → 2s → 4s)
+- ✅ Partial failure handling (1 чат failed → остальные успешно)
+
+**Новые компоненты:**
+- `MarkAsReadService` — actor, TaskGroup, timeout 2 сек
+- `RetryHelpers` — withRetry + withTimeout (exponential backoff)
+- `ViewMessagesRequest` — TDLib Codable модель
+- `MessageContent` — расширен (photo/video/voice/audio cases)
+
+**Тесты:**
+- 12 Unit тестов (MessageContent: mixed content types)
+- 4 Component тестов (MarkAsReadFlow: happy path, partial failure, empty, large batch)
+- 11 Unit тестов (RetryHelpers: exponential backoff, timeout, cancellation)
+- 6 Component тестов (DigestOrchestrator: retry 500→success, 429→success)
+- TSan: 248 тестов CLEAN (MockLogger race condition исправлен)
+- E2E: MarkAsReadE2ETests (100% success, badge исчез в UI)
+
+**Spike Research (v0.4.0):**
+- ✅ viewMessages БЕЗ openChat/closeChat работает (TDLib Issue #1513 research)
+- ✅ Root Cause: getChatHistory(fromMessageId=0) получает последние N сообщений
+- ✅ Cleanup: удалены временные методы openChat/closeChat из spike
+
+**Документация:**
+- ARCHITECTURE.md: Pipeline Flow & Error Handling (retry strategies)
+- MVP.md: v0.4.0 scope, v0.5.0 (BotNotifier), v0.7.0 (Transcription)
+- CLAUDE.md: Platform-specific build commands (Linux vs macOS)
+
+**Метрики v0.4.0:**
+- Research-First: 100% (viewMessages + getChatHistory + OpenAI API)
+- Mock только boundaries: 100% (MockTDLibFFI + MockHTTPClient)
+- Дубликаты типов: 0%
+- TSan: 0 data races, 1 race condition обнаружен и исправлен (MockLogger)
+- Code Review: 100% дней с коммитами
+
+**Известные ограничения:**
+- ❌ CLI флаг `--mark-as-read` / `--no-mark-as-read` НЕ реализован (отложено в v0.6.0)
+- ⚠️ BotNotifier ещё не реализован (v0.5.0) → digest НЕ отправляется пользователю
+- ⚠️ Временное решение v0.4.0: markAsRead ПОСЛЕ digest (БЕЗ BotNotifier)
+
+**Следующие шаги:**
+- v0.5.0: BotNotifier (Telegram Bot API) → целевой pipeline: fetch → digest → **send** → markAsRead
+
+
+## [2025-12-12] Spike Test v0.4.0 — Mark As Read УСПЕШЕН
+
+**Выполнено:**
+- ✅ Spike test: viewMessages([maxMessageId], forceRead=true) работает **БЕЗ openChat/closeChat**
+- ✅ Root Cause найден: getChatHistory(fromMessageId=lastRead) возвращал уже прочитанные сообщения
+- ✅ Фикс: getChatHistory(fromMessageId=0) получает последние N сообщений
+- ✅ Spike test: 100% success (5/5 чатов помечены прочитанными, badge исчез в UI)
+- ✅ Unsupported сообщения (фото/видео/стикеры) теперь помечаются прочитанными
+
+**Изменённые файлы:**
+- `Sources/DigestCore/Sources/ChannelMessageSource.swift` — фикс getChatHistory (fromMessageId=0, offset=0)
+- `Sources/DigestCore/Sources/MarkAsReadService.swift` — viewMessages([max(messageIds)])
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift` — ВРЕМЕННЫЕ методы openChat/closeChat (удалить!)
+- `Sources/TgClientModels/TDLibClientProtocol.swift` — ВРЕМЕННЫЕ методы в протоколе (удалить!)
+- `Sources/App/main.swift` — spike verification блок (удалить!)
+- `Tests/TgClientE2ETests/MarkAsReadE2ETests.swift` — временные модели (удалить!)
+
+**Решения/контекст:**
+- viewMessages обновляет lastReadInboxMessageId синхронно ✅
+- unreadCount обновляется асинхронно через updateChatReadInbox event
+- openChat/closeChat НЕ НУЖНЫ (из TDLib Issue #1513 — это для UI приложений, не для bot-like use case)
+- forceRead=true работает для closed chats (наш случай)
+
+**TODO (следующая сессия):**
+- [ ] Очистка spike кода (удалить openChat/closeChat, verification блок)
+- [ ] Добавить поддержку messagePhoto с caption
+- [ ] Plan Mode: подготовка к релизу v0.4.0 (тесты, документация, checklist)
+
+## [2025-12-12] Сессия — Retry Strategy + Mark as Read validation
+
+**Выполнено:**
+
+## [2025-12-12] Сессия — Debug: viewMessages не работает (openChat required)
+
+**Выполнено:**
+- ✅ Исследована проблема "0 каналов с unread" → корневая причина найдена
+- ✅ Добавлено детальное логирование: типы контента (text/unsupported), getChatHistory, viewMessages
+- ✅ Обнаружено: фильтр каналов работает правильно (тестовый канал в топ-10)
+- ✅ Обнаружено: unsupported контент (фото/видео) не попадает в viewMessages
+- ✅ **КОРНЕВАЯ ПРОБЛЕМА:** viewMessages НЕ работает вообще (даже текстовые не помечаются!)
+- ✅ Исследованы TDLib GitHub Issues (#1513, #258, #136)
+- ✅ **РЕШЕНИЕ:** Требуется openChat → viewMessages → closeChat (не только viewMessages!)
+- ✅ Инцидент зафиксирован в retro-v0.4.0-questions.md (некачественный spike search)
+
+**Изменённые файлы:**
+- `Sources/DigestCore/Sources/ChannelMessageSource.swift` — добавлено логирование типов контента (text/unsupported), детальный список всех каналов
+- `Sources/TDLibAdapter/TDLibClient+HighLevelAPI.swift` — добавлено логирование viewMessages REQUEST/RESPONSE
+- `.claude/archived/retro-v0.4.0-questions.md` — инцидент "Некачественный Spike Search для viewMessages"
+- `.claude/TASKS.md` — актуализирован статус E2E validation (блокер обнаружен)
+
+**Решения/контекст:**
+- **Spike test был неполным:** проверили только API response (OkResponse), но НЕ проверили UI эффект (unread badge)
+- **TDLib требует открытия чата:** viewMessages работает ТОЛЬКО для opened chats (openChat → viewMessages → closeChat)
+- **Документация неполная:** требование openChat отсутствует в TDLib docs, найдено только в GitHub Issues
+- **Research-First чеклист неполный:** нужно добавить "Manual UI verification" для spike tests External APIs
+- **Unsupported контент проблема:** фото/видео с caption не попадают в дайджест → не помечаются прочитанными
+
+**Метрики v0.4.0 (обновлено):**
+- Research-First: 2/3 External APIs (66%) ← целевая 100%
+  - viewMessages spike: incomplete (no UI verification) ❌
+  - getChatHistory: complete ✅
+  - OpenAI API: complete ✅
+
+**TODO:**
+- [ ] Spike test: openChat → viewMessages → closeChat (с manual UI verification!)
+- [ ] Plan mode: архитектура pipeline (параллельный openChat/closeChat → отказоустойчивость)
+- [ ] Пересмотр ARCHITECTURE.md диаграммы (сложная цепочка операций)
+- [ ] Исправить unsupported контент: помечать ВСЕ messageIds (не только text)
+- [ ] Обновить TESTING.md: Research-First чеклист + "Manual UI verification"
+
+**Источники:**
+- [TDLib Issue #1513](https://github.com/tdlib/td/issues/1513)
+- [TDLib Issue #258](https://github.com/tdlib/td/issues/258)
+- [TDLib Issue #136](https://github.com/tdlib/td/issues/136)
+
+
+- ✅ Retry strategy для DigestOrchestrator (exponential backoff: 1s → 2s → 4s)
+- ✅ RetryHelpers с withRetry() + withTimeout() (11 unit тестов, TSan CLEAN)
+- ✅ OpenAIError.is5xx helper (7 unit тестов)
+- ✅ DigestOrchestrator retry тесты (6 component тестов)
+- ✅ MockHTTPClient: callCount + queue-based stubbing для retry сценариев
+- ✅ Параметризация задержек: baseDelay для быстрых тестов (100ms вместо 1s)
+- ✅ Детальное логирование для E2E validation
+- ⚠️ **РЕГРЕССИЯ ОБНАРУЖЕНА:** fetchUnreadMessages() возвращает 0 каналов (ожидалось >0)
+
+**Изменённые файлы:**
+- `Sources/FoundationExtensions/RetryHelpers.swift` — withRetry + withTimeout (Sendable constraints)
+- `Tests/.../RetryHelpersTests.swift` — 11 unit тестов (русские описания, 0.47s вместо 3.2s)
+- `Tests/.../TestHelpers/{CallCounter,DelayRecorder,BoolFlag}.swift` — thread-safe actors для тестов
+- `Sources/DigestCore/Orchestrators/DigestOrchestrator.swift` — retry логика + baseDelay параметр
+- `Sources/DigestCore/Generators/OpenAISummaryGenerator.swift` — OpenAIError.is5xx helper
+- `Tests/.../DigestOrchestratorTests.swift` — 6 retry тестов + обновлён failFastOnUnauthorizedError
+- `Tests/TestHelpers/MockHTTPClient.swift` — callCount + setStubQueue() для retry
+- `Sources/DigestCore/Sources/ChannelMessageSource.swift` — детальное логирование (📊 📋 📨)
+- `Sources/App/main.swift` — TODO комментарии v0.5.0 + детальное логирование markAsRead
+- `.claude/ARCHITECTURE.md` — секция "Pipeline Flow & Error Handling"
+- `.claude/MVP.md` — обновлена v0.4.0 (retry strategy, временное решение, целевой pipeline)
+- `.claude/BACKLOG.md` — задача "Skip Previously Sent Chats"
+- `.claude/archived/retro-v0.4.0-questions.md` — вопрос про параметризацию задержек
+
+**Решения/контекст:**
+- **Retry strategy:** Simple withRetry helper (Option A) вместо Protocol-based (Option B)
+- **baseDelay параметризация:** Обязательна для быстрых тестов (v0.4.0 опыт → должно быть в TESTING.md)
+- **TSan для тестов:** Actor-based счётчики (CallCounter, DelayRecorder) вместо @unchecked Sendable
+- **MockHTTPClient queue:** Первый элемент для 1й попытки, второй для retry (removeFirst())
+- **Pipeline order v0.4.0:** fetch → digest (retry) → markAsRead (БЕЗ BotNotifier — временное решение)
+- **Целевой pipeline v0.5.0:** fetch → digest → **BotNotifier** → markAsRead
+
+**Проблемы обнаружены:**
+- ⚠️ **КРИТИЧНО:** fetchUnreadMessages() вернул 0 каналов с unread, но 3 супергруппы с unread
+- Фильтр `case .supergroup(_, isChannel: true)` пропускает супергруппы (isChannel: false)
+- **Регрессия:** В v0.2.0 фильтрация работала корректно
+- **TODO:** Исследовать что изменилось, проверить git историю ChannelMessageSource.swift:80-95
+
+**Статистика:**
+- 18 новых тестов (11 RetryHelpers + 7 OpenAIError.is5xx)
+- 6 обновлённых тестов DigestOrchestrator (добавлен retry)
+- TSan: CLEAN (0 warnings)
+- Время тестов: RetryHelpers 0.47s (было бы 3.2s без baseDelay), DigestOrchestrator 0.32s (было бы ~7s)
+
+**TODO для следующей сессии:**
+- [ ] Исследовать регрессию фильтрации каналов (v0.2.0 работала → v0.4.0 не работает)
+- [ ] Проверить git историю изменений ChannelMessageSource фильтрации
+- [ ] Определить: включать супергруппы в digest или только каналы?
+
+
+## [2025-12-12] - v0.4.0: MarkAsReadService реализация + TSan validation
+
+**Выполнено:**
+- ✅ ViewMessagesRequest модель + Unit Tests (Codable, snake_case маппинг)
+- ✅ viewMessages() High-Level API (wrapper над sendAndWait, параллельные запросы через @extra)
+- ✅ MarkAsReadService (actor, TaskGroup, concurrency limit=20, partial failure handling)
+- ✅ Component Tests: MarkAsReadFlowTests (4 теста: happy path, partial failure, empty, large batch)
+- ✅ TSan validation: MockLogger race condition обнаружен и исправлен (NSLock)
+- ✅ main.swift integration: добавлен MarkAsReadService в pipeline (fetch → digest → mark as read)
+
+**Находки:**
+- TSan несовместим с uninstrumented C++ libraries (TDLib) → component-level TSan достаточно
+- Code Review вчерашних коммитов: критичных проблем нет, encryption key валидация в BACKLOG
+
+**Известные проблемы:**
+- fetchUnreadMessages() возвращает 0 каналов (фильтрация непрочитанных не работает) → дебаг в следующей сессии
+
+**Файлы:**
+- Sources: MarkAsReadService.swift, ViewMessagesRequest.swift, viewMessages() API
+- Tests: MarkAsReadFlowTests.swift, ViewMessagesRequestTests.swift, TDLibClientTests (viewMessages)
+- Mocks: MockLogger.swift (NSLock fix)
+- Docs: TASKS.md, BACKLOG.md, retro-v0.4.0-questions.md
+
+**Статистика:** 216 тестов CLEAN (TSan), 4 новых component tests, 1 race condition исправлен
+
 ## [2025-12-12] Сессия: v0.4.0 Research-First + E2E тест viewMessages
 
 **Выполнено:**
