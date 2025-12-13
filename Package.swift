@@ -40,7 +40,9 @@ let package = Package(
         ),
         .target(
             name: "FoundationExtensions",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Logging", package: "swift-log")
+            ],
             path: "Sources/FoundationExtensions"
         ),
         .target(
