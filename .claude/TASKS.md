@@ -89,22 +89,16 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 **Цель:** Провести ретроспективу релиза v0.4.0 для анализа процесса и выводов
 
 **План:**
-- [ ] **Проверка метрик** из `.claude/archived/retro-v0.4.0-questions.md`:
-  - Research-First: 100%?
-  - Mock только boundaries: 100%?
-  - Дубликаты типов: 0%?
-  - TSan: сколько race conditions найдено?
-  - Преждевременное завершение дебага: 0 попыток?
-- [ ] **Анализ инцидентов:**
-  - Инцидент #1: viewMessages без openChat (spike research успешен)
-  - Инцидент #2: MockLogger race condition (TSan обнаружил)
-  - Что ещё пошло не так?
-- [ ] **Что улучшить в v0.5.0:**
-  - Процесс TDD
-  - Research-First workflow
-  - Code review timing
-- [ ] **Обновить `.claude/archived/retro-v0.4.0-questions.md`** с финальными выводами
-- [ ] **Append в `.claude/archived/RETRO-RESULT.md`** (дата 2025-12-12)
+- [x] **Проверка метрик** — ✅ записано в retro-v0.4.0-questions.md (2025-12-13):
+  - Research-First: 100% ✅
+  - Mock только boundaries: 100% ✅
+  - Дубликаты типов: 0% ✅
+  - TSan: 1 race condition найден и исправлен ✅
+  - Преждевременное завершение: 0 попыток ✅
+  - Code Review: 100% дней ✅
+- [x] **Анализ инцидентов:** 4 инцидента задокументированы ✅
+- [x] **Что улучшить в v0.5.0:** выводы записаны ✅
+- [ ] **Append итоговый саммари в `.claude/archived/RETRO-RESULT.md`**
 
 **Триггер:** После публикации релиза (git push выполнен)
 

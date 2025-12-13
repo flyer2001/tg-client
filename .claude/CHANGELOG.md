@@ -1,3 +1,47 @@
+## [2025-12-13] Сессия — Финализация v0.4.0 + ARCHITECTURE.md
+
+**Выполнено:**
+- ✅ MarkAsRead.md актуализирован (убраны упоминания --mark-as-read, добавлены ссылки на E2E/Component/Unit тесты)
+- ✅ TASKS.md очищен от завершённых задач (v0.4.0, TSan учения, Retry Strategy, Code Review)
+- ✅ Метрики v0.4.0 записаны в retro-v0.4.0-questions.md (все целевые метрики достигнуты: 100%)
+- ✅ Package.swift исправлен (добавлена зависимость Logging для FoundationExtensions)
+- ✅ DocC генерация улучшена (поддержка E2E тестов + парсинг Unit тестов из комментариев)
+- ✅ MarkAsReadE2ETests актуализирован (убраны устаревшие упоминания openChat/closeChat, spike)
+- ✅ Swift 6.2 Concurrency Flags проверены (код готов, 0 warnings, 216 тестов passed)
+- ✅ ARCHITECTURE.md обновлён с целевым pipeline (DigestOrchestrator + Error Handling Strategies)
+- ✅ RFC v0.4.0-pipeline-integration-rfc.md перемещён в архив
+
+**Изменённые файлы:**
+- `Sources/TgClient/TgClient.docc/E2E-Scenarios/MarkAsRead.md` — актуализация (ссылки на тесты, как запустить E2E)
+- `Tests/TgClientE2ETests/MarkAsReadE2ETests.swift` — убраны упоминания openChat/closeChat
+- `.claude/TASKS.md` — очищен от завершённых задач, обновлена ретроспектива v0.4.0
+- `.claude/archived/retro-v0.4.0-questions.md` — финальные метрики v0.4.0
+- `Package.swift` — добавлена зависимость Logging для FoundationExtensions
+- `scripts/generate-docc-from-tests.sh` — поддержка E2E тестов + парсинг Unit тестов из комментариев
+- `.claude/ARCHITECTURE.md` — целевой pipeline с DigestOrchestrator, error handling strategies
+- `.claude/archived/v0.4.0-pipeline-integration-rfc.md` — перемещён из корня
+
+**Решения/контекст:**
+- **Метрики v0.4.0 достигнуты:** Research-First 100%, Mock только boundaries 100%, Дубликаты 0%, TSan CLEAN, Code Review 100%
+- **4 инцидента задокументированы:** User Story пропущен, TDLIB_DATABASE_ENCRYPTION_KEY, TDD порядок нарушен, Code Review timing
+- **Swift 6.2 готовность:** Код собирается с флагами `NonisolatedNonsendingByDefault` и `InferIsolatedConformances` БЕЗ ошибок
+- **ARCHITECTURE.md:** Целевой pipeline с BotNotifier/StateManager (без статусов версий), только целевая архитектура
+
+**Коммиты (10 шт.):**
+- `08ebe5d` docs: финализация v0.4.0 (MarkAsRead + TASKS + метрики ретро)
+- `65090a9` fix: добавлена зависимость Logging для FoundationExtensions
+- `e909d70` docs: обновлена задача #1 (DocC сборка в процессе)
+- `b53e48b` feat: добавлена генерация DocC для E2E тестов
+- `1f8c378` feat: улучшена генерация DocC (парсинг Unit тестов из комментариев)
+- `001b3c3` docs: актуализация MarkAsReadE2ETests (убраны openChat/closeChat, spike)
+- `8a95553` docs: актуализация ARCHITECTURE.md (целевой pipeline без статусов)
+- `760b93c` docs: задача #2 завершена (ARCHITECTURE.md Pipeline Diagram)
+
+**TODO (следующая сессия):**
+- [ ] Завершить ретроспективу v0.4.0 (append итоговый саммари в RETRO-RESULT.md)
+- [ ] Дождаться SwiftPM development snapshot с фиксом #9493
+
+
 ## [2025-12-12] v0.4.0 РЕЛИЗ — Mark as Read + Media Support
 
 **Функциональность:**
