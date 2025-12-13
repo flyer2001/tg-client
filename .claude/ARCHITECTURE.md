@@ -42,47 +42,121 @@
 
 ## Pipeline Flow & Error Handling
 
-### Sequential Pipeline (v0.4.0 → v0.5.0)
+### Целевой Pipeline (MVP)
+
+**Полный pipeline с DigestOrchestrator:**
 
 ```
-main.swift:
-  1. TDLib auth ────────────────► fail-fast ✗
-  2. getMe() ───────────────────► fail-fast ✗
-  3. fetchUnreadMessages() ─────► partial success ⚠ (внутри)
-                                  fail-fast ✗ (если 0 сообщений)
-  4. generateDigest() ──────────► retry 3x ↻ (1s, 2s, 4s)
-                                  fail-fast ✗ (после retry)
-  5. [v0.5.0] BotNotifier.send()► fail-fast ✗
-  6. markAsRead() ──────────────► partial success ⚠
-                                  graceful degradation
+┌────────────────────────────────────────────────────┐
+│               DigestOrchestrator                   │
+│              .runPipeline()                        │
+└──────────┬──────────────────────────────┬──────────┘
+           │                              │
+           ▼                              ▼
+    ┌──────────────┐             ┌───────────────┐
+    │ StateManager │             │ Checkpoint:   │
+    │ .loadState() │             │ last_run_at   │
+    └──────┬───────┘             └───────────────┘
+           │
+           ▼ (since timestamp)
+    ┌──────────────────────────┐
+    │  MessageSource           │
+    │  .fetchUnreadMessages()  │────► partial success ⚠
+    └──────┬───────────────────┘
+           │
+           ▼ (per-channel loop)
+    ┌──────────────────────────┐
+    │  SummaryGenerator        │
+    │  .generate()             │────► retry 3x ↻ (per channel)
+    │   ↳ OpenAI API           │
+    └──────┬───────────────────┘
+           │
+           ▼ (full digest)
+    ┌──────────────────────────┐
+    │  BotNotifier             │
+    │  .send(digest)           │────► fail-fast ✗
+    │   ↳ Telegram Bot API     │     (пользователь ДОЛЖЕН получить)
+    └──────┬───────────────────┘
+           │
+           ▼ (ТОЛЬКО после успешной отправки)
+    ┌──────────────────────────┐
+    │  MessageSource           │
+    │  .markAsRead()           │────► partial success ⚠
+    └──────┬───────────────────┘
+           │
+           ▼
+    ┌──────────────────────────┐
+    │  StateManager            │
+    │  .saveState(timestamp)   │────► атомарная запись
+    └──────────────────────────┘     (crash-safe)
 ```
 
 **Легенда:**
-- ✗ Fail-fast (ошибка → exit(1), НЕ помечаем прочитанным)
-- ⚠ Partial success (продолжаем при частичных ошибках)
-- ↻ Retry (exponential backoff)
+- ✗ **Fail-fast** — ошибка → прерывание pipeline, НЕ помечаем прочитанным
+- ⚠ **Partial success** — продолжаем при частичных ошибках, логируем
+- ↻ **Retry** — exponential backoff (1s, 2s, 4s) для transient errors
+
+---
 
 ### Error Handling Strategies
 
-| Этап | Стратегия | Обоснование |
-|------|-----------|-------------|
-| **Auth/getMe** | Fail-fast | Критично для всего pipeline |
-| **fetchUnreadMessages** | Partial success (внутри)<br>Fail-fast (наружу) | Один канал упал → продолжаем с остальными<br>0 сообщений → нет смысла продолжать |
-| **generateDigest** | Retry 3x → Fail-fast | AI может временно упасть (rate limit, 5xx)<br>Retry увеличивает reliability |
-| **BotNotifier.send** | Fail-fast (v0.5.0) | Пользователь должен получить digest |
-| **markAsRead** | Partial success | Digest уже отправлен → не критично<br>Упавшие чаты логируем |
+| Компонент | Стратегия | Обоснование |
+|-----------|-----------|-------------|
+| **Auth/getMe** | Fail-fast ✗ | Критично для всего pipeline |
+| **fetchUnreadMessages** | Partial success ⚠ (внутри)<br>Fail-fast ✗ (наружу) | Один канал упал → продолжаем с остальными<br>0 сообщений → нет смысла продолжать |
+| **generateDigest** | Retry 3x ↻ → Fail-fast ✗ | AI может временно упасть (rate limit, 5xx)<br>Retry увеличивает reliability |
+| **BotNotifier.send** | Fail-fast ✗ | Пользователь ДОЛЖЕН получить digest |
+| **markAsRead** | Partial success ⚠ | Digest уже отправлен → не критично<br>Упавшие чаты логируем |
+| **StateManager.save** | Fail-fast ✗ | Критично для checkpoint |
 
-### Ключевые решения
+---
 
-**Retry для AI, но НЕ для TDLib:**
-- OpenAI: временные ошибки (429 rate limit, 5xx) → retry помогает
-- TDLib: partial success достаточен (упавший чат → попадёт в следующий запуск)
+### Ключевые архитектурные решения
 
-**markAsRead ПОСЛЕ BotNotifier:**
-- v0.4.0 временно: после generateDigest (BotNotifier ещё не реализован)
-- v0.5.0 цель: fetch → digest → **send** → markAsRead
+**1. Retry для AI, но НЕ для TDLib:**
+- **OpenAI:** временные ошибки (429 rate limit, 5xx) → retry помогает
+- **TDLib:** partial success достаточен (упавший чат → попадёт в следующий запуск)
 
-**Детали реализации:** См. `.claude/TASKS.md` § Pipeline Architecture v0.4.0
+**2. markAsRead ТОЛЬКО после успешной отправки:**
+- **Последовательность:** fetch → digest → **SEND** → markAsRead → checkpoint
+- **Обоснование:** защита от потери дайджеста при сбоях отправки
+
+**3. Partial success для per-channel processing:**
+- **Проблема:** 1 канал упал → блокировать ВСЕ остальные?
+- **Решение:** логируем ошибку, продолжаем с остальными каналами
+- **Результат:** пользователь получит частичный дайджест (лучше чем ничего)
+
+**4. Checkpoint ПОСЛЕ markAsRead:**
+- **Атомарность:** либо всё успешно (send + mark + checkpoint), либо retry полностью
+- **Trade-off:** возможны дубли генерации digest ($$) vs гарантия доставки пользователю
+- **Выбор:** надёжность > экономия (пользователь важнее денег)
+
+---
+
+### Компоненты Pipeline
+
+**DigestOrchestrator** — координатор всего pipeline
+- Загружает checkpoint (StateManager)
+- Выполняет fetch → digest → send → mark → checkpoint
+- Обрабатывает ошибки согласно стратегиям
+
+**MessageSource** (ChannelMessageSource) — работа с Telegram
+- fetchUnreadMessages(since: Date?) → [SourceMessage]
+- markAsRead([chatId: [messageId]]) → partial success
+
+**SummaryGenerator** (OpenAISummaryGenerator) — AI digest
+- generate(messages: [SourceMessage]) → String
+- Retry 3x для transient errors
+
+**BotNotifier** (TelegramBotNotifier) — отправка пользователю
+- send(digest: String) → void
+- Разбивка длинных digest (>4096 chars)
+
+**StateManager** (FileBasedStateManager) — checkpoint
+- loadState() → Date?
+- saveState(timestamp: Date) → atomic write
+
+**Детали реализации:** См. [RFC](.claude/archived/v0.4.0-pipeline-integration-rfc.md)
 
 ---
 
