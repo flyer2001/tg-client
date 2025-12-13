@@ -384,8 +384,7 @@ withThrowingTaskGroup(of: (ChatId, Result<Void, Error>).self) { group in
 
 **Поведение:**
 - Идемпотентен (повторный вызов безопасен)
-- Локальный API (не network request)
-- Timeout: 2 секунды (как у sendAndWait)
+- Локальный API (не network request, БЕЗ timeout/retry)
 
 **Response:** `Ok` (пустой success marker)
 
@@ -545,7 +544,6 @@ logger.error("Failed to mark chat as read", metadata: [
 - [ ] Помечает N чатов как прочитанные параллельно
 - [ ] Partial failure: 1 чат failed → остальные успешно
 - [ ] CLI флаг `--no-mark-as-read` → пропускает mark-as-read
-- [ ] Timeout 2 секунды для каждого viewMessages
 - [ ] Concurrency limit 20 работает корректно
 
 **Технические:**
