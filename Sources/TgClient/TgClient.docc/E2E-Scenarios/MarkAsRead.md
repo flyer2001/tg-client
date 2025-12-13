@@ -11,7 +11,7 @@
 **Ожидаемое поведение:**
 - Успешный сценарий: N чатов помечаются как прочитанные в Telegram (галка снимается)
 - Partial failure: Если 1 чат failed → остальные продолжаем помечать (не блокируем работу)
-- CLI флаг: `--no-mark-as-read` → пропустить отметку (dry-run режим для тестирования)
+- **Помечаем даже unsupported контент:** Если в чате были фото/видео (игнорируемые в v0.4.0) → всё равно помечаем весь чат как прочитанный
 
 ## Официальная документация
 
@@ -26,71 +26,63 @@
 
 ## Шаги
 
-1. **Проверка CLI флага**
-   - Если `--no-mark-as-read` → пропустить отметку, вернуться
-   - Иначе → продолжить
-
-2. **Отметка N чатов параллельно**
+1. **Отметка N чатов параллельно**
    - **API:** TDLib `viewMessages(chatId, messageIds, forceRead: true)`
    - **Параллелизм:** Ограничен `maxParallelRequests = 20` (консервативный лимит для TDLib)
    - **Timeout:** 2 секунды для каждого `viewMessages` запроса
    - **Результат:** Dictionary [chatId: Result] с успехом/ошибкой для каждого чата
 
-3. **Обработка partial failure**
+2. **Обработка partial failure**
    - **Логика:** Если 1 чат failed → логируем ошибку, продолжаем с остальными
    - **Не блокируем:** Даже если некоторые чаты не удалось пометить → не ошибка
 
-4. **Синхронизация с Telegram**
+3. **Синхронизация с Telegram**
    - **TDLib:** Автоматически синхронизирует состояние с Telegram сервером
    - **Результат:** В основном Telegram клиенте (мобильный/desktop) галка непрочитанных снимается
 
 ## Как проверить сценарий
 
-**Ручной E2E тест:**
+**Запуск E2E теста:**
 
-1. Подготовка:
+1. Убедитесь что есть непрочитанные сообщения в каналах
+2. Откройте файл `Tests/TgClientE2ETests/MarkAsReadE2ETests.swift`
+3. Найдите строку `@Test("E2E: Mark messages as read", .disabled())`
+4. Уберите `.disabled()` → `@Test("E2E: Mark messages as read")`
+5. Запустите тест:
    ```bash
-   # Убедитесь что есть непрочитанные сообщения в каналах
-   # Откройте основной Telegram клиент → видно N непрочитанных чатов
+   swift test --filter MarkAsReadE2ETests
    ```
 
-2. Запуск (с отметкой прочитанным):
-   ```bash
-   swift run tg-client                # markAsRead = true (default)
-   ```
+**Ожидаемые логи:**
+```
+✅ fetchUnreadMessages() completed
+   Channels with unread: N
 
-3. Проверка в Telegram:
-   - Откройте основной Telegram клиент (мобильный/desktop)
-   - **Ожидаемое:** Галка непрочитанных снята для чатов из дайджеста (unreadCount = 0)
+✅ Marking messages as read...
+✅ Chat marked as read (API test passed)
+   Unread chats before: N
+   Unread chats after: 0
 
-4. Запуск (без отметки — dry-run):
-   ```bash
-   swift run tg-client --no-mark-as-read
-   ```
+⚠️  MANUAL UI VERIFICATION REQUIRED:
+   Проверьте что unread badge исчез в Telegram клиенте
+```
 
-5. Проверка в Telegram:
-   - **Ожидаемое:** Галка непрочитанных НЕ снята (unreadCount > 0)
+**Важно:** После теста верните `.disabled()` обратно.
 
-**Ожидаемые логи (с --mark-as-read):**
-- `INFO: Marking 5 chats as read (maxParallelRequests: 20)`
-- `DEBUG: Marking chat 12345 as read (10 messages)`
-- `INFO: Mark-as-read completed: 5 success, 0 failed, 342 ms`
+## Связанные тесты
 
-**Ожидаемые логи (с --no-mark-as-read):**
-- `INFO: Skipping mark-as-read (disabled via CLI flag)`
+**E2E Сценарий:**
+- <doc:MarkAsReadE2ETests> — полный сценарий (fetch → mark → verify UI)
 
-**Component тест:**
+**Component Tests:**
+- <doc:MarkAsReadFlowTests> — 4 edge cases (happy path, partial failure, empty, large batch)
 
-<doc:MarkAsReadServiceTests>
-
-**Unit тесты моделей:**
-
-- ViewMessagesRequest — проверка Codable для TDLib Request
+**Unit Tests:**
+- <doc:ViewMessagesRequestTests> — Codable encoding/decoding
 
 ## Известные ограничения (v0.4.0)
 
 - ✅ Partial failure handling: 1 чат failed → остальные продолжаем
-- ✅ CLI флаг `--no-mark-as-read` для dry-run режима
 - ⚠️ Нет retry strategy: ошибка viewMessages → логируем, продолжаем с остальными
 - ⚠️ Консервативный лимит параллелизма (20): TDLib rate limits не исследованы
 - ⚠️ Помечаем ВСЕ чаты из дайджеста: даже если были пропущенные фото/видео (unsupported content tracking → v0.6.0)
@@ -111,12 +103,3 @@
 - Large batch (100 чатов) → concurrency limit работает корректно
 - Timeout для одного чата → не блокирует остальные
 - Task cancellation → graceful shutdown
-
-## Тестирование concurrency
-
-**TSan (Thread Sanitizer):**
-```bash
-swift test --sanitize=thread --filter MarkAsReadServiceTests
-```
-
-**Ожидаемый результат:** 0 data races
