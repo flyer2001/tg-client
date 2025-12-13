@@ -111,10 +111,18 @@ extract_model_references() {
     # Ищем хелперы тестирования (конкретные имена классов)
     local helpers=$(grep -oE '\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b' "$file" | sort | uniq)
 
+    # Ищем упоминания Unit тестов в комментариях (/// - Unit тесты модели: XYZTests.swift)
+    local comment_refs=$(grep -oE 'Unit тесты модели: ([A-Z][a-zA-Z]*Tests)\.swift' "$file" | sed 's/Unit тесты модели: \(.*\)\.swift/\1/' | sort | uniq)
+
     # Объединяем все типы и добавляем суффикс Tests
     for model in $requests $responses $helpers; do
         # Добавляем Tests к имени модели
         models="${models}${model}Tests"$'\n'
+    done
+
+    # Добавляем ссылки из комментариев (уже с суффиксом Tests)
+    for model in $comment_refs; do
+        models="${models}${model}"$'\n'
     done
 
     echo "$models" | grep -v '^$' | sort | uniq
