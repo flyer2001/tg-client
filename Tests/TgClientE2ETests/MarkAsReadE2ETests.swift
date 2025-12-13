@@ -13,11 +13,11 @@ import Logging
 ///
 /// **User Story:** <doc:MarkAsRead>
 ///
-/// **Цель spike:** Проверить реальное поведение TDLib `viewMessages` API:
-/// - Request/Response JSON формат
-/// - Идемпотентность (повторный вызов)
-/// - Синхронизация unreadCount с Telegram
-/// - Edge cases (несуществующий chatId/messageId, пустой массив)
+/// **Что проверяется:**
+/// - viewMessages API работает с `forceRead: true` БЕЗ openChat/closeChat
+/// - Идемпотентность (повторный вызов безопасен)
+/// - Синхронизация unreadCount с Telegram клиентом
+/// - Чат исчезает из списка непрочитанных после markAsRead
 ///
 /// **Предусловия:**
 /// - **КРИТИЧНО:** Пользователь уже авторизован в TDLib (сохранённая сессия в ~/.tdlib/)
@@ -26,18 +26,16 @@ import Logging
 @Suite("E2E: Отметка сообщений как прочитанных")
 struct MarkAsReadE2ETests {
 
-    /// E2E тест: отметка сообщений как прочитанных через openChat → viewMessages → closeChat.
+    /// E2E тест: отметка сообщений как прочитанных через `viewMessages(forceRead: true)`.
     ///
-    /// **Spike Test для v0.4.0:** Проверка требования TDLib — openChat перед viewMessages.
-    /// Источник: [TDLib Issue #1513](https://github.com/tdlib/td/issues/1513)
+    /// **Результат spike research v0.4.0:** viewMessages работает **БЕЗ** openChat/closeChat!
+    /// Root cause: параметр `forceRead: true` работает для closed chats (bot-like use case).
     ///
     /// **Сценарий:**
     /// 1. Получить непрочитанные сообщения (fetchUnreadMessages)
-    /// 2. Открыть чат (openChat)
-    /// 3. Пометить сообщения прочитанными (viewMessages)
-    /// 4. Закрыть чат (closeChat)
-    /// 5. Проверить что чат исчез из непрочитанных (fetchUnreadMessages повторно)
-    /// 6. **⚠️ КРИТИЧНО:** Manual UI verification в Telegram клиенте (badge должен исчезнуть!)
+    /// 2. Пометить сообщения прочитанными (viewMessages с forceRead: true)
+    /// 3. Проверить что чат исчез из непрочитанных (fetchUnreadMessages повторно)
+    /// 4. **⚠️ КРИТИЧНО:** Manual UI verification в Telegram клиенте (badge должен исчезнуть!)
     ///
     /// **Предусловия:**
     /// - Пользователь авторизован в TDLib
