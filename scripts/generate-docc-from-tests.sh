@@ -30,9 +30,11 @@ fi
 DOCC_BASE="Sources/TgClient/TgClient.docc"
 UNIT_TESTS_DIR="$DOCC_BASE/Tests/Unit-Tests"
 COMPONENT_TESTS_DIR="$DOCC_BASE/Tests/Component-Tests"
+E2E_TESTS_DIR="$DOCC_BASE/Tests/E2E-Tests"
 
 mkdir -p "$UNIT_TESTS_DIR"
 mkdir -p "$COMPONENT_TESTS_DIR"
+mkdir -p "$E2E_TESTS_DIR"
 
 # Функция для извлечения doc comment (многострочные /// комментарии)
 extract_doc_comment() {
@@ -146,6 +148,8 @@ generate_docc_from_test() {
 
     if [ "$test_type" == "Unit" ]; then
         test_type_ru="Юнит"
+    elif [ "$test_type" == "E2E" ]; then
+        test_type_ru="E2E"
     else
         test_type_ru="Компонентный"
     fi
@@ -275,5 +279,10 @@ while IFS= read -r test_file; do
         generate_docc_from_test "$test_file" "$COMPONENT_TESTS_DIR" "Component"
     fi
 done < <(find Tests/TgClientComponentTests -name "*Tests.swift" -type f)
+
+# Обработка E2E тестов
+while IFS= read -r test_file; do
+    generate_docc_from_test "$test_file" "$E2E_TESTS_DIR" "E2E"
+done < <(find Tests/TgClientE2ETests -name "*Tests.swift" -type f)
 
 echo "✅ DoCC документация успешно сгенерирована"
