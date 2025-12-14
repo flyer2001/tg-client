@@ -1,3 +1,25 @@
+## [2025-12-14] Сессия 2 — Подготовка к v0.5.0
+
+**Выполнено:**
+- ✅ Проверка SwiftPM development snapshot (пока не готов, ждём)
+- ✅ Задача "Грумминг v0.5.0" добавлена в TASKS.md
+- ✅ Подготовка к v0.5.0 завершена (7/7 подзадач)
+
+**Обновлённые документы:**
+- `.claude/ROLES.md` — Planning Architect роль + Testing Architect gating
+- `CLAUDE.md` — Правило 0 (Grep/Read перед написанием) + Code Review триггер
+- `.claude/TESTING.md` — чек-лист "После spike research"
+- `.claude/commands/endtask.md` — Code Review триггер
+- `.claude/commands/endsession.md` — Code Review триггер
+- `.claude/TASKS.md` — добавлена задача "Грумминг v0.5.0"
+
+**Коммиты:**
+- `6c050a7` docs: архивирование ретро v0.3.0 и v0.4.0
+- `421611b` docs: обновление CHANGELOG.md, TASKS.md после ретро v0.4.0
+- `93d47b1` docs: подготовка к v0.5.0 (обновление правил на основе ретро v0.4.0)
+
+**Следующий шаг:**
+- Грумминг v0.5.0 (определить scope: BotNotifier + что из BACKLOG)
 ## [2025-12-14] Сессия — Ретроспектива v0.4.0 (завершение)
 
 **Выполнено:**
