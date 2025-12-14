@@ -560,9 +560,40 @@ logger.error("Failed to mark chat as read", metadata: [
 
 ### v0.5.0: BotNotifier (Telegram Bot API)
 
-**Статус:** 📝 Planned
+**Статус:** 📝 Planned (scope определён 2025-12-15)
 
-**Scope:** TBD (см. BACKLOG.md)
+**Scope:** ТОЛЬКО BotNotifier — send-only для MVP
+
+**Цель:** Отправка дайджеста пользователю через Telegram бота.
+
+**Must Have:**
+- [ ] BotNotifier service (отправка дайджеста через Telegram Bot API)
+- [ ] Spike research: библиотека vs HTTP calls
+- [ ] Минимальный scope: send-only (`sendMessage`)
+- [ ] Интеграция в DigestOrchestrator pipeline:
+  ```
+  fetch → digest → BotNotifier → markAsRead
+  ```
+- [ ] Env vars: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_CHAT_ID`
+- [ ] Документация: README.md (как получить `chat_id`, `/start` в боте)
+
+**Отложено в v0.6.0:**
+- ❌ CLI флаг `--mark-as-read` / `--no-mark-as-read`
+- ❌ Улучшение ссылок на сообщения ("саммари per chat")
+- ❌ Команды бота (`/digest`, `/start`)
+- ❌ Webhook / Long Polling (interactive bot)
+
+**Обоснование:**
+BotNotifier — сложная задача (~5-7 дней), сравнима с TDLibClient. Нужен отдельный клиент для Telegram Bot API. Для MVP достаточно send-only (без команд).
+
+**Spike research:**
+См. `.claude/archived/spike-telegram-bot-api-2025-12-15.md` (создать на следующей сессии)
+
+**Критичные вопросы:**
+1. Библиотека ([swift-telegram-sdk](https://github.com/nerzh/swift-telegram-sdk)) vs HTTP calls?
+2. Как получить `chat_id`? (пользователь должен начать диалог `/start`)
+3. Send-only достаточно для v0.5.0?
+4. Webhook setup для новых пользователей?
 
 ---
 
