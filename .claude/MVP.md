@@ -570,6 +570,9 @@ logger.error("Failed to mark chat as read", metadata: [
 - [ ] BotNotifier service (отправка дайджеста через Telegram Bot API)
 - [ ] Spike research: библиотека vs HTTP calls
 - [ ] Минимальный scope: send-only (`sendMessage`)
+- [ ] **Plain text формат** (БЕЗ `parse_mode`, без MarkdownV2 escape)
+- [ ] Retry strategy: переиспользовать `withRetry` + `withTimeout` из FoundationExtensions
+- [ ] **Message >4096 chars: fail-fast** (throw error, пользователь сократит AI prompt)
 - [ ] Интеграция в DigestOrchestrator pipeline:
   ```
   fetch → digest → BotNotifier → markAsRead
@@ -578,6 +581,7 @@ logger.error("Failed to mark chat as read", metadata: [
 - [ ] Документация: README.md (как получить `chat_id`, `/start` в боте)
 
 **Отложено в v0.6.0:**
+- ❌ **Message split (>4096 chars)** — transactional (all-or-nothing)
 - ❌ CLI флаг `--mark-as-read` / `--no-mark-as-read`
 - ❌ Улучшение ссылок на сообщения ("саммари per chat")
 - ❌ Команды бота (`/digest`, `/start`)
@@ -587,7 +591,9 @@ logger.error("Failed to mark chat as read", metadata: [
 BotNotifier — сложная задача (~5-7 дней), сравнима с TDLibClient. Нужен отдельный клиент для Telegram Bot API. Для MVP достаточно send-only (без команд).
 
 **Spike research:**
-См. `.claude/archived/spike-telegram-bot-api-2025-12-15.md` (создать на следующей сессии)
+✅ DONE — См. `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
+
+**Рекомендация:** HTTP calls (URLSession) без библиотеки — проще для send-only
 
 **Критичные вопросы:**
 1. Библиотека ([swift-telegram-sdk](https://github.com/nerzh/swift-telegram-sdk)) vs HTTP calls?
@@ -597,13 +603,119 @@ BotNotifier — сложная задача (~5-7 дней), сравнима с
 
 ---
 
-### v0.6.0: Unsupported Content Tracking
+### v0.6.0: Message Split + Unsupported Content Tracking
 
 **Статус:** 📝 Planned
 
 **Scope:**
+
+#### 1. Message Split (>4096 chars) — Transactional
+
+**Цель:** Если дайджест >4096 символов → разбить на части и отправить последовательно.
+
+**Архитектура:**
+```swift
+func send(parts: [String]) async throws {
+    for (index, part) in parts.enumerated() {
+        logger.info("Sending part \(index+1)/\(parts.count)")
+
+        do {
+            try await sendSingleMessage(part) // retry внутри
+        } catch {
+            logger.error("Failed to send part \(index+1), stopping")
+            throw BotNotifierError.partialFailure(
+                sent: index,
+                total: parts.count,
+                underlyingError: error
+            )
+        }
+    }
+}
+```
+
+**Правило:** All-or-nothing (если part 2 failed → НЕ отправляем part 3).
+
+**Логика split:**
+- Разбить по параграфам (сохранить MarkdownV2 форматирование)
+- Numbered parts: "Дайджест (1/3)", "Дайджест (2/3)", "Дайджест (3/3)"
+- Лимит: 4096 chars per part
+
+**⚠️ Rate Limits (Bot API):**
+- **1 msg/sec для одного чата** → добавить delay 1 sec между частями
+- Retry на 429 как fallback (если delay недостаточен)
+
+**Acceptance Criteria:**
+- [ ] Если message >4096 → split по параграфам
+- [ ] Sequential отправка (part 1 → part 2 → part 3)
+- [ ] **Delay 1 sec между частями** (соблюдаем rate limit 1 msg/sec)
+- [ ] Fail-fast: если part N failed → throw `partialFailure(sent: N-1, total: M)`
+- [ ] Логирование partial failure (сколько частей отправлено)
+
+#### 2. Unsupported Content Tracking
+
+**Scope:**
 - "⚠️ Пропущено 3 фото, 1 видео" в summary
 - Умная стратегия mark-as-read (не помечать чаты с unsupported content)
+
+#### 3. CLI флаг `--mark-as-read` / `--no-mark-as-read`
+
+**Scope:**
+- `--no-mark-as-read` → dry-run (НЕ помечать сообщения прочитанными)
+
+#### 4. MarkdownV2 форматирование (MarkdownV2Formatter)
+
+**Цель:** Красивое форматирование дайджеста в Telegram.
+
+**Scope:**
+- Отдельный компонент `MarkdownV2Formatter` (между SummaryGenerator и BotNotifier)
+- **Жирный:** название канала (`*Tech News*`)
+- **Курсив:** метаданные (`_10:30, 15 дек_`)
+- **Ссылки:** на оригинальные сообщения (`[Сообщение #123](https://t.me/c/123/456)`)
+- **Код:** выделение ключевых фраз (`` `релиз` ``)
+
+**MarkdownV2 Escape:**
+- Спецсимволы требуют escape: `()[]{}.-!+=#|`
+- Пример: `"Tech News (5 новых)"` → `"Tech News \\(5 новых\\)"`
+- Функция: `escapeMarkdownV2(_ text: String) -> String`
+
+**Архитектура:**
+```swift
+protocol MessageFormatter: Sendable {
+    func format(_ summary: String) -> String
+}
+
+struct MarkdownV2Formatter: MessageFormatter {
+    func format(_ summary: String) -> String {
+        // Применяет форматирование + escape
+    }
+}
+
+struct PlainTextFormatter: MessageFormatter {
+    func format(_ summary: String) -> String {
+        return summary // pass-through
+    }
+}
+```
+
+**BotNotifier integration:**
+```swift
+actor TelegramBotNotifier {
+    private let formatter: MessageFormatter
+
+    func send(_ message: String) async throws {
+        let formatted = formatter.format(message)
+        // sendMessage с parse_mode из formatter
+    }
+}
+```
+
+**Acceptance Criteria:**
+- [ ] MarkdownV2Formatter: escape всех спецсимволов
+- [ ] Форматирование: жирный (каналы), курсив (метаданные), ссылки
+- [ ] Unit тесты: edge cases escape (вложенные скобки, смешанные символы)
+- [ ] PlainTextFormatter: pass-through (для v0.5.0 обратная совместимость)
+
+**Примечание v0.5.0:** Plain text (БЕЗ `parse_mode`) → escape НЕ нужен, форматирование отсутствует.
 
 ---
 

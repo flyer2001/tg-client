@@ -1,3 +1,70 @@
+---
+
+## Сессия 3 — Architecture-First для BotNotifier v0.5.0 (2025-12-16)
+
+**Роль:** Senior Swift Architect
+
+### 🎯 Цель сессии
+
+Провести Architecture-First анализ (7 блоков) для TelegramBotNotifier перед началом TDD.
+
+### ✅ Выполнено
+
+**1. Architecture-First анализ (7 блоков):**
+- ✅ Concurrency: Actor, sequential retry (withRetry), URLSession
+- ✅ Performance: Rate limit НЕ проблема (single-user MVP)
+- ✅ Memory: Fail-fast >4096 chars
+- ✅ Failure handling: Retry 429/5xx, fail-fast 400/401, timeout 30s
+- ✅ Pipeline: fetch → digest → BotNotifier → markAsRead
+- ✅ Observability: Логи (начало, retry, success/error)
+- ✅ Testing: MockHTTPClient, edge cases (429, 5xx, 400, >4096)
+
+**2. Критичные решения:**
+- ✅ **Plain text** (БЕЗ parse_mode) для v0.5.0 → MarkdownV2Formatter в v0.6.0
+- ✅ **Fail-fast >4096** для v0.5.0 → transactional split в v0.6.0
+- ✅ **HTTPClient:** Переиспользуем HTTPClientProtocol + URLSessionHTTPClient + MockHTTPClient
+
+**3. Документация:**
+- ✅ Создан Architecture Design: `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md`
+- ✅ Обновлён MVP.md (v0.5.0 scope: plain text, fail-fast, retry)
+- ✅ Обновлён MVP.md (v0.6.0 scope: split + rate limit delay, MarkdownV2Formatter)
+- ✅ Обновлён TASKS.md (готово к TDD, ссылка на Architecture Design)
+
+**4. Инцидент:**
+- ✅ Записан инцидент #3 в retro-v0.5.0.md: "Architecture-First результат как огромная портянка текста"
+- ✅ Root cause: пропущен принцип CLAUDE.md "сначала кратко → обсуждение → детали"
+- ✅ Исправление: обсуждение поэтапно (7 блоков + 3 критичных решения)
+
+### 📝 Решения
+
+**Scope v0.5.0:**
+- BotNotifier — send-only, plain text (БЕЗ parse_mode, без MarkdownV2 escape)
+- Fail-fast если >4096 chars (пользователь сократит AI prompt)
+- Retry: переиспользуем withRetry + withTimeout из FoundationExtensions
+- HTTP: переиспользуем HTTPClientProtocol + URLSessionHTTPClient + MockHTTPClient
+
+**Отложено в v0.6.0:**
+- Message split (>4096 chars) — transactional (all-or-nothing) + delay 1 sec между частями
+- MarkdownV2Formatter (жирный, курсив, ссылки, escape)
+
+### 📊 Метрики
+
+- Правило 0 применено: ✅ (Grep HTTPClient → найден → переиспользуем)
+- Architecture-First: ✅ 7 блоков + 3 критичных решения обсуждены поэтапно
+- Инциденты: 1 (Architecture-First как "портянка текста" → исправлено в процессе)
+
+### 🚀 Следующий шаг
+
+**TDD для TelegramBotNotifier** следуя Architecture Design документу.
+
+**Роль:** Senior Testing Architect
+
+**Читать:**
+- TESTING.md (Outside-In TDD workflow)
+- TESTING-PATTERNS.md (паттерны моков, async тесты)
+- `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md` (Architecture Design)
+- `.claude/archived/spike-telegram-bot-api-2025-12-15.md` (реальные JSON для Unit тестов)
+
 ## [2025-12-14] Сессия 2 — Подготовка к v0.5.0
 
 **Выполнено:**

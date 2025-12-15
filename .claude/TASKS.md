@@ -37,63 +37,22 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 
 ---
 
-### 2. Грумминг v0.5.0 🎯 SCOPE ОПРЕДЕЛЁН
+### 2. BotNotifier v0.5.0 🎯 TDD READY
 
-**Статус:** ✅ Scope определён (2025-12-15)
+**Статус:** ✅ Architecture Design DONE (2025-12-16) → готово к TDD
 
-**Решение:** ТОЛЬКО BotNotifier (большая задача ~5-7 дней)
+**Scope:**
+- BotNotifier — Telegram Bot API интеграция (send-only, plain text)
+- Plain text формат (БЕЗ parse_mode)
+- Fail-fast если message >4096 chars
+- Retry: withRetry + withTimeout (переиспользуем FoundationExtensions)
+- HTTP: HTTPClientProtocol + URLSessionHTTPClient + MockHTTPClient
 
-**Scope v0.5.0:**
-- ✅ **BotNotifier** — Telegram Bot API интеграция (send-only для MVP)
+**Документы для TDD:**
+- ✅ Spike research: `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
+- ✅ **Architecture Design: `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md`**
 
-**Отложено в v0.6.0:**
-- ❌ CLI флаг `--mark-as-read` / `--no-mark-as-read` (quick win, но не критично)
-- ❌ Улучшение ссылок на сообщения ("саммари per chat")
-- ❌ Команды бота (`/digest`, `/start`)
-- ❌ Webhook / Long Polling (interactive bot)
-
-**Обоснование:**
-BotNotifier — сложность сравнима с TDLibClient:
-- Нужен отдельный клиент для Telegram Bot API (как TDLibClient)
-- Решение: библиотека ([swift-telegram-sdk](https://github.com/nerzh/swift-telegram-sdk)) vs HTTP calls
-- Long Polling vs Webhook (для MVP: send-only без команд)
-- Ограничение: пользователь должен начать диалог с ботом (`/start`)
-- Для новых пользователей: управление стартом бота на backend
-
-**Следующий шаг:** Spike research Telegram Bot API
-
-**Spike research задачи:**
-1. **Telegram Bot API basics:**
-   - `sendMessage` — отправка дайджеста
-   - `getUpdates` — long polling (нужен ли для v0.5.0?)
-   - Ограничение `chat_id` — как получить? нужен ли `/start`?
-
-2. **Библиотека vs HTTP calls:**
-   - [swift-telegram-sdk](https://github.com/nerzh/swift-telegram-sdk) review:
-     - Зависимости? (SwiftNIO?)
-     - Стабильность? (последний коммит, issues)
-     - API coverage? (sendMessage, getUpdates)
-   - Прямые HTTP calls (URLSession) — проще, но больше кода
-
-3. **Send-only vs Interactive:**
-   - Send-only: достаточно для v0.5.0? (отправка дайджеста)
-   - Interactive: webhook/long polling (команды `/digest`, `/start`)
-   - Рекомендация для MVP
-
-4. **Long Polling vs Webhook:**
-   - Long Polling: проще для dev (не нужен публичный IP/domain)
-   - Webhook: production-ready (нужен HTTP server — Vapor/SwiftNIO?)
-
-5. **Развёртывание для новых пользователей:**
-   - Как управлять стартом бота на backend?
-   - Webhook setup (если выбран webhook)
-   - Документация для пользователя (README.md)
-
-**Результат spike:**
-- Файл: `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
-- Рекомендация: библиотека vs HTTP calls
-- Минимальный scope для v0.5.0 (send-only or interactive?)
-- Передать в Planning Architect → Architecture-First (7 блоков)
+**Следующий шаг:** Outside-In TDD следуя Architecture Design документу
 
 ---
 
@@ -126,37 +85,54 @@ BotNotifier — сложность сравнима с TDLibClient:
 
 ---
 
-## 🚀 Промпт для следующей сессии (Linux)
+## 🚀 Промпт для следующей сессии
 
 ```
-Spike research: Telegram Bot API для v0.5.0
+Architecture-First: TelegramBotNotifier для v0.5.0
 
-Роль: Planning Architect
+Роль: Senior Swift Architect
 
 Контекст:
-- Scope v0.5.0: ТОЛЬКО BotNotifier (send-only для MVP)
-- Задача: spike research для выбора архитектуры BotNotifier
+- ✅ Spike research DONE: .claude/archived/spike-telegram-bot-api-2025-12-15.md
+- ✅ Live эксперимент выполнен (10 тестов, реальные JSON)
+- ✅ Решение: HTTP calls (URLSession) без библиотеки
+- ✅ Scope: send-only (sendMessage, БЕЗ getUpdates/команд)
+- ✅ 2 инцидента записаны в retro-v0.5.0.md
 
-Следующий шаг:
-1. Прочитать TASKS.md → секция "Грумминг v0.5.0" (spike research задачи)
-2. WebFetch Telegram Bot API docs:
-   - sendMessage (основной метод для отправки дайджеста)
-   - getUpdates (long polling — нужен ли для v0.5.0?)
-   - Как получить chat_id? (ограничение: пользователь должен начать диалог)
-3. GitHub: swift-telegram-sdk review
-   - Зависимости (SwiftNIO?)
-   - Стабильность (последний коммит, open issues)
-   - API coverage (sendMessage есть?)
-4. Создать spike документ:
-   - Файл: `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
-   - Формат: как spike-openai-api-2025-12-03.md
-   - Разделы: API basics, библиотека vs HTTP, рекомендация
-5. Рекомендация для v0.5.0:
-   - Библиотека vs HTTP calls (обоснование)
-   - Send-only достаточно? (или нужен getUpdates для chat_id?)
-   - Webhook setup (если нужен для новых пользователей)
+Следующий шаг: Architecture-First анализ (7 блоков)
 
-Результат:
-- spike-telegram-bot-api-2025-12-15.md с рекомендацией
-- Передать в Architecture-First (7 блоков)
+1. Прочитать файлы:
+   - ROLES.md → Senior Swift Architect (чеклист 7 блоков)
+   - .claude/archived/spike-telegram-bot-api-2025-12-15.md
+   - Секция "Live Experiment Results" (критичные находки)
+
+2. Architecture-First (7 блоков для TelegramBotNotifier):
+
+   1. Concurrency: Actor? Retry sequential? Thread-safety?
+   2. Performance: Rate limits (30 msg/sec). Backpressure нужен?
+   3. Memory: 4096 chars limit. Truncate или split?
+   4. Failure handling: Retry (429, 5xx). Fail-fast (400, 401). Timeout?
+   5. Pipeline: fetch → digest → BotNotifier → markAsRead (sequential)
+   6. Observability: Логи (начало, успех, ошибки, retry attempts)
+   7. Testing: MockHTTPClient, edge cases (4096 limit, MarkdownV2 escape, retry)
+
+3. Критичные находки из spike (учесть):
+   - ⚠️ MarkdownV2 escape ОБЯЗАТЕЛЕН → функция escapeMarkdownV2()
+   - ⚠️ Response содержит `entities` поле (НЕ в docs, найдено в live)
+   - ✅ 4096 chars = точный лимит (не байты)
+   - ✅ Error: {"ok": false, "error_code": 400, "description": "..."}
+
+4. Вопросы для обсуждения:
+   - MarkdownV2 escape: где? (SummaryGenerator ИЛИ BotNotifier?)
+   - Message >4096: truncate ИЛИ split?
+   - HTTPClient: переиспользовать из OpenAISummaryGenerator?
+
+5. Результат:
+   - Ответы на 7 блоков (кратко, 2-3 строки)
+   - Решения по критичным находкам
+   - Готово к TDD → передать Testing Architect
+
+⚠️ НЕ писать код! Только архитектурный анализ.
+
+Давай начнём!
 ```
