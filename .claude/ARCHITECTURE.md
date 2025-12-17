@@ -220,6 +220,7 @@
 - [ ] Выбрал стратегию (sequential vs parallel)
 - [ ] Определил поведение при ошибках (fail fast vs partial success)
 - [ ] Продумал логирование критичных точек
+- [ ] **Struct performance:** Большие struct (>3 properties) с частым копированием? → Риск heap allocation + дорогое копирование. Рассмотреть class или COW оптимизацию ([источник](https://habr.com/ru/articles/942500/))
 
 ---
 

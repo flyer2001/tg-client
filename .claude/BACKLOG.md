@@ -241,6 +241,45 @@ extension TDLibClient {
 - Batch запросы к OpenAI
 - Адаптивная pagination для loadChats
 
+#### Swift Server Meetup #7 - видео анализ
+
+**Задача:** Просмотреть видео "What's New in Swift Server" (декабрь 2024) для актуальных best practices.
+
+**Контекст:**
+- Транскрипция скачана: `/tmp/swift-server-full.txt`
+- Основные темы: AWS Lambda deployment, Swift 6.0.2, performance, packaging
+
+**Релевантность:** Средняя (больше про serverless, меньше про CLI/daemon)
+
+**Когда:** После MVP (низкий приоритет)
+
+#### swift-configuration 1.0
+
+**Задача:** Оценить применимость swift-configuration для multi-platform CLI приложения.
+
+**Контекст:**
+- Сейчас: EnvFileLoader (простые .env файлы)
+- swift-configuration: typed configs, validation, multi-environment support
+
+**Вопрос:** Нужна ли миграция для CLI с простыми env vars?
+
+**Когда:** Пересмотреть после MVP (если появятся сложные конфигурации)
+
+**Ссылка:** https://www.swift.org/blog/swift-configuration-1.0-released/
+
+#### Cupertino MCP Server
+
+**Задача:** Установить Cupertino MCP сервер для offline доступа к Swift документации.
+
+**Описание:**
+- 302k+ страниц документации (Swift.org, Apple Developer, Swift Evolution)
+- SQLite база, offline доступ
+- Полезен для всех Swift проектов (не только UI)
+
+**Когда:** После MVP
+
+**Ссылка:** https://apptractor.ru/info/github/cupertino.html
+
 #### Валидация и документация TDLIB_DATABASE_ENCRYPTION_KEY
 
 **Проблема:** Некорректный encryption key (не кратный 16 байтам для AES) вызывает "Wrong padding length" ошибку. Требование не документировано.

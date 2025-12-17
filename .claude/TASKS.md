@@ -16,9 +16,9 @@
 
 **План тестирования:**
 - [x] **Мониторить merge** PR #9493 в ветку `main` или `6.3` ✅ MERGED
-- [ ] **Скачать development snapshot** с https://www.swift.org/install/linux/ (ожидать появление snapshot с фиксом)
-- [ ] **Протестировать на Linux (UFO Hosting KVM):**
-  - Установить snapshot
+- [x] **Проверить доступность snapshot** ✅ READY (2025-12-15)
+- [ ] **Протестировать на Linux (UFO Hosting KVM):** 🎯 СЛЕДУЮЩАЯ СЕССИЯ
+  - Установить snapshot: `swift-2025-12-15` или новее
   - Запустить clean build
   - Запустить incremental build (должна работать за 1-3 сек, не зависать)
   - Проверить что НЕ нужен workaround build-clean.sh
@@ -27,7 +27,7 @@
 - [ ] **Обновить StackOverflow** (отметить решение)
 - [ ] **Обновить Swift Forums** (отметить решение)
 
-**Следующий шаг:** Дождаться появления development snapshot (обычно 1-2 дня после merge)
+**Следующий шаг:** 🚀 **Протестировать snapshot на Linux (UFO Hosting KVM)** - snapshot готов с 2025-12-15
 
 **Команда для проверки snapshot:**
 ```bash
@@ -37,9 +37,9 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 
 ---
 
-### 2. BotNotifier v0.5.0 🎯 TDD READY
+### 2. BotNotifier v0.5.0 🎯 TDD В ПРОЦЕССЕ
 
-**Статус:** ✅ Architecture Design DONE (2025-12-16) → готово к TDD
+**Статус:** ⏳ Unit Tests GREEN (2025-12-17) → Component тест следующий шаг (отложен на след. сессию)
 
 **Scope:**
 - BotNotifier — Telegram Bot API интеграция (send-only, plain text)
@@ -48,11 +48,33 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
 - Retry: withRetry + withTimeout (переиспользуем FoundationExtensions)
 - HTTP: HTTPClientProtocol + URLSessionHTTPClient + MockHTTPClient
 
-**Документы для TDD:**
+**Документы:**
 - ✅ Spike research: `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
-- ✅ **Architecture Design: `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md`**
+- ✅ Architecture Design: `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md`
+- ✅ User Story: `Sources/TgClient/TgClient.docc/E2E-Scenarios/BotNotifier.md`
 
-**Следующий шаг:** Outside-In TDD следуя Architecture Design документу
+**TDD Progress (Outside-In):**
+- ✅ User Story документ (BotNotifier.md)
+- ✅ E2E тест (RED) — `Tests/TgClientE2ETests/BotNotifierE2ETests.swift` (disabled, будет реализован позже)
+- ✅ Протокол BotNotifierProtocol — `Sources/DigestCore/Notifiers/BotNotifierProtocol.swift`
+- ✅ JSONEncoder/Decoder.telegramBot() extension — `Sources/FoundationExtensions/JSONCoding.swift`
+- ✅ Unit Tests для extension — `Tests/TgClientUnitTests/FoundationExtensions/JSONCodingTests.swift` (9 тестов, GREEN)
+- ✅ Unit Tests для моделей — `Tests/TgClientUnitTests/DigestCore/TelegramBotAPIModelsTests.swift` (12 тестов, GREEN)
+- ✅ Models → GREEN:
+  - `Sources/DigestCore/Models/TelegramBotAPI/BotAPIError.swift`
+  - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageRequest.swift`
+  - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageResponse.swift` (+ Message, User, Chat)
+- [ ] Component тест (RED) — TelegramBotNotifier + MockHTTPClient (happy path)
+- [ ] Implementation → GREEN — TelegramBotNotifier (actor + withRetry)
+- [ ] Component Tests (edge cases) — retry 429, fail-fast 400/401, >4096 limit
+- [ ] DigestOrchestrator integration
+- [ ] E2E manual test с реальным ботом
+
+**Инциденты (записаны в retro-v0.5.0.md):**
+- Инцидент #4: User Story создан в DocC комментариях вместо MD файла (исправлено)
+- Инцидент #5: JSONEncoder/Decoder extension БЕЗ unit тестов + избыточные тесты для v0.6.0 (исправлено)
+
+**Следующий шаг:** Component тест (RED) — TelegramBotNotifier + MockHTTPClient
 
 ---
 

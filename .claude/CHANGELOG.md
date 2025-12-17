@@ -1,3 +1,75 @@
+## [2025-12-17] Сессия 3 — Проверки перед TDD: Swift snapshot + статьи + обновления документации
+
+**Выполнено:**
+- ✅ Проверен Swift development snapshot (2025-12-15) — готов к тестированию на Linux
+- ✅ Скачана транскрипция Swift Server Meetup #7 видео (yt-dlp)
+- ✅ Проанализированы статьи: swift-configuration 1.0, struct performance, Cupertino MCP
+- ✅ Обновлён TASKS.md: snapshot статус + задача тестирования на Linux
+- ✅ Обновлён BACKLOG.md: добавлены 3 исследования (Swift Server видео, swift-configuration, Cupertino)
+- ✅ Обновлён ARCHITECTURE.md: чеклист про struct performance добавлен
+
+**Изменённые файлы:**
+- `.claude/TASKS.md` — обновлён статус snapshot (готов 2025-12-15), следующий шаг = тестирование Linux
+- `.claude/BACKLOG.md` — добавлены задачи: Swift Server Meetup #7 анализ, swift-configuration 1.0, Cupertino MCP
+- `.claude/ARCHITECTURE.md` — чеклист "Struct performance" (большие struct >3 properties → heap allocation риск)
+
+**Решения/контекст:**
+- Swift development snapshot 2025-12-15 готов к тестированию (PR #9493 включён)
+- swift-configuration 1.0 — оставляем EnvFileLoader для простых env vars (пересмотр после MVP)
+- Struct performance чеклист: struct >3 properties + частое копирование → риск heap allocation + дорогое копирование
+- Cupertino MCP — полезен для Swift CLI/server (302k страниц документации, offline)
+- Swift Server Meetup #7 — релевантность средняя (AWS Lambda focus)
+
+**TODO:**
+- [ ] Протестировать Swift snapshot на Linux (UFO Hosting KVM) — следующая сессия
+- [ ] Продолжить TDD: Component тест TelegramBotNotifier (Правило 0 → Grep/Read паттерн)
+
+
+## Сессия 4 — BotNotifier v0.5.0: Unit Tests GREEN (2025-12-17)
+
+**Выполнено:**
+- ✅ User Story документ создан (`Sources/TgClient/TgClient.docc/E2E-Scenarios/BotNotifier.md`)
+- ✅ E2E тест создан (`Tests/TgClientE2ETests/BotNotifierE2ETests.swift`, disabled)
+- ✅ Протокол `BotNotifierProtocol` создан
+- ✅ JSONEncoder/Decoder.telegramBot() extension добавлен (snake_case конвертация)
+- ✅ Unit тесты для extension: 9 тестов GREEN
+- ✅ Unit тесты для моделей: 12 тестов GREEN (v0.5.0 scope — plain text)
+- ✅ Модели созданы: `BotAPIError`, `SendMessageRequest`, `SendMessageResponse` (+ Message, User, Chat)
+- ✅ Все 21 тест GREEN
+
+**Изменённые файлы:**
+- `Sources/TgClient/TgClient.docc/E2E-Scenarios/BotNotifier.md` — User Story документ
+- `Tests/TgClientE2ETests/BotNotifierE2ETests.swift` — E2E тест (disabled)
+- `Sources/DigestCore/Notifiers/BotNotifierProtocol.swift` — протокол для BotNotifier
+- `Sources/FoundationExtensions/JSONCoding.swift` — добавлен `.telegramBot()` extension
+- `Tests/TgClientUnitTests/FoundationExtensions/JSONCodingTests.swift` — добавлены тесты для `.telegramBot()` (9 тестов)
+- `Tests/TgClientUnitTests/DigestCore/TelegramBotAPIModelsTests.swift` — Unit тесты для моделей (12 тестов, v0.5.0 scope)
+- `Sources/DigestCore/Models/TelegramBotAPI/BotAPIError.swift` — enum с isRetryable логикой
+- `Sources/DigestCore/Models/TelegramBotAPI/SendMessageRequest.swift` — request модель
+- `Sources/DigestCore/Models/TelegramBotAPI/SendMessageResponse.swift` — response модель (+ Message, User, Chat)
+
+**Решения/контекст:**
+- **v0.5.0 scope:** Plain text ТОЛЬКО (БЕЗ parse_mode), MarkdownV2 отложено в v0.6.0
+- **MarkdownV2 тесты удалены:** 3 теста для v0.6.0 удалены (entities field, MarkdownV2 encoding), JSON сохранены в spike research для будущего
+- **snake_case конвертация:** `chatId` → `"chat_id"`, `errorCode` → `"error_code"`, `messageId` → `"message_id"`, `parseMode` → `"parse_mode"`
+- **BotAPIError.isRetryable:** 429/5xx → retry, 400/401/404 → fail-fast, messageTooLong → fail-fast
+- **Модели на основе реальных JSON:** из spike research live эксперимента (10 тестов с реальным ботом)
+
+**Инциденты (записаны в retro-v0.5.0.md):**
+- **Инцидент #4:** User Story создан в DocC комментариях вместо MD файла (исправлено)
+  - Root cause: Правило 0 пропущено (не прочитал существующие User Story файлы)
+  - Исправление: создан правильный MD файл, E2E тест обновлён
+- **Инцидент #5:** JSONEncoder/Decoder extension БЕЗ unit тестов + избыточные тесты для v0.6.0 (исправлено)
+  - Root cause: TDD порядок нарушен (extension → тесты вместо тесты → extension), scope v0.5.0 проигнорирован
+  - Исправление: добавлены тесты для extension (9 тестов), удалены MarkdownV2 тесты (3 теста)
+
+**TODO:**
+- [ ] Component тест (RED) — TelegramBotNotifier + MockHTTPClient (happy path)
+- [ ] Implementation → GREEN — TelegramBotNotifier (actor + withRetry)
+- [ ] Component Tests (edge cases) — retry 429, fail-fast 400/401, >4096 limit
+- [ ] DigestOrchestrator integration
+- [ ] E2E manual test с реальным Telegram ботом
+
 ---
 
 ## Сессия 3 — Architecture-First для BotNotifier v0.5.0 (2025-12-16)
