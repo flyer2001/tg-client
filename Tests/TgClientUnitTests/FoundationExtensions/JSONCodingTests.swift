@@ -393,3 +393,157 @@ struct OpenAIJSONCodingTests {
         #expect(decoded == original, "Round-trip должен вернуть исходные данные")
     }
 }
+
+// MARK: - Telegram Bot API Tests
+
+/// Unit-тесты для Telegram Bot API encoder/decoder (JSONCoding.swift).
+///
+/// **Цель:** Убедиться что `.telegramBot()` factory методы используют правильные стратегии кодирования.
+///
+/// **Что тестируем:**
+/// - `JSONEncoder.telegramBot()` использует `.convertToSnakeCase`
+/// - `JSONDecoder.telegramBot()` использует `.convertFromSnakeCase`
+/// - Telegram Bot API specific поля: `chat_id`, `error_code`, `message_id`, `parse_mode`
+@Suite("JSONEncoder.telegramBot() и JSONDecoder.telegramBot()")
+struct TelegramBotJSONCodingTests {
+
+    // MARK: - Test Models
+
+    /// Простая модель для тестирования snake_case конвертации (Telegram Bot API).
+    struct SimpleBotModel: Codable, Equatable {
+        let chatId: Int64
+        let errorCode: Int?
+        let messageId: Int?
+    }
+
+    /// Модель с полем parseMode (специфично для Telegram Bot API).
+    struct BotMessageModel: Codable, Equatable {
+        let chatId: Int64
+        let text: String
+        let parseMode: String?
+    }
+
+    // MARK: - Encoding Tests
+
+    @Test("Базовая конвертация camelCase → snake_case")
+    func encodeBasicSnakeCase() throws {
+        let model = SimpleBotModel(chatId: 566335622, errorCode: 400, messageId: 123)
+        let encoder = JSONEncoder.telegramBot()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // Проверяем конвертацию camelCase → snake_case (специфичные поля Bot API)
+        #expect(result["chat_id"] as? Int64 == 566335622, "chatId → chat_id")
+        #expect(result["error_code"] as? Int == 400, "errorCode → error_code")
+        #expect(result["message_id"] as? Int == 123, "messageId → message_id")
+
+        // Убеждаемся что camelCase ключей НЕТ
+        #expect(result["chatId"] == nil, "Не должно быть camelCase ключа")
+        #expect(result["errorCode"] == nil, "Не должно быть camelCase ключа")
+    }
+
+    @Test("Конвертация parseMode поля")
+    func encodeParseModeField() throws {
+        let model = BotMessageModel(chatId: 123, text: "Hello", parseMode: "MarkdownV2")
+        let encoder = JSONEncoder.telegramBot()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        // parseMode → parse_mode (Telegram Bot API specific)
+        #expect(result["parse_mode"] as? String == "MarkdownV2", "parseMode → parse_mode")
+        #expect(result["parseMode"] == nil, "Не должно быть camelCase ключа")
+    }
+
+    @Test("Опциональные поля (nil пропускается)")
+    func encodeOptionalFields() throws {
+        let model = SimpleBotModel(chatId: 123, errorCode: nil, messageId: nil)
+        let encoder = JSONEncoder.telegramBot()
+        let data = try encoder.encode(model)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let result = try #require(json, "JSON должен быть словарём")
+
+        #expect(result["chat_id"] as? Int64 == 123)
+        #expect(result["error_code"] == nil, "errorCode=nil пропущен")
+        #expect(result["message_id"] == nil, "messageId=nil пропущен")
+    }
+
+    // MARK: - Decoding Tests
+
+    @Test("Базовая конвертация snake_case → camelCase")
+    func decodeBasicSnakeCase() throws {
+        let json = """
+        {
+            "chat_id": 566335622,
+            "error_code": 400,
+            "message_id": 123
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.telegramBot()
+        let result = try decoder.decode(SimpleBotModel.self, from: data)
+
+        #expect(result.chatId == 566335622, "chat_id → chatId")
+        #expect(result.errorCode == 400, "error_code → errorCode")
+        #expect(result.messageId == 123, "message_id → messageId")
+    }
+
+    @Test("Декодирование parseMode поля")
+    func decodeParseModeField() throws {
+        let json = """
+        {
+            "chat_id": 123,
+            "text": "Hello",
+            "parse_mode": "MarkdownV2"
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.telegramBot()
+        let result = try decoder.decode(BotMessageModel.self, from: data)
+
+        #expect(result.parseMode == "MarkdownV2", "parse_mode → parseMode")
+    }
+
+    @Test("Декодирование опциональных полей (отсутствующие = nil)")
+    func decodeOptionalFields() throws {
+        let json = """
+        {
+            "chat_id": 123
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder.telegramBot()
+        let result = try decoder.decode(SimpleBotModel.self, from: data)
+
+        #expect(result.chatId == 123)
+        #expect(result.errorCode == nil, "Отсутствующее поле → nil")
+        #expect(result.messageId == nil, "Отсутствующее поле → nil")
+    }
+
+    // MARK: - Round-trip Tests
+
+    @Test("Round-trip: encode → decode должен вернуть исходные данные")
+    func roundTripSimpleModel() throws {
+        let original = SimpleBotModel(chatId: 566335622, errorCode: 400, messageId: 123)
+        let encoder = JSONEncoder.telegramBot()
+        let decoder = JSONDecoder.telegramBot()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(SimpleBotModel.self, from: data)
+
+        #expect(decoded == original, "Round-trip должен вернуть исходные данные")
+    }
+
+    @Test("Round-trip: модель с parseMode")
+    func roundTripBotMessageModel() throws {
+        let original = BotMessageModel(chatId: 123, text: "Hello", parseMode: "MarkdownV2")
+        let encoder = JSONEncoder.telegramBot()
+        let decoder = JSONDecoder.telegramBot()
+
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(BotMessageModel.self, from: data)
+
+        #expect(decoded == original)
+    }
+}
