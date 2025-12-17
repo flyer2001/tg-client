@@ -102,3 +102,41 @@ extension JSONDecoder {
         return decoder
     }
 }
+
+// MARK: - Telegram Bot API
+
+extension JSONEncoder {
+    /// Централизованный encoder для Telegram Bot API.
+    ///
+    /// **Настройки:**
+    /// - `keyEncodingStrategy = .convertToSnakeCase` — автоматическая конвертация camelCase → snake_case
+    ///
+    /// **Использование:**
+    /// ```swift
+    /// let encoder = JSONEncoder.telegramBot()
+    /// let data = try encoder.encode(request)
+    /// ```
+    public static func telegramBot() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
+    }
+}
+
+extension JSONDecoder {
+    /// Централизованный decoder для Telegram Bot API.
+    ///
+    /// **Настройки:**
+    /// - `keyDecodingStrategy = .convertFromSnakeCase` — автоматическая конвертация snake_case → camelCase
+    ///
+    /// **Использование:**
+    /// ```swift
+    /// let decoder = JSONDecoder.telegramBot()
+    /// let response = try decoder.decode(SendMessageResponse.self, from: data)
+    /// ```
+    public static func telegramBot() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
+}
