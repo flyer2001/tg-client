@@ -10,6 +10,9 @@ public enum BotAPIError: Error, Sendable {
     /// Сообщение превышает лимит Bot API (4096 chars).
     case messageTooLong(length: Int, limit: Int)
 
+    /// Ошибка конфигурации (невалидный URL, token).
+    case invalidConfiguration(message: String)
+
     /// Проверка нужен ли retry для ошибки.
     ///
     /// **Retry (3 попытки, exponential backoff):**
@@ -24,7 +27,7 @@ public enum BotAPIError: Error, Sendable {
         switch self {
         case .apiError(let code, _):
             return code == 429 || (500...599).contains(code)
-        case .messageTooLong:
+        case .messageTooLong, .invalidConfiguration:
             return false
         }
     }
