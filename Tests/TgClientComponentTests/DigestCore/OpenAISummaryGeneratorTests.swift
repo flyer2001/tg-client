@@ -65,6 +65,16 @@ struct OpenAISummaryGeneratorTests {
 
         // Assert: проверяем результат
         #expect(summary == "**Tech News:** Обзор новых фич Swift 6")
+
+        // Проверяем что HTTP запрос был отправлен корректно
+        let sentRequests = await mockClient.sentRequests
+        #expect(sentRequests.count == 1)
+
+        let request = sentRequests[0]
+        #expect(request.url?.absoluteString == "https://api.openai.com/v1/chat/completions")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-api-key")
     }
 
     @Test("HTTP 401 Unauthorized → OpenAIError.unauthorized")

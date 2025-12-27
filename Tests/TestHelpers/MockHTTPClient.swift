@@ -33,6 +33,9 @@ public actor MockHTTPClient: HTTPClientProtocol {
     /// Счётчик вызовов send().
     private var _callCount: Int = 0
 
+    /// История отправленных запросов (для проверки URL/body в тестах).
+    private var _sentRequests: [URLRequest] = []
+
     public init() {}
 
     /// Устанавливает stub результат (single-stub mode).
@@ -52,8 +55,14 @@ public actor MockHTTPClient: HTTPClientProtocol {
         _callCount
     }
 
+    /// Возвращает историю отправленных запросов.
+    public var sentRequests: [URLRequest] {
+        _sentRequests
+    }
+
     public func send(request: URLRequest) async throws -> Data {
         _callCount += 1
+        _sentRequests.append(request)
 
         // Queue mode: берём следующий результат из очереди
         if !stubQueue.isEmpty {
