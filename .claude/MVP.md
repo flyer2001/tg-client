@@ -784,6 +784,165 @@ actor TelegramBotNotifier {
 
 ---
 
+## 🔬 Перед выпуском v1.0 в production
+
+**Цель:** Убедиться что система работает стабильно и эффективно в production.
+
+### 1. Профилирование (Performance Baseline)
+
+**Инструменты:**
+- Swift Instruments (Time Profiler, Allocations)
+- Linux: `perf`, `valgrind --tool=callgrind`
+- Custom logging: duration tracking для каждого этапа pipeline
+
+**Метрики baseline (single-user MVP):**
+
+| Этап | Целевое время | Критический порог |
+|------|---------------|-------------------|
+| TDLib fetch (50 сообщений) | <2s | >5s |
+| JSON parsing (TDLib + Bot API) | <100ms | >500ms |
+| AI саммаризация | <3s | >10s |
+| Bot API send | <1s | >3s |
+| **Полный цикл** | <7s | >20s |
+
+**Что измеряем:**
+- CPU time per stage
+- Memory footprint (Allocations)
+- JSON parsing overhead (Codable)
+- Network latency (AI API, Bot API)
+
+**Когда оптимизировать:**
+- ❌ Codable optimization (2x speedup) — НЕ нужна для MVP (см. [Habr статья](https://habr.com/ru/companies/tbank/articles/977694))
+  - **Причина:** ~30 моделей vs 200k у Т-Банка, CLI service (стартап time НЕ критичен)
+  - **Триггер для пересмотра:** Профилирование показало >10% CPU на JSON parsing
+- ✅ withRetry + withTimeout — уже реализовано
+- ✅ Parallel mark-as-read — уже реализовано (v0.4.0)
+
+**Performance тесты (добавить в v1.0):**
+```swift
+@Test func performanceBaseline() async throws {
+    let start = Date()
+
+    // Simulate full pipeline
+    try await orchestrator.run()
+
+    let duration = Date().timeIntervalSince(start)
+    #expect(duration < 20.0, "Pipeline exceeded 20s threshold")
+}
+```
+
+**Цели профилирования:**
+1. Установить baseline метрики (для мониторинга регрессий)
+2. Найти bottlenecks (если полный цикл >20s)
+3. Проверить memory leaks (Instruments → Leaks)
+
+### 2. Production Мониторинг и Метрики
+
+**Structured Logging (уже есть):**
+- ✅ JSON logs (для парсинга Prometheus/Loki)
+- ✅ Уровни: DEBUG, INFO, WARN, ERROR
+- ✅ Metadata: chatId, duration, error codes
+
+**Метрики для сбора (v1.0):**
+
+| Метрика | Тип | Назначение |
+|---------|-----|------------|
+| `pipeline_duration_seconds` | Histogram | Время полного цикла |
+| `fetch_messages_count` | Counter | Сколько сообщений получено |
+| `ai_generation_duration_seconds` | Histogram | Время генерации AI |
+| `bot_send_duration_seconds` | Histogram | Время отправки в бот |
+| `errors_total{type}` | Counter | Количество ошибок по типам |
+| `mark_as_read_success_rate` | Gauge | % успешных mark-as-read |
+
+**Технологии (выбрать в v1.0):**
+
+**Вариант 1: Prometheus + Grafana (рекомендуется)**
+- ✅ Стандарт для метрик
+- ✅ Alerting встроен
+- ✅ Swift библиотека: [swift-metrics](https://github.com/apple/swift-metrics)
+- ⚠️ Требует Prometheus server (Docker)
+
+**Вариант 2: Logs → Metrics (проще для MVP)**
+- ✅ Structured logs + Log aggregator (Loki/Elasticsearch)
+- ✅ Grafana парсит JSON logs → строит графики
+- ✅ НЕ требует изменений в коде (уже есть JSON logs)
+- ⚠️ Менее точно чем native metrics
+
+**Вариант 3: CloudWatch / DataDog (платно)**
+- ✅ Managed solution
+- ❌ Стоимость
+
+**Рекомендация для v1.0:** Logs → Loki + Grafana (минимальные изменения)
+
+### 3. Alerting (v1.0)
+
+**Критичные алерты:**
+
+| Условие | Действие | Канал |
+|---------|----------|-------|
+| Pipeline failed >3 раз подряд | Alert в Telegram | Личный чат |
+| AI API 401 (invalid key) | Alert + STOP service | Личный чат |
+| Memory usage >80% | Warning | Logs |
+| Full cycle >20s | Warning | Logs |
+
+**Реализация (фаза 1 — Telegram алерты):**
+```swift
+actor AlertService {
+    func sendAlert(_ message: String, severity: Severity) async throws {
+        // Отправка через Bot API (тот же бот)
+        // Prefix: "🚨 ALERT" для критичных
+    }
+}
+```
+
+**Интеграция:**
+- DigestOrchestrator → catch errors → AlertService.sendAlert()
+- Retry exhausted → alert "Failed after 3 retries: OpenAI 429"
+
+### 4. Дашборды (Grafana)
+
+**Dashboard 1: Pipeline Health**
+- График: pipeline duration (последние 24ч)
+- Counter: сообщений обработано
+- Error rate: % failed pipelines
+
+**Dashboard 2: AI Performance**
+- Histogram: AI generation time
+- Counter: токены использованы (из OpenAI response)
+- Cost tracking: `$0.006 per digest`
+
+**Dashboard 3: System Health**
+- Memory usage
+- CPU usage
+- Disk space
+
+**Настройка (выбрать в v1.0):**
+- Grafana Cloud (бесплатный tier) или self-hosted Docker
+
+### 5. Acceptance Criteria (v1.0 Production Readiness)
+
+**Функциональные:**
+- [ ] Профилирование выполнено (baseline метрики задокументированы)
+- [ ] Performance тесты добавлены (pipeline <20s)
+- [ ] Memory leaks проверены (Instruments → Leaks)
+
+**Метрики и мониторинг:**
+- [ ] Structured logging работает (JSON формат)
+- [ ] Метрики экспортируются (Prometheus или Logs → Loki)
+- [ ] Grafana dashboard настроен (3 дашборда: Pipeline, AI, System)
+- [ ] Алертинг настроен (критичные ошибки → Telegram)
+
+**Документация:**
+- [ ] DEPLOY.md: секция "Мониторинг и Метрики"
+- [ ] README.md: ссылка на Grafana dashboard
+- [ ] Runbook: "Что делать если alert?"
+
+**Performance Regression Protection:**
+- [ ] CI/CD: performance тесты в GitHub Actions
+- [ ] Fail build если pipeline >20s
+
+---
+
 ## 📋 После релиза новой версии
 
 - [ ] Ревизия BACKLOG.md — актуализировать после каждого релиза

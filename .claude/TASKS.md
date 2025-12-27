@@ -7,39 +7,42 @@
 
 ## 📋 Текущие задачи
 
-### 1. Мониторинг SwiftPM Issue #9441 🎯 КРИТИЧНО
+### 1. ✅ SwiftPM Issue #9441 — РЕШЕНО (2025-12-24)
 
-**Статус:** ✅ **PR #9493 MERGED** (2025-12-12) 🎉
+**Статус:** ✅ **ПРОТЕСТИРОВАНО И ПОДТВЕРЖДЕНО**
 
 **Фикс:** PR #9493 — фикс deadlock в incremental builds на KVM
 **Merged:** https://github.com/swiftlang/swift-package-manager/pull/9493#event-21526083511
 
-**План тестирования:**
-- [x] **Мониторить merge** PR #9493 в ветку `main` или `6.3` ✅ MERGED
+**Результаты тестирования:**
+- [x] **Мониторить merge** PR #9493 в ветку `main` или `6.3` ✅ MERGED (2025-12-12)
 - [x] **Проверить доступность snapshot** ✅ READY (2025-12-15)
-- [ ] **Протестировать на Linux (UFO Hosting KVM):** 🎯 СЛЕДУЮЩАЯ СЕССИЯ
-  - Установить snapshot: `swift-2025-12-15` или новее
-  - Запустить clean build
-  - Запустить incremental build (должна работать за 1-3 сек, не зависать)
-  - Проверить что НЕ нужен workaround build-clean.sh
-- [ ] **Отписаться в issue** с результатами тестирования
-- [ ] **Закрыть issue #9441** после успешной проверки
-- [ ] **Обновить StackOverflow** (отметить решение)
-- [ ] **Обновить Swift Forums** (отметить решение)
+- [x] **Протестировать на Linux (UFO Hosting KVM):** ✅ УСПЕШНО (2025-12-24)
+  - Установлен snapshot: `swift-DEVELOPMENT-SNAPSHOT-2025-12-19-a`
+  - Clean build: ~50s ✅
+  - Incremental build #1: 2.96s ✅ (раньше: зависание)
+  - Incremental build #2: 3.04s ✅ (раньше: зависание)
+  - build-clean.sh workaround больше НЕ нужен ✅
+- [x] **Отчёты подготовлены и отправлены:** ✅ DONE (2025-12-24)
+  - GitHub Issue #9441 ✅
+  - Swift Forums ✅
+  - StackOverflow ✅
 
-**Следующий шаг:** 🚀 **Протестировать snapshot на Linux (UFO Hosting KVM)** - snapshot готов с 2025-12-15
+**Swift на production сервере:**
+- Версия: Swift 6.3-dev (swift-DEVELOPMENT-SNAPSHOT-2025-12-19-a)
+- Incremental builds работают нормально (~2-3 сек)
+- Workaround скрипты удалены
 
-**Команда для проверки snapshot:**
-```bash
-# Проверить доступность нового snapshot
-curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | grep date
-```
+**Ссылки:**
+- GitHub Issue: https://github.com/swiftlang/swift-package-manager/issues/9441
+- Swift Forums: https://forums.swift.org/t/swiftpm-hangs-at-planning-build-on-every-incremental-build-swift-6-2-linux/83562/7
+- StackOverflow: https://stackoverflow.com/questions/79837922/swift-package-manager-hangs-on-incremental-builds-swift-6-2-linux-ubuntu-24-04
 
 ---
 
 ### 2. BotNotifier v0.5.0 🎯 TDD В ПРОЦЕССЕ
 
-**Статус:** ⏳ Unit Tests GREEN (2025-12-17) → Component тест следующий шаг (отложен на след. сессию)
+**Статус:** ✅ **Component тесты GREEN** (2025-12-18) → DigestOrchestrator integration следующий шаг
 
 **Scope:**
 - BotNotifier — Telegram Bot API интеграция (send-only, plain text)
@@ -64,17 +67,35 @@ curl -s https://download.swift.org/development/ubuntu2204/latest-build.yml | gre
   - `Sources/DigestCore/Models/TelegramBotAPI/BotAPIError.swift`
   - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageRequest.swift`
   - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageResponse.swift` (+ Message, User, Chat)
-- [ ] Component тест (RED) — TelegramBotNotifier + MockHTTPClient (happy path)
-- [ ] Implementation → GREEN — TelegramBotNotifier (actor + withRetry)
-- [ ] Component Tests (edge cases) — retry 429, fail-fast 400/401, >4096 limit
-- [ ] DigestOrchestrator integration
+- ✅ **Component тесты (9 тестов, GREEN)** — `Tests/TgClientComponentTests/DigestCore/TelegramBotNotifierTests.swift`
+  - Happy path: успешная отправка plain text (проверка URL/headers/body)
+  - Edge cases: >4096 chars (fail-fast), 4096 chars (граница), 400/401/404 (fail-fast), 429/500 (retry), retry exhausted (3 попытки)
+- ✅ **Implementation → GREEN** — `Sources/DigestCore/Notifiers/TelegramBotNotifier.swift`
+  - Actor isolation, retry 3x (exponential backoff: 1s, 2s, 4s), timeout 30s
+  - Переиспользование: withRetry, HTTPClientProtocol
+- ✅ **MockHTTPClient улучшен** — добавлено `sentRequests: [URLRequest]` для проверки URL/body
+- ✅ **OpenAISummaryGeneratorTests улучшен** — проверка request (URL + Authorization header)
+- [ ] DigestOrchestrator integration — добавить BotNotifier в pipeline
 - [ ] E2E manual test с реальным ботом
+
+**Важные решения (2025-12-18):**
+- **MockHTTPClient sentRequests:** Выбран паттерн `sentRequests: [URLRequest]` (queue) вместо словаря [Request: Response]
+  - **Причина:** Component тесты = 1 endpoint, Queue достаточно для retry сценариев
+  - URLRequest НЕ Hashable → сложность без выигрыша
+- **Codable оптимизация:** НЕ нужна для MVP (проанализирована [Habr статья](https://habr.com/ru/companies/tbank/articles/977694/))
+  - Т-Банк: 200k моделей, 2x speedup → наш проект: ~30 моделей, CLI service
+  - Триггер для пересмотра: профилирование покажет >10% CPU на JSON parsing
+  - Trade-off: несовместимость с автогенерацией TDLib/Bot API моделей
+- **Профилирование и мониторинг:** Добавлена секция в MVP.md "Перед выпуском v1.0 в production"
+  - Performance baseline metrics, Prometheus/Grafana, Alerting через Telegram
 
 **Инциденты (записаны в retro-v0.5.0.md):**
 - Инцидент #4: User Story создан в DocC комментариях вместо MD файла (исправлено)
 - Инцидент #5: JSONEncoder/Decoder extension БЕЗ unit тестов + избыточные тесты для v0.6.0 (исправлено)
 
-**Следующий шаг:** Component тест (RED) — TelegramBotNotifier + MockHTTPClient
+**Следующий шаг:**
+1. **Code Review** вчерашних и сегодняшних изменений (ОБЯЗАТЕЛЬНО перед продолжением!)
+2. DigestOrchestrator integration — добавить BotNotifier в pipeline (fetch → digest → **BotNotifier** → markAsRead)
 
 ---
 

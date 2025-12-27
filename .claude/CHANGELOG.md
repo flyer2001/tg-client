@@ -1,3 +1,74 @@
+## [2025-12-18] Сессия: Component тесты TelegramBotNotifier v0.5.0
+## 2025-12-18 — BotNotifier v0.5.0: E2E GREEN 🎉
+
+**Задачи:**
+- ✅ Code Review проведён (force unwrap → guard, Specs)
+- ✅ E2E manual test пройден (реальный Bot API, message_id=9)
+- ✅ `.env.example` создан с инструкциями
+- ✅ Инциденты #6, #7 записаны в retro
+
+**Изменения:**
+- BotNotifier: force unwrap URL → guard + BotAPIError.invalidConfiguration
+- BotNotifier: базовый URL в `private struct Specs`
+- E2E тест реализован (Bot Token из env, chat_id захардкожен 566335622)
+- `.env.example`: инструкции по получению Bot Token + Chat ID
+
+**Тесты:** 281/281 GREEN + E2E manual GREEN
+
+**Инциденты:**
+- #6: Пропущен E2E manual test, начата integration БЕЗ завершения TDD
+- #7: Чуть не захардкодили Bot Token в код (секрет в репозиторий)
+
+**Root cause #6:** Code Review триггер сработал, но сбил с TDD workflow
+**Root cause #7:** "Захардкодить credentials" воспринято как "все данные"
+
+**Следующий шаг:** Полный E2E pipeline (fetch → digest → send → markAsRead)
+
+---
+
+
+**Выполнено:**
+- ✅ Component тесты TelegramBotNotifier (9 тестов GREEN)
+  - Happy path: успешная отправка plain text с проверкой URL/headers/body
+  - Edge cases: >4096 chars (fail-fast), 4096 (граница), 400/401/404 (fail-fast), 429/500 (retry 2x), retry exhausted (3 попытки)
+- ✅ Реализация TelegramBotNotifier (actor + retry + timeout)
+  - withRetry: 3 попытки, exponential backoff (1s, 2s, 4s)
+  - withTimeout: 30 sec per attempt
+  - Fail-fast: message >4096 chars (проверка ДО HTTP call)
+- ✅ MockHTTPClient улучшен — добавлено `sentRequests: [URLRequest]`
+  - Позволяет проверять URL, headers, body в тестах
+  - Backward compatible (не ломает существующие тесты)
+- ✅ OpenAISummaryGeneratorTests улучшен — проверка request (URL + Authorization header)
+- ✅ Профилирование и мониторинг — добавлена секция в MVP.md
+  - Performance baseline metrics (целевые значения для v1.0)
+  - Мониторинг: Prometheus/Grafana, Alerting через Telegram
+  - Performance тесты (pipeline <20s threshold)
+- ✅ Codable оптимизация проанализирована (Habr статья)
+  - **Решение:** НЕ нужна для MVP (~30 моделей vs 200k у Т-Банка)
+  - Trade-off: 2x speedup vs несовместимость с автогенерацией TDLib моделей
+
+**Изменённые файлы:**
+- `Sources/DigestCore/Notifiers/BotNotifierProtocol.swift` — протокол для отправки через бота
+- `Sources/DigestCore/Notifiers/TelegramBotNotifier.swift` — реализация (actor, retry, timeout)
+- `Tests/TgClientComponentTests/DigestCore/TelegramBotNotifierTests.swift` — 9 Component тестов
+- `Tests/TestHelpers/MockHTTPClient.swift` — добавлен `sentRequests` для проверки URL/body
+- `Tests/TgClientComponentTests/DigestCore/OpenAISummaryGeneratorTests.swift` — улучшена проверка request
+- `.claude/MVP.md` — добавлена секция "Перед выпуском v1.0 в production"
+- `.claude/TASKS.md` — актуализирован прогресс BotNotifier v0.5.0
+
+**Решения/контекст:**
+- **MockHTTPClient sentRequests:** Выбран паттерн Queue вместо словаря [Request: Response]
+  - Component тесты = 1 endpoint, Queue достаточно для retry
+  - URLRequest НЕ Hashable → сложность без выигрыша
+- **TDD workflow:** happy path → GREEN → edge cases → GREEN (Outside-In)
+  - Правило 0 применено: Grep существующий паттерн (OpenAISummaryGeneratorTests) → переиспользование
+- **Все тесты GREEN:** 281/281 (включая новые 9 BotNotifier тестов)
+
+**TODO:**
+- [ ] Code Review вчерашних и сегодняшних изменений (перед продолжением!)
+- [ ] DigestOrchestrator integration — добавить BotNotifier в pipeline
+- [ ] E2E manual test с реальным Telegram ботом
+
 ## [2025-12-17] Сессия 3 — Проверки перед TDD: Swift snapshot + статьи + обновления документации
 
 **Выполнено:**
