@@ -132,7 +132,7 @@
 
 3. **Документация:**
    - [x] `SUBAGENTS-GUIDE.md` — гайд по использованию субагентов ✅ СОЗДАНО (2025-01-11)
-   - [x] `ROLES-SUBAGENTS-ARCHITECTURE.md` — архитектура ролей ↔ субагентов ✅ СОЗДАНО (2025-01-11)
+   - [x] `ROLES.md` — роли, субагенты, MCP клиенты (единая точка входа) ✅ ОБНОВЛЕНО (2025-01-11)
 
 4. **Тестирование:**
    - [ ] Протестировать `diagnostics-swift` на реальной задаче
@@ -158,12 +158,12 @@
 - **Субагент** (.claude/agents/) = **ЧТО делать** (workflow, инструменты)
 - **Комбинация:** "swift-diagnostics + Bugfix Specialist" = 5-фазный workflow + баг-фикс мышление
 
-Детали: `.claude/ROLES-SUBAGENTS-ARCHITECTURE.md`
+Детали: `.claude/ROLES.md` (секция Субагенты)
 
 **Ссылки:**
 - HYP-001: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyRep/_project-hub/hypotheses/active/HYP-001-subagents-perplexity.md`
 - Kotlin reference: https://github.com/AlexGladkov/claude-code-agents
-- Архитектура: `.claude/ROLES-SUBAGENTS-ARCHITECTURE.md`
+- Роли + Субагенты + MCP: `.claude/ROLES.md`
 
 ---
 

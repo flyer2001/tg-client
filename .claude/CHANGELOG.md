@@ -4,7 +4,7 @@
 - Создан глобальный Swift агент: `~/.claude/agents/swift/diagnostics-swift.md` (5-фазный workflow для поиска багов)
 - Создан локальный агент: `.claude/agents/tdlib-integration.md` (TDLib research expert)
 - Документация: `SUBAGENTS-GUIDE.md` (как использовать субагентов)
-- Архитектура: `ROLES-SUBAGENTS-ARCHITECTURE.md` (соотношение ролей ↔ субагентов)
+- Роли + Субагенты + MCP: `ROLES.md` (единая точка входа, компактная версия)
 
 **Ключевые концепции:**
 - Роль (ROLES.md) = КАК думать (образ мышления)
