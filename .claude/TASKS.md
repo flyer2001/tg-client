@@ -189,6 +189,41 @@
 
 ---
 
+### 5. Swift 6.2 → async defer (SE-0493) 🔄 ОТЛОЖЕНО
+
+**Приоритет:** 🟠 Низкий (ждём релиз Swift 6.2)
+
+**Контекст:**
+- Текущая версия: Swift 6.0 (`swift-tools-version: 6.0`)
+- SE-0493 (async defer): Swift 6.2 (ожидается ~mid 2025)
+
+**Что даёт async defer:**
+```swift
+// Было (Swift 6.0) — cleanup вручную:
+let collectionTask = Task { ... }
+// ... код ...
+collectionTask.cancel()  // легко забыть при раннем return/throw
+
+// Станет (Swift 6.2) — гарантированный cleanup:
+let collectionTask = Task { ... }
+defer { await collectionTask.value }  // выполнится при ЛЮБОМ exit
+```
+
+**Задачи после выхода Swift 6.2:**
+- [ ] Обновить Swift на Linux (UFO Hosting)
+- [ ] Обновить Swift на macOS (локальная разработка)
+- [ ] Обновить `swift-tools-version` в Package.swift
+- [ ] Рефакторинг `ChannelMessageSource.fetchAllChats()` — async defer для `collectionTask.cancel()`
+- [ ] Проверить другие места с Task cleanup
+
+**Триггер:** Выход Swift 6.2 stable release
+
+**Ссылки:**
+- SE-0493: https://github.com/swiftlang/swift-evolution/blob/main/proposals/0493-async-defer.md
+- Swift releases: https://www.swift.org/download/
+
+---
+
 **Ссылки:**
 - [MVP.md](MVP.md) — scope и статус MVP
 - [BACKLOG.md](BACKLOG.md) — бэклог будущих фич
