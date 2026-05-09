@@ -27,12 +27,28 @@ public enum MessageContent: Sendable, Codable, Equatable {
 
         switch type {
         case "messageText":
-            // Декодируем FormattedText из поля "text"
+            // text-сообщение: контент в поле "text"
             let textContainer = try decoder.container(keyedBy: TextKeys.self)
             let formattedText = try textContainer.decode(FormattedText.self, forKey: .text)
             self = .text(formattedText)
+
+        case "messagePhoto",
+             "messageVideo",
+             "messageDocument",
+             "messageAnimation",
+             "messageAudio",
+             "messageVoiceNote":
+            // Медиа с возможной подписью — достаём caption если есть и не пустая
+            let captionContainer = try decoder.container(keyedBy: CaptionKeys.self)
+            if let caption = try captionContainer.decodeIfPresent(FormattedText.self, forKey: .caption),
+               !caption.text.isEmpty {
+                self = .text(caption)
+            } else {
+                self = .unsupported
+            }
+
         default:
-            // Все остальные типы (messagePhoto, messageVideo, etc.) → unsupported
+            // messageSticker, messageVideoNote, messagePoll, messageLocation и т.д. — без текста
             self = .unsupported
         }
     }
@@ -52,5 +68,9 @@ public enum MessageContent: Sendable, Codable, Equatable {
 
     private enum TextKeys: String, CodingKey {
         case text
+    }
+
+    private enum CaptionKeys: String, CodingKey {
+        case caption
     }
 }

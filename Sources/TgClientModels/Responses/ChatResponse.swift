@@ -35,8 +35,7 @@ public struct ChatResponse: TDLibResponse, Sendable, Equatable {
         case positions
     }
 
-    #if DEBUG
-    /// Инициализатор для создания чата программно (например, в тестах).
+    /// Инициализатор для создания чата программно (тесты + ChatCollector обновление позиций).
     public init(id: Int64, type: ChatType, title: String, unreadCount: Int32, lastReadInboxMessageId: Int64, positions: [ChatPosition] = []) {
         self.id = id
         self.chatType = type
@@ -45,5 +44,4 @@ public struct ChatResponse: TDLibResponse, Sendable, Equatable {
         self.lastReadInboxMessageId = lastReadInboxMessageId
         self.positions = positions
     }
-    #endif
 }

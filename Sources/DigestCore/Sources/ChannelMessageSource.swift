@@ -160,83 +160,210 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         fatalError("Not implemented yet - RED phase")
     }
 
+    // MARK: - Public API: per-chat fetch (для VK Bot Bridge меню)
+
+    /// Возвращает список ВСЕХ непрочитанных чатов всех типов (каналы, группы, ЛС).
+    ///
+    /// Не подгружает сами сообщения — это для построения меню. Для получения текста
+    /// конкретного чата используй `fetchMessages(for:)`.
+    ///
+    /// **Фильтры:**
+    /// - Архивные чаты исключаются (как и в `fetchUnreadMessages()`)
+    /// - Secret чаты (E2E) пропускаются
+    /// - Только чаты с unreadCount > 0
+    public func fetchUnreadChats() async throws -> [UnreadChatInfo] {
+        logger.info("fetchUnreadChats() started")
+        let allChats = try await loadAllChats()
+
+        let unread = allChats.compactMap { chat -> UnreadChatInfo? in
+            guard chat.unreadCount > 0 else { return nil }
+            guard let kind = Self.classify(chat.chatType) else { return nil }
+            return UnreadChatInfo(
+                id: chat.id,
+                title: chat.title,
+                kind: kind,
+                unreadCount: chat.unreadCount,
+                lastReadInboxMessageId: chat.lastReadInboxMessageId
+            )
+        }
+
+        logger.info("Found \(unread.count) unread chats (channels: \(unread.filter { $0.kind == .channel }.count), groups: \(unread.filter { $0.kind == .group }.count), dm: \(unread.filter { $0.kind == .dm }.count))")
+        return unread
+    }
+
+    /// Подгружает текстовые сообщения для одного чата из меню.
+    ///
+    /// **Стратегия:** всегда берём последние N сообщений `getChatHistory(fromMessageId:0, offset:0, limit:N)`.
+    /// Это самый предсказуемый формат TDLib — без манипуляций offset'ами.
+    ///
+    /// **N зависит от типа чата:**
+    /// - Канал: `unreadCount` (дайджест за период)
+    /// - Группа/ЛС: `max(unreadCount, 30)` — даём контекст разговора, не только непрочитанные
+    /// - Cap: `maxChatHistoryLimit` (default 100)
+    ///
+    /// **Порядок:** TDLib возвращает newest-first, мы реверсируем — old→new как в Telegram чате.
+    public func fetchMessages(for chat: UnreadChatInfo) async throws -> [SourceMessage] {
+        let target: Int
+        switch chat.kind {
+        case .channel:
+            target = max(Int(chat.unreadCount), 1)
+        case .group, .dm:
+            target = max(Int(chat.unreadCount), 30)
+        }
+        return try await fetchLastMessages(for: chat, count: target)
+    }
+
+    /// Подгружает последние `count` сообщений чата (включая прочитанные).
+    ///
+    /// **TDLib quirk:** `getChatHistory(from=0, offset=0, limit=N)` берёт только из локального
+    /// кэша. Если в кэше меньше N — TDLib НЕ дотягивает с сервера автоматически.
+    /// Стандартный обход: итеративные запросы с `from=<id_самого_старого_из_прошлого_ответа>`.
+    /// На таком запросе TDLib понимает "нужны старее" и тянет с сервера.
+    ///
+    /// Безопасный лимит итераций — 5, чтобы случайно не зациклиться.
+    public func fetchLastMessages(for chat: UnreadChatInfo, count: Int) async throws -> [SourceMessage] {
+        let target = min(max(count, 1), maxChatHistoryLimit)
+        let perRequest = Int32(target)
+
+        logger.info("fetchLastMessages: requesting chat=\(chat.id) (\(chat.title)) target=\(target)")
+
+        var collected: [Message] = []
+        var seenIds = Set<Int64>()
+        var fromMessageId: Int64 = 0
+        let maxAttempts = 5
+
+        for attempt in 1...maxAttempts {
+            let resp = try await tdlib.getChatHistory(
+                chatId: chat.id,
+                fromMessageId: fromMessageId,
+                offset: 0,
+                limit: perRequest
+            )
+            if resp.messages.isEmpty {
+                logger.info("fetchLastMessages: empty response on attempt \(attempt), stopping")
+                break
+            }
+            var newCount = 0
+            for m in resp.messages where !seenIds.contains(m.id) {
+                seenIds.insert(m.id)
+                collected.append(m)
+                newCount += 1
+            }
+            logger.info("fetchLastMessages: attempt \(attempt) → \(resp.messages.count) raw, \(newCount) new (collected: \(collected.count)/\(target))")
+            if newCount == 0 { break }
+            if collected.count >= target { break }
+            // newest-first → самый старый = последний в массиве
+            fromMessageId = resp.messages.last?.id ?? 0
+        }
+
+        let textCount = collected.filter { if case .text = $0.content { return true } else { return false } }.count
+        logger.info("fetchLastMessages: total collected \(collected.count), text \(textCount), non-text \(collected.count - textCount)")
+
+        // Берём ровно target (не больше) и реверсируем для отображения oldest→newest
+        let trimmed = Array(collected.prefix(target))
+        return trimmed.reversed().compactMap { message -> SourceMessage? in
+            guard case .text(let formattedText) = message.content else {
+                return nil
+            }
+            return SourceMessage(
+                chatId: message.chatId,
+                messageId: message.id,
+                content: formattedText.text,
+                channelTitle: chat.title,
+                link: nil
+            )
+        }
+    }
+
+    private static func classify(_ type: ChatType) -> ChatKind? {
+        switch type {
+        case .supergroup(_, let isChannel):
+            return isChannel ? .channel : .group
+        case .basicGroup:
+            return .group
+        case .private:
+            return .dm
+        case .secret:
+            return nil
+        }
+    }
+
     // MARK: - Private Helpers
 
-    /// Загружает все чаты через loadChats() + updates stream.
+    /// Загружает все чаты через loadChats() (для pull данных с сервера) + getChats() (snapshot in-memory).
+    ///
+    /// **Почему не updateNewChat events:** TDLib шлёт `updateNewChat` только при первой
+    /// подгрузке чата (initial load или новый чат). В long-running сервисе после первого
+    /// `/digest` events уже не приходят — повторный `loadChats` сразу возвращает 404
+    /// "All chats loaded", а наш collector локальный → пустой результат.
+    ///
+    /// **Решение:** `getChats(...)` возвращает chat_ids уже подгруженные TDLib в память.
+    /// Затем для каждого id — `getChat(id)` (cached, быстрый).
     ///
     /// **Алгоритм:**
-    /// 1. Подписываемся на updates stream (Task 1)
-    /// 2. Вызываем loadChats() (Task 2)
-    /// 3. Ждём `updatesCollectionTimeout` после loadChats()
-    /// 4. Собираем все updateNewChat
-    ///
-    /// - Returns: Массив ChatResponse из updateNewChat
+    /// 1. `loadChats` в цикле до 404 — гарантирует pull свежих данных с сервера
+    /// 2. `getChats` — snapshot всех известных chat_ids
+    /// 3. Параллельный `getChat(id)` для каждого (с лимитом)
+    /// 4. Фильтрация archive (positions содержит main или folder)
     private func loadAllChats() async throws -> [ChatResponse] {
-        let collector = ChatCollector()
-
-        // Начинаем слушать updates в фоне (ПЕРЕД loadChats)
-        let collectionTask = Task {
-            for await update in self.tdlib.updates {
-                switch update {
-                case .newChat(let chat):
-                    await collector.add(chat)
-
-                case .chatPosition(let chatId, let position):
-                    await collector.updatePosition(chatId: chatId, position: position)
-
-                default:
-                    break
-                }
-            }
-        }
-
-        // Pagination loop с защитой от зависания
+        // Шаг 1: pull данных с сервера (loadChats до 404 — на свежем cache отрабатывает быстро)
         var loadedBatches = 0
-
         while loadedBatches < maxLoadChatsBatches {
             do {
-                logger.info("loadChats batch \(loadedBatches + 1)...")
                 _ = try await tdlib.loadChats(chatList: .main, limit: 100)
                 loadedBatches += 1
-                logger.info("loadChats batch \(loadedBatches) completed")
-
-                // Ждём перед следующим вызовом
-                try await Task.sleep(for: loadChatsPaginationDelay)
-
+                if loadedBatches < maxLoadChatsBatches {
+                    try await Task.sleep(for: loadChatsPaginationDelay)
+                }
             } catch let error as TDLibErrorResponse where error.isAllChatsLoaded {
-                // 404 → все чаты загружены (успех)
-                logger.info("All chats loaded after \(loadedBatches) batches")
+                logger.info("loadChats: all chats loaded after \(loadedBatches) batches")
                 break
-
             } catch {
-                // Любая другая ошибка → логируем, НО ПРОДОЛЖАЕМ работу (partial success)
-                logger.error("loadChats failed at batch \(loadedBatches): \(error)")
+                logger.warning("loadChats failed at batch \(loadedBatches): \(error)")
                 break
             }
         }
-
         if loadedBatches >= maxLoadChatsBatches {
             logger.warning("Reached max batches limit (\(maxLoadChatsBatches)), stopping pagination")
         }
 
-        // Ждём финальные updates
-        try await Task.sleep(for: updatesCollectionTimeout)
+        // Шаг 2: snapshot из in-memory cache (без зависимости от updateNewChat)
+        let chatsResp = try await tdlib.getChats(chatList: .main, limit: 1000)
+        logger.info("getChats returned \(chatsResp.chatIds.count) chat ids (totalCount: \(chatsResp.totalCount))")
 
-        // Останавливаем сбор
-        collectionTask.cancel()
+        // Шаг 3: getChat(id) для каждого, параллельно с лимитом
+        var allChats: [ChatResponse] = []
+        try await withThrowingTaskGroup(of: ChatResponse?.self) { group in
+            var activeTasks = 0
+            for chatId in chatsResp.chatIds {
+                while activeTasks >= maxParallelHistoryRequests {
+                    if let result = try await group.next() {
+                        if let chat = result { allChats.append(chat) }
+                        activeTasks -= 1
+                    }
+                }
+                group.addTask {
+                    do {
+                        return try await self.tdlib.getChat(chatId: chatId)
+                    } catch {
+                        self.logger.warning("getChat(\(chatId)) failed: \(error)")
+                        return nil
+                    }
+                }
+                activeTasks += 1
+            }
+            while let result = try await group.next() {
+                if let chat = result { allChats.append(chat) }
+            }
+        }
+        logger.info("Hydrated \(allChats.count) ChatResponse from \(chatsResp.chatIds.count) ids")
 
-        let allChats = await collector.getAll()
-        logger.info("Collected \(allChats.count) chats from \(loadedBatches) batches")
-
-        // Фильтруем каналы для дайджеста
-        // ЛОГИКА: Включаем каналы из .main и .folder, исключаем только .archive (без folder/main)
-        // Приоритет: folder > archive (чат в folder + archive → ВКЛЮЧИТЬ)
+        // Шаг 4: фильтрация — оставляем только main или folder (отсекаем archive-only)
         let relevantChats = allChats.filter { chat in
             let hasFolder = chat.positions.contains { if case .folder = $0.list { return true } else { return false } }
             let hasMain = chat.positions.contains { $0.list == .main }
             return hasFolder || hasMain
         }
-
         logger.info("Filtered to \(relevantChats.count) relevant chats (removed \(allChats.count - relevantChats.count) archive-only)")
 
         return relevantChats

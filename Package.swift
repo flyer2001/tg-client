@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -10,7 +10,8 @@ let package = Package(
         .executable(name: "tg-client", targets: ["App"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.4")
+        .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.22.0")
         // DocC plugin временно отключен для ускорения тестов
         // Включить перед генерацией документации: swift package generate-documentation
         // .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
@@ -24,7 +25,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 "TDLibAdapter",
-                "DigestCore"
+                "DigestCore",
+                "BotBridge"
             ],
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
@@ -79,10 +81,21 @@ let package = Package(
             path: "Sources/DigestCore",
             exclude: ["Generators/SummaryGenerator.md"]
         ),
+        .target(
+            name: "BotBridge",
+            dependencies: [
+                "DigestCore",
+                "TDLibAdapter",
+                "TgClientModels",
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Hummingbird", package: "hummingbird")
+            ],
+            path: "Sources/BotBridge"
+        ),
         // Test targets
         .target(
             name: "TestHelpers",
-            dependencies: ["TGClientInterfaces", "TgClientModels", "FoundationExtensions", "TDLibAdapter"],
+            dependencies: ["TGClientInterfaces", "TgClientModels", "FoundationExtensions", "TDLibAdapter", "DigestCore"],
             path: "Tests/TestHelpers"
         ),
         .testTarget(

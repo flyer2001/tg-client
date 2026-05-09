@@ -2,10 +2,12 @@ import TGClientInterfaces
 import Foundation
 import FoundationExtensions
 
-/// Сообщение из Telegram (из TDLib getChatHistory).
+/// Сообщение из Telegram (из TDLib getChatHistory или sendMessage).
 ///
 /// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1message.html
-public struct Message: Sendable, Codable, Equatable {
+public struct Message: TDLibResponse, Sendable, Codable, Equatable {
+    public let type = "message"
+
     /// ID сообщения (уникален в рамках чата).
     public let id: Int64
 

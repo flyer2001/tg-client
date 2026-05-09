@@ -53,10 +53,48 @@ extension TDLibClient: TDLibClientProtocol {
         return try await sendAndWait(GetChatRequest(chatId: chatId), expecting: ChatResponse.self)
     }
 
+    /// Возвращает chat_ids уже подгруженных в TDLib in-memory cache.
+    /// Не дёргает сеть — синхронный snapshot. Используется в long-running сервисе для
+    /// повторной выборки чатов без `updateNewChat` событий (TDLib шлёт их только при
+    /// первой подгрузке через `loadChats`).
+    public func getChats(chatList: ChatList = .main, limit: Int32 = 1000) async throws -> ChatsResponse {
+        return try await sendAndWait(GetChatsRequest(chatList: chatList, limit: limit), expecting: ChatsResponse.self)
+    }
+
     public func getChatHistory(chatId: Int64, fromMessageId: Int64, offset: Int32, limit: Int32) async throws -> MessagesResponse {
         return try await sendAndWait(
             GetChatHistoryRequest(chatId: chatId, fromMessageId: fromMessageId, offset: offset, limit: limit, onlyLocal: false),
             expecting: MessagesResponse.self
+        )
+    }
+
+    /// Отправляет текстовое сообщение в чат.
+    ///
+    /// Возвращает preliminary `Message` (его id может быть временным до полной доставки).
+    /// Полная гарантия — через update `messageSendSucceeded`. MVP считает успешным сам факт
+    /// возврата Message без ошибки.
+    @discardableResult
+    public func sendMessage(chatId: Int64, text: String) async throws -> Message {
+        return try await sendAndWait(SendMessageRequest(chatId: chatId, text: text), expecting: Message.self)
+    }
+
+    /// Ищет чат по публичному username (без `@` в начале).
+    ///
+    /// Возвращает `ChatResponse` (с `id`, `title`, `chatType` и т.д.).
+    /// Если username не найден — TDLib бросит ошибку.
+    public func searchPublicChat(username: String) async throws -> ChatResponse {
+        let normalized = username.hasPrefix("@") ? String(username.dropFirst()) : username
+        return try await sendAndWait(SearchPublicChatRequest(username: normalized), expecting: ChatResponse.self)
+    }
+
+    /// Помечает сообщения как прочитанные (с force_read=true для гарантии).
+    ///
+    /// Минимум — один message_id (например ID последнего). TDLib обычно помечает диапазон
+    /// от первого до последнего как viewed.
+    public func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool = true) async throws -> OkResponse {
+        return try await sendAndWait(
+            ViewMessagesRequest(chatId: chatId, messageIds: messageIds, forceRead: forceRead),
+            expecting: OkResponse.self
         )
     }
 
