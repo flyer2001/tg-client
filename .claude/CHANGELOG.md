@@ -1,3 +1,41 @@
+## [2026-05-09] Safety push spike + planning v0.6.0 миграции
+
+**Контекст:** ветка `feature/vk-bot-bridge` несколько недель крутилась локально с несохранёнными изменениями. Origin/main за это время ушёл вперёд (v0.4.0 релиз, v0.5.0 BotNotifier в работе).
+
+**Сделано:**
+- ✅ Snapshot push: 4 атомарных коммита в `feature/vk-bot-bridge` + push на origin
+- ✅ Тег `spike/vk-bridge-2026-05-09` — точка отката, точка референса
+- ✅ Spike помечен в TASKS.md как research artifact (не для merge как есть)
+- ✅ В очередь добавлена задача: Migration RFC v0.6.0 (TDD-реализация поверх `BotNotifierProtocol` из v0.5.0)
+
+**Стратегия миграции:** spike = боевой spike, а реализация в main — отдельной веткой `feature/vk-bridge-tdd` от `origin/main` с полным outside-in TDD циклом.
+
+**Следующая сессия:** написать `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (user stories, test matrix, phasing).
+
+
+## [2026-05-06] Сессия — VK Bot Bridge MVP (feature/vk-bot-bridge)
+
+**Контекст:** мобильный интернет блокирует ТГ → нужен альтернативный канал команд через VK.
+
+**Реализовано (всё в ветке `feature/vk-bot-bridge`, не merge'ится в main как есть):**
+- ✅ Новый таргет `BotBridge` (Hummingbird 2.22 + swift-tools 6.1)
+- ✅ VK Callback API webhook через nginx (`https://cashflow-game.ru/vkWebHook` → `:8082`)
+- ✅ Service mode `tg-client service` — long-running, держит TDLib сессию
+- ✅ Команды: `/test`, `/digest`, `/get N|all|channels|groups|dm`, `/last N [count]`, `/reply N <text>`, `/to <user> <text>`, `/to_alena`, `/read N`
+- ✅ TDLib wrappers: `getChats`, `sendMessage`, `searchPublicChat`, `viewMessages`
+- ✅ DigestCore расширен на все типы чатов (каналы/группы/ЛС) + iterative pagination для `/last`
+- ✅ Production-фиксы: `Message: TDLibResponse`, `ChatResponse`/`FormattedText` init вне `#if DEBUG`, caption из медиа
+- ✅ Деплой на текущий VPS: systemd unit, nginx location, /etc/tg-client.env (mode 600)
+
+**Известные проблемы:**
+- 🟡 SEGV TDLib (continuation leak — known issue из CLAUDE.md, auto-restart есть)
+- 🟡 Тесты для BotBridge не написаны (out-of-scope этой итерации)
+
+**Деплой статус:** активный сервис на сервере, используется лично.
+
+**Следующие шаги:** см. `.claude/TASKS.md` секцию «Технический долг этой ветки».
+
+
 ## [2025-12-08] Сессия 7 — Release v0.3.0
 
 **Выполнено:**
