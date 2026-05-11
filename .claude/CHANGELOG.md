@@ -1,3 +1,31 @@
+## [2026-05-11] Сессия завершения планирования v0.6.0 (RFC готов)
+
+**Контекст:** safety-push незакоммиченной работы spike + написание полного RFC миграции на TDD-реализацию.
+
+**Сделано:**
+- ✅ **Safety push spike**: 4 коммита (Sources + 2× docs + chore) → `origin/feature/vk-bot-bridge` (ветка-снапшот)
+- ✅ **RFC v0.6.0** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, 10 разделов): spike findings, 7 user stories с AC, test matrix, reuse map, архитектура v2, TDD pipeline, phasing, versioning + cutover plan, acceptance criteria, риски (15 шт), 7 закрытых открытых вопросов
+- ✅ **Архитектурный pivot:** webhook + Hummingbird → **VK Long Poll** через URLSession. Эффект: −5 транзитивных deps, −20-40 сек к build на Linux, простой деплой для open-source (без nginx/HTTPS-домена/cert)
+- ✅ **Решения по миграции зафиксированы:** branch strategy (feature/vk-bridge-tdd от origin/main), тот же VK group для тестов, `/to_alena` удалён, `/read N` достаточно (no auto-mark), Claude=root может деплоить сам
+- ✅ Удалён избыточный тег `spike/vk-bridge-2026-05-09` (ветка-морозилка, сама ветка достаточна как reference)
+
+**Коммиты сессии (7 шт, все в origin/feature/vk-bot-bridge):**
+- `2c5a62f` docs: RFC v0.6.0 — переход с Hummingbird на VK Long Poll
+- `e3f5bc3` docs: RFC v0.6.0 — заполнение разделов 3-10
+- `8e7ef86` docs: RFC v0.6.0 — скелет + spike findings + user stories
+- `a930203` docs: TASKS и CHANGELOG — пометка spike snapshot
+- `f11732a` chore: настройки Claude Code
+- `57313e4` docs: RFC и release materials VK Bot Bridge spike
+- `6a8a227` feat: VK Bot Bridge MVP (spike) — 22 файла, +1843 −90
+
+**Не сделано (намеренно, для следующей сессии):**
+- Phase 1 implementation — должно идти со свежим контекстом, mini-spike VK Long Poll API contract (~1.5ч)
+- Создание ветки `feature/vk-bridge-tdd` от origin/main
+- Деплой v0.4.0/v0.5.0 на сервер — решение отложено до старта v0.6.0
+
+**Следующая сессия:** см. промпт в TASKS.md → задача #4 «Migration RFC v0.6.0 → Следующий шаг — Phase 1 implementation».
+
+
 ## [2026-05-09] Safety push spike + planning v0.6.0 миграции
 
 **Контекст:** ветка `feature/vk-bot-bridge` несколько недель крутилась локально с несохранёнными изменениями. Origin/main за это время ушёл вперёд (v0.4.0 релиз, v0.5.0 BotNotifier в работе).

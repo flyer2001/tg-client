@@ -1,8 +1,9 @@
 # Задачи проекта
 
-> **Последнее обновление:** 2026-05-09
+> **Последнее обновление:** 2026-05-11
 > **Текущая версия:** v0.3.0 (релиз) + ветка `feature/vk-bot-bridge` (🧪 spike, запушена)
 > **На origin/main:** v0.4.0 (mark-as-read) + v0.5.0 in progress (TelegramBotNotifier)
+> **RFC миграции:** ✅ готов — `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (1315 строк)
 
 ---
 
@@ -10,8 +11,8 @@
 
 > **Статус:** РАБОТАЕТ как MVP в проде на VPS. Без TDD/тестов. Используется автором лично.
 > **Назначение:** research artifact / боевой spike. **Не для merge в main как есть.**
-> **Snapshot tag:** `spike/vk-bridge-2026-05-09`
-> **Реальная реализация:** будет в отдельной ветке `feature/vk-bridge-tdd` от `origin/main` по полному TDD циклу (см. задачу #4 «Migration RFC v0.6.0» ниже).
+> **Реальная реализация:** будет в отдельной ветке `feature/vk-bridge-tdd` от `origin/main` по полному TDD циклу (см. задачу #4 ниже).
+> **Тег `spike/vk-bridge-2026-05-09` удалён** — ветка-морозилка, сама ветка достаточна как reference.
 
 ### Что добавлено
 - **Новый таргет `BotBridge`** (Hummingbird-based HTTP сервер, swift-tools 6.1)
@@ -113,32 +114,37 @@
 
 ### 4. Migration RFC v0.6.0 (VK Bridge → main по TDD)
 
-**Приоритет:** 🎯 Следующая большая задача
+**Статус:** ✅ **RFC готов** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, запушен)
 
-**Контекст:** В origin/main уже появился `BotNotifierProtocol` + `TelegramBotNotifier` (v0.5.0 in progress) с полным набором тестов. Наш VK BotBridge spike нужно мигрировать на этот протокол с TDD, не как параллельный таргет.
+**Что в RFC:**
+- 10 разделов + закрытые открытые вопросы Q1-Q7
+- 7 User Stories с Acceptance Criteria (US-1 ping → US-7 read)
+- Test Matrix per-story
+- Reuse Map (~64% spike-кода переиспользуется)
+- Architecture v2: **VK Bot Long Poll** (а не webhook!) — отказ от Hummingbird, −5 транзитивных deps, проще деплой open-source
+- 3 фазы реализации (US-1 → US-2+3 → US-4..7), estimate 13-19 дней
+- Cutover plan на VPS с rollback скриптом (downtime ~30 сек)
 
-**Цель:** Spike `feature/vk-bot-bridge` → production `feature/vk-bridge-tdd` (от `origin/main`).
+**Ключевые архитектурные решения:**
+- Транспорт: VK Bot Long Poll API через URLSession (не webhook + Hummingbird)
+- Цель: тот же VK group для тестов и прода (нет separate community)
+- `/to_alena` shortcut удалён (open-source friendliness)
+- `/read N` достаточно, auto-mark не нужен
+- Claude (root) может делать деплой сам
 
-**Подход:**
-- MVP остаётся в `feature/vk-bot-bridge` как research artifact + работающий прод
-- Новая ветка `feature/vk-bridge-tdd` от `origin/main`, с outside-in TDD по каждой user story
-- Версия v0.6.0 (после v0.5.0 BotNotifier)
-- На сервере MVP-binary продолжает крутиться до полной TDD-реализации
+**Следующий шаг — Phase 1 implementation (отдельная сессия):**
+1. `git fetch && git checkout origin/main && git pull`
+2. `git checkout -b feature/vk-bridge-tdd`
+3. **Mini-spike (~1.5ч):** VK Bot Long Poll API contract + URLSession cancellation на Linux
+4. **US-1 `/ping`** по Outside-In TDD:
+   - E2E test (RED) → Component drop-in → Unit → GREEN → REFACTOR
+   - Покрытие: VKLongPollClient (failed=1/2/3, network backoff, graceful shutdown), VKEventDispatcher, WhitelistFilter, AuditLogger, VKBridgeConfig, VKBotNotifier
+5. **Phase 1 DoD:** US-1 закрыта, smoke `/ping` работает на dev VPS
 
-**Следующий шаг (отдельная сессия):**
-1. Написать `.claude/v0.6.0-vk-bridge-tdd-rfc.md` со структурой:
-   - Spike findings (что узнали из MVP в проде)
-   - User Stories + Acceptance Criteria (7 stories)
-   - Test Matrix (Story → E2E + Component + Unit)
-   - Reuse Map (артефакты MVP → copy/inspire/discard)
-   - Architecture v2 (`VKBotNotifier: BotNotifierProtocol` + `VKWebhookServer`)
-   - TDD Pipeline (outside-in по story)
-   - Phasing (3 фазы: infra → notifier+digest → остальные команды)
-   - Versioning (v0.6.0 release plan)
-   - Acceptance Criteria для merge в main
-   - Risks (TDLib SEGV, диск, SwiftPM #9441, миграция systemd)
-
-**После RFC:** Phase 1 — `Hummingbird` infra + config + VKModels + smoke E2E.
+**Документы для следующей сессии:**
+- 🎯 **главный документ:** `.claude/v0.6.0-vk-bridge-tdd-rfc.md`
+- Старый spike RFC: `.claude/vk-bot-bridge-rfc.md` (исторический контекст)
+- Текстовый план фаз: раздел 7 RFC
 
 ---
 
