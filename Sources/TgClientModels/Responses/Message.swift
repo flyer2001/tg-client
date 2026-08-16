@@ -69,7 +69,15 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
         self.chatId = try container.decodeInt64(forKey: .chatId)
         self.date = try container.decode(Int32.self, forKey: .date)
         self.content = try container.decode(MessageContent.self, forKey: .content)
-        self.isOutgoing = try container.decodeIfPresent(Bool.self, forKey: .isOutgoing) ?? false
+        // На Linux Bool теряет тип при round-trip через JSONSerialization (становится числом),
+        // поэтому принимаем и true/false, и 0/1.
+        if let flag = try? container.decodeIfPresent(Bool.self, forKey: .isOutgoing) {
+            self.isOutgoing = flag ?? false
+        } else if let number = try? container.decodeIfPresent(Int.self, forKey: .isOutgoing) {
+            self.isOutgoing = number != 0
+        } else {
+            self.isOutgoing = false
+        }
 
         if let sender = try? container.nestedContainer(keyedBy: SenderKeys.self, forKey: .senderId) {
             self.senderId = (try? sender.decodeInt64(forKey: .userId)) ?? (try? sender.decodeInt64(forKey: .chatId))
