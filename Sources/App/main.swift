@@ -18,12 +18,24 @@ struct TGClient {
         // Загрузка .env файла (если существует)
         try? EnvFileLoader.loadDotEnv()
 
-        // Парсим режим из CLI: oneshot (default) или service
-        let args = CommandLine.arguments.dropFirst()
-        let mode: RunMode = args.contains("service") ? .service : .oneshot
+        // Парсим режим из CLI: oneshot (default), service или dump
+        let args = Array(CommandLine.arguments.dropFirst())
+        let mode: RunMode
+        if args.contains("service") {
+            mode = .service
+        } else if args.first == "dump" {
+            guard args.count >= 2 else {
+                FileHandle.standardError.write(Data("Usage: tg-client dump <@bot_username> [output.jsonl]\n".utf8))
+                exit(2)
+            }
+            let output = args.count >= 3 ? args[2] : "/root/dumps/\(args[1].trimmingCharacters(in: CharacterSet(charactersIn: "@"))).jsonl"
+            mode = .dump(username: args[1], output: output)
+        } else {
+            mode = .oneshot
+        }
 
         var logger = Logger(label: "tg-client")
-        logger.logLevel = mode == .service ? .info : .warning
+        logger.logLevel = mode == .oneshot ? .warning : .info
 
         let env = ProcessInfo.processInfo.environment
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
@@ -53,7 +65,7 @@ struct TGClient {
         do {
             try await td.start(config: config) { promptType in
                 switch mode {
-                case .oneshot:
+                case .oneshot, .dump:
                     switch promptType {
                     case .phoneNumber:
                         return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
@@ -92,6 +104,8 @@ struct TGClient {
             await runOneshot(td: td, env: env, logger: logger)
         case .service:
             await runService(td: td, logger: logger)
+        case .dump(let username, let output):
+            await runDump(td: td, username: username, output: output, logger: logger)
         }
     }
 
@@ -221,8 +235,61 @@ struct TGClient {
         }
     }
 
-    enum RunMode {
+    // MARK: - Dump mode (полная выгрузка истории одного чата в JSONL)
+
+    /// Выгружает всю переписку с ботом/пользователем в JSONL.
+    ///
+    /// **Приватность:** тексты сообщений не печатаются — только счётчики и диапазон дат.
+    private static func runDump(td: TDLibClient, username: String, output: String, logger: Logger) async {
+        let handle = username.hasPrefix("@") ? String(username.dropFirst()) : username
+
+        let chat: ChatResponse
+        do {
+            chat = try await td.searchPublicChat(username: handle)
+        } catch {
+            print("⚠️ Чат @\(handle) не найден: \(error)")
+            exit(1)
+        }
+
+        let url = URL(fileURLWithPath: output)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+
+        print("📥 Выгружаю историю чата \(chat.id) → \(output)")
+
+        do {
+            let stats = try await dumpChatHistory(
+                chatId: chat.id,
+                to: url,
+                logger: logger
+            ) { fromMessageId, limit in
+                try await td.getChatHistory(
+                    chatId: chat.id,
+                    fromMessageId: fromMessageId,
+                    offset: 0,
+                    limit: limit
+                ).messages
+            }
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            let oldest = stats.oldestDate.map { formatter.string(from: Date(timeIntervalSince1970: TimeInterval($0))) } ?? "—"
+            let newest = stats.newestDate.map { formatter.string(from: Date(timeIntervalSince1970: TimeInterval($0))) } ?? "—"
+            let bytes = ((try? FileManager.default.attributesOfItem(atPath: output))?[.size] as? Int) ?? 0
+
+            print("✅ Готово: \(stats.messageCount) сообщений (текст \(stats.textCount), прочее \(stats.otherCount))")
+            print("   Период: \(oldest) … \(newest), запросов: \(stats.pages), файл: \(bytes) байт")
+        } catch {
+            print("⚠️ Выгрузка упала: \(error)")
+            exit(1)
+        }
+    }
+
+    enum RunMode: Equatable {
         case oneshot
         case service
+        case dump(username: String, output: String)
     }
 }

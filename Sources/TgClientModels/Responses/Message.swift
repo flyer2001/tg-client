@@ -20,13 +20,30 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
     /// Содержимое сообщения.
     public let content: MessageContent
 
+    /// ID отправителя: user_id для `messageSenderUser`, chat_id для `messageSenderChat`.
+    ///
+    /// `nil` если TDLib не прислал `sender_id` (старые сервисные сообщения).
+    public let senderId: Int64?
+
+    /// Исходящее ли сообщение (отправлено текущим аккаунтом).
+    public let isOutgoing: Bool
+
     #if DEBUG
     /// Инициализатор для тестов (создание mock-данных).
-    public init(id: Int64, chatId: Int64, date: Int32, content: MessageContent) {
+    public init(
+        id: Int64,
+        chatId: Int64,
+        date: Int32,
+        content: MessageContent,
+        senderId: Int64? = nil,
+        isOutgoing: Bool = false
+    ) {
         self.id = id
         self.chatId = chatId
         self.date = date
         self.content = content
+        self.senderId = senderId
+        self.isOutgoing = isOutgoing
     }
     #endif
 
@@ -36,6 +53,14 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
         case chatId
         case date
         case content
+        case senderId
+        case isOutgoing
+    }
+
+    /// Ключи вложенного объекта `sender_id` (messageSenderUser / messageSenderChat).
+    private enum SenderKeys: String, CodingKey {
+        case userId
+        case chatId
     }
 
     public init(from decoder: Decoder) throws {
@@ -44,6 +69,13 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
         self.chatId = try container.decodeInt64(forKey: .chatId)
         self.date = try container.decode(Int32.self, forKey: .date)
         self.content = try container.decode(MessageContent.self, forKey: .content)
+        self.isOutgoing = try container.decodeIfPresent(Bool.self, forKey: .isOutgoing) ?? false
+
+        if let sender = try? container.nestedContainer(keyedBy: SenderKeys.self, forKey: .senderId) {
+            self.senderId = (try? sender.decodeInt64(forKey: .userId)) ?? (try? sender.decodeInt64(forKey: .chatId))
+        } else {
+            self.senderId = nil
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -53,5 +85,10 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
         try container.encode(chatId, forKey: .chatId)
         try container.encode(date, forKey: .date)
         try container.encode(content, forKey: .content)
+        try container.encode(isOutgoing, forKey: .isOutgoing)
+        if let senderId {
+            var sender = container.nestedContainer(keyedBy: SenderKeys.self, forKey: .senderId)
+            try sender.encode(senderId, forKey: .userId)
+        }
     }
 }
