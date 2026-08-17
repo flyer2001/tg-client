@@ -299,10 +299,12 @@ struct TGClient {
 
     /// Читает документ (блоки через `===`), режет под лимит Telegram и шлёт по очереди.
     ///
-    /// Пауза 2 сек между сообщениями — защита от flood wait.
-    /// Упало на i-м чанке — печатает номер, продолжить можно файлом без уже отправленных блоков.
+    /// Пауза между сообщениями — `TG_SEND_DELAY_SECONDS` (default 7) — защита от flood wait
+    /// и время боту прожевать. Прогресс в `<input>.sent` (номер последнего успешного чанка):
+    /// после обрыва перезапуск той же командой продолжает со следующего.
     private static func runSend(td: TDLibClient, username: String, input: String, logger: Logger) async {
         let handle = username.hasPrefix("@") ? String(username.dropFirst()) : username
+        let delaySeconds = ProcessInfo.processInfo.environment["TG_SEND_DELAY_SECONDS"].flatMap { Int($0) } ?? 7
 
         guard let document = try? String(contentsOfFile: input, encoding: .utf8) else {
             print("⚠️ Не могу прочитать файл \(input)")
@@ -314,6 +316,18 @@ struct TGClient {
             exit(1)
         }
 
+        // Resume: в .sent лежит количество уже отправленных чанков
+        let progressPath = input + ".sent"
+        let alreadySent = (try? String(contentsOfFile: progressPath, encoding: .utf8))
+            .flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 0
+        if alreadySent >= chunks.count {
+            print("✅ Все \(chunks.count) чанков уже отправлены ранее (\(progressPath)). Для повторной отправки удали этот файл.")
+            return
+        }
+        if alreadySent > 0 {
+            print("▶️ Продолжаю с чанка \(alreadySent + 1)/\(chunks.count) (по \(progressPath))")
+        }
+
         let chat: ChatResponse
         do {
             chat = try await td.searchPublicChat(username: handle)
@@ -322,18 +336,19 @@ struct TGClient {
             exit(1)
         }
 
-        print("📤 Отправляю \(chunks.count) сообщений в чат \(chat.id)...")
-        for (index, chunk) in chunks.enumerated() {
+        print("📤 Отправляю \(chunks.count - alreadySent) сообщений в чат \(chat.id), пауза \(delaySeconds) сек...")
+        for (index, chunk) in chunks.enumerated() where index >= alreadySent {
             do {
                 _ = try await td.sendMessage(chatId: chat.id, text: chunk)
+                try? "\(index + 1)\n".write(toFile: progressPath, atomically: true, encoding: .utf8)
                 print("   \(index + 1)/\(chunks.count) отправлено (\(chunk.count) символов)")
             } catch {
                 print("⚠️ Чанк \(index + 1)/\(chunks.count) не отправился: \(error)")
-                print("   Отправлено успешно: \(index). Убери первые \(index) блоков из файла и перезапусти.")
+                print("   Успешно: \(index). Перезапусти ту же команду — продолжит с чанка \(index + 1).")
                 exit(1)
             }
             if index + 1 < chunks.count {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(Int64(delaySeconds)))
             }
         }
         print("✅ Все \(chunks.count) сообщений отправлены")
