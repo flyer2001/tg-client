@@ -13,11 +13,19 @@ import Foundation
 public func splitIntoTelegramChunks(document: String, maxLength: Int = 4000) -> [String] {
     precondition(maxLength > 0)
 
-    let blocks = document
-        .components(separatedBy: "\n===\n")
-        .flatMap { $0.components(separatedBy: "\n===") }
-        .flatMap { $0.components(separatedBy: "===\n") }
-        .map { $0 == "===" ? "" : $0 }
+    // Разделитель — строка, состоящая ровно из "===" (не подстрока: текст вида
+    // "=== ЗАГРУЗКА ЗАВЕРШЕНА ===" внутри блока трогать нельзя).
+    var blocks: [String] = []
+    var currentLines: [String] = []
+    for line in document.components(separatedBy: "\n") {
+        if line.trimmingCharacters(in: .whitespaces) == "===" {
+            blocks.append(currentLines.joined(separator: "\n"))
+            currentLines = []
+        } else {
+            currentLines.append(line)
+        }
+    }
+    blocks.append(currentLines.joined(separator: "\n"))
 
     var chunks: [String] = []
     for block in blocks {

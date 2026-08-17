@@ -43,4 +43,12 @@ struct TelegramChunkerTests {
         let chunks = splitIntoTelegramChunks(document: doc, maxLength: 4000)
         #expect(chunks == ["первый", "второй"])
     }
+
+    /// "===" как подстрока внутри текста — НЕ разделитель; делит только строка ровно "===".
+    @Test("=== внутри строки не режет блок")
+    func keepsInlineDelimiterText() {
+        let doc = "=== ЗАГРУЗКА ЗАВЕРШЕНА ===\nПодтверди приём.\n===\nвторой блок"
+        let chunks = splitIntoTelegramChunks(document: doc, maxLength: 4000)
+        #expect(chunks == ["=== ЗАГРУЗКА ЗАВЕРШЕНА ===\nПодтверди приём.", "второй блок"])
+    }
 }
