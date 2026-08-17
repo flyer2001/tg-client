@@ -23,6 +23,12 @@ struct TGClient {
         let mode: RunMode
         if args.contains("service") {
             mode = .service
+        } else if args.first == "send" {
+            guard args.count >= 3 else {
+                FileHandle.standardError.write(Data("Usage: tg-client send <@bot_username> <blocks.txt>\n".utf8))
+                exit(2)
+            }
+            mode = .send(username: args[1], input: args[2])
         } else if args.first == "dump" {
             guard args.count >= 2 else {
                 FileHandle.standardError.write(Data("Usage: tg-client dump <@bot_username> [output.jsonl]\n".utf8))
@@ -65,7 +71,7 @@ struct TGClient {
         do {
             try await td.start(config: config) { promptType in
                 switch mode {
-                case .oneshot, .dump:
+                case .oneshot, .dump, .send:
                     switch promptType {
                     case .phoneNumber:
                         return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
@@ -106,6 +112,8 @@ struct TGClient {
             await runService(td: td, logger: logger)
         case .dump(let username, let output):
             await runDump(td: td, username: username, output: output, logger: logger)
+        case .send(let username, let input):
+            await runSend(td: td, username: username, input: input, logger: logger)
         }
     }
 
@@ -287,9 +295,54 @@ struct TGClient {
         }
     }
 
+    // MARK: - Send mode (отправка подготовленного документа боту чанками)
+
+    /// Читает документ (блоки через `===`), режет под лимит Telegram и шлёт по очереди.
+    ///
+    /// Пауза 2 сек между сообщениями — защита от flood wait.
+    /// Упало на i-м чанке — печатает номер, продолжить можно файлом без уже отправленных блоков.
+    private static func runSend(td: TDLibClient, username: String, input: String, logger: Logger) async {
+        let handle = username.hasPrefix("@") ? String(username.dropFirst()) : username
+
+        guard let document = try? String(contentsOfFile: input, encoding: .utf8) else {
+            print("⚠️ Не могу прочитать файл \(input)")
+            exit(1)
+        }
+        let chunks = splitIntoTelegramChunks(document: document)
+        guard !chunks.isEmpty else {
+            print("⚠️ Файл пуст — отправлять нечего")
+            exit(1)
+        }
+
+        let chat: ChatResponse
+        do {
+            chat = try await td.searchPublicChat(username: handle)
+        } catch {
+            print("⚠️ Чат @\(handle) не найден: \(error)")
+            exit(1)
+        }
+
+        print("📤 Отправляю \(chunks.count) сообщений в чат \(chat.id)...")
+        for (index, chunk) in chunks.enumerated() {
+            do {
+                _ = try await td.sendMessage(chatId: chat.id, text: chunk)
+                print("   \(index + 1)/\(chunks.count) отправлено (\(chunk.count) символов)")
+            } catch {
+                print("⚠️ Чанк \(index + 1)/\(chunks.count) не отправился: \(error)")
+                print("   Отправлено успешно: \(index). Убери первые \(index) блоков из файла и перезапусти.")
+                exit(1)
+            }
+            if index + 1 < chunks.count {
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        print("✅ Все \(chunks.count) сообщений отправлены")
+    }
+
     enum RunMode: Equatable {
         case oneshot
         case service
         case dump(username: String, output: String)
+        case send(username: String, input: String)
     }
 }
