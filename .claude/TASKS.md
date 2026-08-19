@@ -1,6 +1,6 @@
 # Задачи проекта
 
-> **Последнее обновление:** 2026-05-11
+> **Последнее обновление:** 2026-08-19
 > **Текущая версия:** v0.3.0 (релиз) + ветка `feature/vk-bot-bridge` (🧪 spike, запушена)
 > **На origin/main:** v0.4.0 (mark-as-read) + v0.5.0 in progress (TelegramBotNotifier)
 > **RFC миграции:** ✅ готов — `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (1315 строк)
@@ -104,11 +104,10 @@
 
 ---
 
-### 3. Планирование v0.4.0: Отметка о прочтении
+### 3. Хвосты после сессии 2026-08-19 (dump/send)
 
-**Статус:** ✅ **Зарелизен в origin/main** (см. историю на GitHub).
-
-В этой ветке локально закрыт через TDLib `viewMessages` (использован в `/read N` команде BotBridge spike), но это НЕ та реализация что в main — там полный TDD цикл с E2E.
+- [ ] Актуализировать DEPLOY.md: прод-сервера 45.8.145.191 не существует, машина = supervisor-VDS 194.59.245.243; нет `/root/tg-client`, `/opt/tg-client`, `tg-client.service`; TDLib собран из master (v1.8.66) в `/usr/local` (2026-08-16)
+- [ ] MockTDLibFFI: fatalError на незамоканном `getChats` роняет весь `swift test` (ChannelMessageSourceTests, pre-existing) — вернуть мягкую ошибку или домокать
 
 ---
 

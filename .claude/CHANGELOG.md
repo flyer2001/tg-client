@@ -1,3 +1,33 @@
+## [2026-08-19] Выгрузка истории чата с ботом + отправка контекста чанками (задача Алены)
+
+**Контекст:** разовая задача — выгрузить переписку Алены с @psyDreambook_bot (бот-толкователь снов, обнулился контекст) и загрузить обратно скомпонованный контекст. Логин под аккаунтом Алены (отдельный TDLIB_STATE_DIR, удалён после задачи).
+
+**Сделано:**
+- ✅ `tg-client dump <@username> [file]` — полная выгрузка истории чата в JSONL (пагинация до первого сообщения, без лимитов; нетекстовые как type=other)
+- ✅ `Message.senderId` / `Message.isOutgoing` — декод вложенного sender_id (messageSenderUser/Chat)
+- ✅ `tg-client send <@username> <blocks.txt>` — отправка документа чанками ≤4000 симв. (блоки через `===`), пауза TG_SEND_DELAY_SECONDS (7 сек), resume через `<input>.sent`
+- ✅ Фиксы: is_outgoing терпим к числу после JSONSerialization (Linux); .env не перезатирает env (setenv overwrite=0); пауза после последнего чанка (иначе TDLib умирал до фактической отправки — маркер завис на сутки); чанкер режет только по строке ровно `===`
+- ✅ TDLib собран из master (v1.8.66) в /usr/local на этой VDS — раньше библиотеки не было вообще
+- ✅ Юнит-тесты: ChatHistoryDumper (3), TelegramChunker (5), Message sender (2). Полный прогон 188 зелёных
+- ✅ Сама задача: 1398 сообщений выгружено (22.06–17.08), документ 3 разделов (41 сон / 11 тем фактов / 6 тем постов), 78 + 17 чанков доставлено боту, подтверждено по серверной истории
+
+**Решения:**
+- «ufohosting-прод» из DEPLOY.md не существует: машина одна (эта VDS, 194.59.245.243), /root/tg-client и tg-client.service отсутствуют — зафиксировано в memory
+- Дампы и документы — только в /root/dumps (вне репо), после задачи удалены; сессия Алены удалена (ей нужно завершить устройство в Telegram → Devices)
+
+**Открытое:**
+- DEPLOY.md устарел (IP 45.8.145.191, пути /opt, systemd) — актуализировать
+- MockTDLibFFI: fatalError на незамоканном getChats роняет весь `swift test` (pre-existing, ChannelMessageSourceTests)
+
+**Файлы:**
+- Sources/App/main.swift (dump/send режимы)
+- Sources/DigestCore/Sources/ChatHistoryDumper.swift (новый)
+- Sources/DigestCore/Sources/TelegramChunker.swift (новый)
+- Sources/TgClientModels/Responses/Message.swift
+- Sources/FoundationExtensions/EnvFileLoader.swift
+- Tests/TgClientUnitTests/DigestCore/{ChatHistoryDumperTests,TelegramChunkerTests}.swift
+- Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/MessageTests.swift
+
 ## [2026-05-11] Сессия завершения планирования v0.6.0 (RFC готов)
 
 **Контекст:** safety-push незакоммиченной работы spike + написание полного RFC миграции на TDD-реализацию.
