@@ -347,9 +347,10 @@ struct TGClient {
                 print("   Успешно: \(index). Перезапусти ту же команду — продолжит с чанка \(index + 1).")
                 exit(1)
             }
-            if index + 1 < chunks.count {
-                try? await Task.sleep(for: .seconds(Int64(delaySeconds)))
-            }
+            // Пауза и после последнего чанка: иначе выход убивает TDLib до того,
+            // как сообщение реально улетит на сервер (висит в "отправляется").
+            // ponytail: sleep вместо ожидания updateMessageSendSucceeded; менять если 7 сек перестанет хватать
+            try? await Task.sleep(for: .seconds(Int64(delaySeconds)))
         }
         print("✅ Все \(chunks.count) сообщений отправлены")
     }
