@@ -194,7 +194,7 @@ Prepend лог в секцию "📝 Логи метрик" этого файл�
 **Что было предложено (ОПАСНО!):**
 ```swift
 // ⚠️ TEMP: Захардкожены credentials для быстрого тестирования
-let botToken = "8441950954:AAEq9B1glTgCdJt0NN5Oqu047cwzrJ5uMug"  // ❌ СЕКРЕТ В РЕПОЗИТОРИИ!
+let botToken = "<REDACTED>"  // ❌ СЕКРЕТ В РЕПОЗИТОРИИ!
 let chatId: Int64 = 566335622  // ✅ Chat ID — не секрет
 ```
 
