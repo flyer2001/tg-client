@@ -17,6 +17,7 @@ import TDLibAdapter
 /// addProxy proxy:proxy enable:Bool comment:string = AddedProxy;   // «Can be called before authorization»
 /// proxy server:string port:int32 type:ProxyType = Proxy;
 /// proxyTypeSocks5 username:string password:string = ProxyType;
+/// proxyTypeHttp username:string password:string http_only:Bool = ProxyType;   // http_only=false → HTTP CONNECT
 /// ```
 ///
 /// ⚠️ В старых версиях TDLib сигнатура была плоской: `addProxy server port enable type` — Research-First поймал смену.
@@ -59,10 +60,38 @@ struct AddProxyRequestTests {
         #expect(proxy == TDProxy(server: "proxy.example.com", port: 1080, username: "bob", password: "secret"))
     }
 
-    @Test("TDProxy: не socks5 или без порта → nil")
+    /// HTTP-прокси с CONNECT (tinyproxy): `proxyTypeHttp`, `http_only: false` — TDLib нужен TCP-туннель, не HTTP-запросы.
+    @Test("Encode AddProxyRequest — HTTP CONNECT (http_only: false)")
+    func encodeHttp() throws {
+        let request = AddProxyRequest(proxy: TDProxy(server: "proxy.example.com", port: 8388, username: "bob", password: "secret", kind: .http))
+
+        let json = try JSONSerialization.jsonObject(with: try encoder.encode(request)) as? [String: Any]
+        let type = (json?["proxy"] as? [String: Any])?["type"] as? [String: Any]
+
+        #expect(type?["@type"] as? String == "proxyTypeHttp")
+        #expect(type?["username"] as? String == "bob")
+        #expect(type?["password"] as? String == "secret")
+        #expect(type?["http_only"] as? Bool == false)
+    }
+
+    @Test("TDProxy из http://user:pass@host:port")
+    func parseHttp() {
+        let proxy = TDProxy(url: "http://bob:secret@proxy.example.com:8388")
+        #expect(proxy == TDProxy(server: "proxy.example.com", port: 8388, username: "bob", password: "secret", kind: .http))
+    }
+
+    @Test("TDProxy: другая схема или без порта → nil")
     func parseInvalid() {
-        #expect(TDProxy(url: "http://127.0.0.1:8080") == nil)
+        #expect(TDProxy(url: "ftp://127.0.0.1:21") == nil)
         #expect(TDProxy(url: "socks5://127.0.0.1") == nil)
         #expect(TDProxy(url: "") == nil)
+    }
+
+    /// В логах — только схема, хост и порт: пароль прокси не должен утекать в лог/консоль.
+    @Test("TDProxy.logDescription без пароля")
+    func logDescriptionHidesPassword() {
+        let proxy = TDProxy(server: "proxy.example.com", port: 8388, username: "bob", password: "secret", kind: .http)
+        #expect(proxy.logDescription == "http proxy.example.com:8388")
+        #expect(!proxy.logDescription.contains("secret"))
     }
 }
