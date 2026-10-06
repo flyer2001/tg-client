@@ -73,6 +73,17 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     /// Все запросы, отправленные клиентом (сырой JSON), — для проверок «что ушло в TDLib».
     private var _sentRequests: [String] = []
 
+    /// `@type` всех отправленных запросов по порядку.
+    public func sentRequestTypes() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _sentRequests.compactMap { json in
+            guard let data = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            return dict["@type"] as? String
+        }
+    }
+
     /// Запросы заданного `@type` в порядке отправки, распарсенные в словарь.
     public func sentRequests(ofType type: String) -> [[String: Any]] {
         lock.lock()
