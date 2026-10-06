@@ -1,25 +1,8 @@
 import Foundation
 
-// MARK: - Incoming (callback)
+// MARK: - Incoming (Long Poll update object)
 
-/// Событие от VK Callback API.
-///
-/// Минимальный набор полей: верхнеуровневый `type` определяет, как декодировать `object`.
-public struct VKCallbackEvent: Decodable, Sendable {
-    public let type: String
-    public let groupId: Int?
-    public let secret: String?
-    public let object: VKObject?
 
-    enum CodingKeys: String, CodingKey {
-        case type
-        case groupId = "group_id"
-        case secret
-        case object
-    }
-}
-
-/// Объект внутри `message_new` события.
 public struct VKObject: Decodable, Sendable {
     public let message: VKMessage?
 }

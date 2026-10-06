@@ -8,7 +8,7 @@ import Foundation
 /// **Источник:** обычно `/etc/tg-client.env` (mode 600), подключенный через
 /// `EnvironmentFile` в systemd unit.
 public struct BotBridgeConfig: Sendable {
-    /// Токен сообщества VK со scope `messages`.
+    /// Ключ сообщества VK с правами `manage` (Long Poll) и `messages`.
     public let vkBotToken: String
 
     /// ID сообщества VK (число из URL вида vk.com/club<id>).
@@ -17,56 +17,26 @@ public struct BotBridgeConfig: Sendable {
     /// Whitelist пользователей VK, которым разрешено вызывать команды.
     public let vkBotOwnerIds: Set<Int>
 
-    /// Секрет, заданный в настройках VK Callback API.
-    /// Приходит в каждом POST'е, валидируем чтобы фильтровать чужие запросы.
-    public let vkCallbackSecret: String
-
-    /// Confirmation token из настроек VK Callback API.
-    /// Возвращается в ответ на запрос `type: "confirmation"`.
-    public let vkConfirmationToken: String
-
     /// Версия VK API (например, "5.199").
     public let vkApiVersion: String
 
-    /// Хост, на котором слушает Hummingbird (обычно "127.0.0.1" — наружу через nginx).
-    public let httpHost: String
-
-    /// Порт Hummingbird (по умолчанию 8082, не должен пересекаться с cashflow на 8080).
-    public let httpPort: Int
-
-    public init(
-        vkBotToken: String,
-        vkBotGroupId: Int,
-        vkBotOwnerIds: Set<Int>,
-        vkCallbackSecret: String,
-        vkConfirmationToken: String,
-        vkApiVersion: String = "5.199",
-        httpHost: String = "127.0.0.1",
-        httpPort: Int = 8082
-    ) {
+    public init(vkBotToken: String, vkBotGroupId: Int, vkBotOwnerIds: Set<Int>, vkApiVersion: String = "5.199") {
         self.vkBotToken = vkBotToken
         self.vkBotGroupId = vkBotGroupId
         self.vkBotOwnerIds = vkBotOwnerIds
-        self.vkCallbackSecret = vkCallbackSecret
-        self.vkConfirmationToken = vkConfirmationToken
         self.vkApiVersion = vkApiVersion
-        self.httpHost = httpHost
-        self.httpPort = httpPort
     }
 
     /// Загружает конфигурацию из переменных окружения процесса.
     ///
-    /// Обязательные: `VK_BOT_TOKEN`, `VK_BOT_GROUP_ID`, `VK_BOT_OWNER_IDS`,
-    /// `VK_CALLBACK_SECRET`, `VK_CONFIRMATION_TOKEN`.
-    /// Опциональные: `VK_API_VERSION` (5.199), `BOT_BRIDGE_HOST` (127.0.0.1), `BOT_BRIDGE_PORT` (8082).
+    /// Обязательные: `VK_BOT_TOKEN`, `VK_BOT_GROUP_ID`, `VK_BOT_OWNER_IDS`.
+    /// Опциональные: `VK_API_VERSION` (5.199).
     ///
     /// `VK_BOT_OWNER_IDS` — comma-separated список целых VK user id.
     public static func fromEnvironment(_ env: [String: String] = ProcessInfo.processInfo.environment) throws -> BotBridgeConfig {
         let token = try require(env, "VK_BOT_TOKEN")
         let groupIdStr = try require(env, "VK_BOT_GROUP_ID")
         let ownerIdsStr = try require(env, "VK_BOT_OWNER_IDS")
-        let secret = try require(env, "VK_CALLBACK_SECRET")
-        let confirmation = try require(env, "VK_CONFIRMATION_TOKEN")
 
         guard let groupId = Int(groupIdStr) else {
             throw BotBridgeConfigError.invalidValue(key: "VK_BOT_GROUP_ID", value: groupIdStr)
@@ -81,17 +51,11 @@ public struct BotBridgeConfig: Sendable {
             throw BotBridgeConfigError.invalidValue(key: "VK_BOT_OWNER_IDS", value: ownerIdsStr)
         }
 
-        let port = env["BOT_BRIDGE_PORT"].flatMap { Int($0) } ?? 8082
-
         return BotBridgeConfig(
             vkBotToken: token,
             vkBotGroupId: groupId,
             vkBotOwnerIds: ownerIds,
-            vkCallbackSecret: secret,
-            vkConfirmationToken: confirmation,
-            vkApiVersion: env["VK_API_VERSION"] ?? "5.199",
-            httpHost: env["BOT_BRIDGE_HOST"] ?? "127.0.0.1",
-            httpPort: port
+            vkApiVersion: env["VK_API_VERSION"] ?? "5.199"
         )
     }
 

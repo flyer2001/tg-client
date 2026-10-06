@@ -11,7 +11,6 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.22.0")
         // DocC plugin временно отключен для ускорения тестов
         // Включить перед генерацией документации: swift package generate-documentation
         // .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
@@ -89,8 +88,7 @@ let package = Package(
                 "DigestCore",
                 "TDLibAdapter",
                 "TgClientModels",
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "Hummingbird", package: "hummingbird")
+                .product(name: "Logging", package: "swift-log")
             ],
             path: "Sources/BotBridge"
         ),
@@ -102,7 +100,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientUnitTests",
-            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore", "TestHelpers"],
+            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers"],
             path: "Tests/TgClientUnitTests"
         ),
         .testTarget(

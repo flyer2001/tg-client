@@ -258,7 +258,7 @@ struct TGClient {
         print("\n✅ All tests completed successfully!")
     }
 
-    // MARK: - Service mode (long-running, VK webhook bridge)
+    // MARK: - Service mode (long-running, VK Long Poll bridge)
 
     private static func runService(td: TDLibClient, logger: Logger) async {
         let botConfig: BotBridgeConfig
@@ -289,24 +289,35 @@ struct TGClient {
             logger: Logger(label: "CommandProcessor")
         )
 
-        let webhookHandler = VKWebhookHandler(
-            config: botConfig,
-            processor: processor,
-            logger: Logger(label: "VKWebhookHandler")
-        )
+        let poller = VKLongPollClient(
+            groupId: botConfig.vkBotGroupId,
+            token: botConfig.vkBotToken,
+            apiVersion: botConfig.vkApiVersion,
+            httpClient: httpClient,
+            logger: Logger(label: "VKLongPoll")
+        ) { message in
+            await processor.handle(message: message)
+        }
 
-        let server = BotBridgeServer(
-            config: botConfig,
-            webhookHandler: webhookHandler,
-            logger: Logger(label: "BotBridgeServer")
-        )
+        logger.info("Service mode: VK Long Poll, group \(botConfig.vkBotGroupId)")
+        let loop = Task { try await poller.run() }
 
-        logger.info("Service mode: BotBridge starting on \(botConfig.httpHost):\(botConfig.httpPort)")
+        // SIGINT/SIGTERM → отмена цикла: текущий long poll запрос прерывается (spike: работает на Linux)
+        let signalSources = [SIGINT, SIGTERM].map { sig -> DispatchSourceSignal in
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig)
+            source.setEventHandler { loop.cancel() }
+            source.resume()
+            return source
+        }
+        defer { signalSources.forEach { $0.cancel() } }
 
         do {
-            try await server.run()
+            try await loop.value
+        } catch where loop.isCancelled {
+            logger.info("Service mode: остановлен сигналом")
         } catch {
-            logger.error("BotBridge server failed: \(error)")
+            logger.error("VK Long Poll failed: \(error)")
             exit(1)
         }
     }
