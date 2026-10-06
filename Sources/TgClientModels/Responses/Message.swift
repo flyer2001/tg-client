@@ -72,7 +72,7 @@ public struct Message: TDLibResponse, Sendable, Codable, Equatable {
         // На Linux Bool теряет тип при round-trip через JSONSerialization (становится числом),
         // поэтому принимаем и true/false, и 0/1.
         if let flag = try? container.decodeIfPresent(Bool.self, forKey: .isOutgoing) {
-            self.isOutgoing = flag ?? false
+            self.isOutgoing = flag
         } else if let number = try? container.decodeIfPresent(Int.self, forKey: .isOutgoing) {
             self.isOutgoing = number != 0
         } else {

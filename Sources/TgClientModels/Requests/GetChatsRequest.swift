@@ -44,6 +44,11 @@ public struct ChatsResponse: TDLibResponse, Sendable, Codable, Equatable {
         case totalCount
     }
 
+    public init(chatIds: [Int64], totalCount: Int32) {
+        self.chatIds = chatIds
+        self.totalCount = totalCount
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.chatIds = try container.decode([Int64].self, forKey: .chatIds)

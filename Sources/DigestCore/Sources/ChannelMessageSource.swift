@@ -307,7 +307,7 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
 
         logger.info("fetchLastMessages: requesting chat=\(chat.id) (\(chat.title)) target=\(target)")
 
-        var collected: [Message] = []
+        var collected: [TgClientModels.Message] = []
         var seenIds = Set<Int64>()
         var fromMessageId: Int64 = 0
         let maxAttempts = 5

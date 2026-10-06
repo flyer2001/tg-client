@@ -62,7 +62,7 @@ public func dumpChatHistory(
     pageSize: Int32 = 100,
     maxPages: Int = 10_000,
     logger: Logger,
-    fetchPage: (Int64, Int32) async throws -> [Message]
+    fetchPage: (Int64, Int32) async throws -> [TgClientModels.Message]
 ) async throws -> ChatHistoryDumpStats {
     guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
         throw CocoaError(.fileWriteNoPermission)
