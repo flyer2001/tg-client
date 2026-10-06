@@ -1,7 +1,7 @@
 # Задачи проекта
 
 > **Последнее обновление:** 2026-10-06
-> **Текущая версия:** v0.5.0 в ветке `release/v0.5.0` (VK Bridge на Long Poll), не запушена
+> **Текущая версия:** v0.5.0 (тег запушен 2026-10-06), сервис — systemd `tg-client` на ubuntu-home (TDLib через tinyproxy VDS:8388)
 > **На origin/main:** v0.4.0 + TelegramBotNotifier (заготовка, не подключена — уходит в v0.6.0)
 > **Разработка:** сборка/тесты на ubuntu-home (Swift 6.4, TDLib 1.8.67), git — на VDS
 
@@ -13,10 +13,9 @@
 
 ### 1. Релиз v0.5.0
 
-- [ ] `.env.example`: блок VK Bridge (`VK_BOT_TOKEN`, `VK_BOT_GROUP_ID`, `VK_BOT_OWNER_IDS`), `TELEGRAM_BOT_*` пометить «v0.6.0, не подключено» — **правит Sergey** (`.env*` закрыт агенту правами)
-- [ ] Push `release/v0.5.0` и `main` (коммит `4206dc9` — отозванный токен бота → `<REDACTED>`)
-- [ ] Merge `release/v0.5.0` → `main`, тег `v0.5.0`, публикация DocC
-- [ ] Где жить сервису постоянно: ubuntu-home (TDLib через tinyproxy VDS:8388, сейчас запущен `nohup`) + systemd, или VDS (`/opt/tg-client`: release-бинарь 73 МБ + libtdjson 1.8.67, проверен запуск) — решить и оформить unit
+- [ ] GitHub Release для тега `v0.5.0` (тег и main запушены 2026-10-06): текст — `scratchpad`/CHANGELOG; Sergey создаёт в UI или авторизовать `gh` на VDS
+- [ ] Проверить CI после пуша (Linux Build + Documentation на Swift 6.4, TDLib собирался с нуля) и что DocC обновился на GitHub Pages (страница VKBridge)
+- [ ] Анонс в TG-канал (@aidigestcreator): текст и промпт картинки готовы в сессии 2026-10-06
 
 ### 2. Хвосты после сессии 2026-08-19 (dump/send)
 
