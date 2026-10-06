@@ -55,12 +55,23 @@ struct TGClient {
             exit(2)
         }
 
+        // TDLIB_PROXY=socks5://[user:pass@]host:port — где Telegram недоступен напрямую (Россия)
+        var proxy: TDProxy?
+        if let raw = env["TDLIB_PROXY"], !raw.isEmpty {
+            guard let parsed = TDProxy(url: raw) else {
+                FileHandle.standardError.write(Data("TDLIB_PROXY: ожидается socks5://[user:pass@]host:port\n".utf8))
+                exit(2)
+            }
+            proxy = parsed
+        }
+
         let config = TDConfig(
             apiId: apiId,
             apiHash: apiHash,
             stateDir: stateDir,
             logPath: stateDir + "/tdlib.log",
-            databaseEncryptionKey: databaseEncryptionKey
+            databaseEncryptionKey: databaseEncryptionKey,
+            proxy: proxy
         )
 
         // ВАЖНО: настройка TDLib логирования должна быть ДО создания клиента

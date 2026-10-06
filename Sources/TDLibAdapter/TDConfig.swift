@@ -1,4 +1,5 @@
 import Foundation
+import TgClientModels
 
 /// Конфигурация для подключения к Telegram API через TDLib.
 ///
@@ -76,6 +77,9 @@ public struct TDConfig: Sendable {
     /// **По умолчанию:** пустая строка (НЕ рекомендуется для production)
     public let databaseEncryptionKey: String
 
+    /// SOCKS5-прокси для TDLib (`TDLIB_PROXY`); `nil` — прямое подключение.
+    public let proxy: TDProxy?
+
     /// Создаёт новую конфигурацию TDLib.
     ///
     /// - Parameters:
@@ -91,7 +95,8 @@ public struct TDConfig: Sendable {
         stateDir: String,
         logPath: String,
         logVerbosity: TDLibLogVerbosity = .fatal,
-        databaseEncryptionKey: String = ""
+        databaseEncryptionKey: String = "",
+        proxy: TDProxy? = nil
     ) {
         self.apiId = apiId
         self.apiHash = apiHash
@@ -99,5 +104,6 @@ public struct TDConfig: Sendable {
         self.logPath = logPath
         self.logVerbosity = logVerbosity
         self.databaseEncryptionKey = databaseEncryptionKey
+        self.proxy = proxy
     }
 }
