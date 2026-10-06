@@ -109,7 +109,6 @@ public actor CommandProcessor {
         /last N [count] — последние сообщения чата N (default count=5)
         /reply N <text> — ответить в чат N
         /to <username> <text> — отправить @username
-        /to_alena <text> — alias для @alenoch13
         /read N — пометить чат N как прочитанный
         /test — диагностика
         """
@@ -318,7 +317,6 @@ public actor CommandProcessor {
         /last N [count] — последние сообщения чата (default 5)
         /reply N <текст> — ответить в чат N
         /to <username> <текст> — отправить любому по @username
-        /to_alena <текст> — alias для @alenoch13
         /test — этот ответ
         """
         await reply(to: peerId, text: report)
@@ -367,14 +365,6 @@ public actor CommandProcessor {
         // /reply N <text> — текст берём из ОРИГИНАЛЬНОГО raw (с регистром, эмодзи, переводами)
         if let _ = stripCommandPrefix(lowered, prefixes: ["/reply ", "reply "]) {
             return parseReply(raw: trimmed)
-        }
-
-        // /to_alena <text> — alias на /to alenoch13 <text>
-        if let _ = stripCommandPrefix(lowered, prefixes: ["/to_alena ", "to_alena "]) {
-            // achievable text — из оригинала, без префикса
-            let prefix = lowered.hasPrefix("/to_alena ") ? "/to_alena " : "to_alena "
-            let text = String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            return .toUsername("alenoch13", text: text)
         }
 
         // /to <username> <text> — общая
