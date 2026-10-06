@@ -125,3 +125,18 @@ public enum MessageContent: Sendable, Codable, Equatable {
         }
     }
 }
+
+extension MessageContent {
+    /// Текст сообщения или подпись медиа; `nil` — если текста нет (стикер, медиа без подписи и т.д.).
+    public var textOrCaption: String? {
+        switch self {
+        case .text(let formatted):
+            return formatted.text
+        case .photo(let caption), .video(let caption), .voice(let caption), .audio(let caption):
+            guard let text = caption?.text, !text.isEmpty else { return nil }
+            return text
+        case .unsupported:
+            return nil
+        }
+    }
+}

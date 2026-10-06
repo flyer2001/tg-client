@@ -128,6 +128,9 @@ extract_model_references() {
     echo "$models" | grep -v '^$' | sort | uniq
 }
 
+# Границы слова для sed -E: GNU sed понимает \b, BSD sed (macOS) — только [[:<:]] / [[:>:]]
+if sed --version >/dev/null 2>&1; then WB_L='\b'; WB_R='\b'; else WB_L='[[:<:]]'; WB_R='[[:>:]]'; fi
+
 # Функция для замены упоминаний моделей и хелперов в комментариях на DoCC ссылки
 # Пример: "SetAuthenticationPhoneNumberRequest" -> "<doc:SetAuthenticationPhoneNumberRequestTests>"
 # Пример: "MockTDLibFFI" -> "<doc:MockTDLibFFITests>"
@@ -135,11 +138,11 @@ add_doc_links_to_models() {
     local text="$1"
 
     # Заменяем *Request на ссылки (например, SetAuthenticationPhoneNumberRequest)
-    # Используем [[:<:]] и [[:>:]] для word boundaries (BSD sed в macOS)
-    text=$(printf '%s\n' "$text" | sed -E 's/[[:<:]]([A-Z][a-zA-Z]*Request)[[:>:]]/<doc:\1Tests>/g')
+    # Границы слова: BSD sed (macOS) — [[:<:]] [[:>:]], GNU sed (Linux) — \b
+    text=$(printf '%s\n' "$text" | sed -E "s/${WB_L}([A-Z][a-zA-Z]*Request)${WB_R}/<doc:\\1Tests>/g")
 
     # Заменяем *Response на ссылки (например, AuthorizationStateUpdateResponse)
-    text=$(printf '%s\n' "$text" | sed -E 's/[[:<:]]([A-Z][a-zA-Z]*Response)[[:>:]]/<doc:\1Tests>/g')
+    text=$(printf '%s\n' "$text" | sed -E "s/${WB_L}([A-Z][a-zA-Z]*Response)${WB_R}/<doc:\\1Tests>/g")
 
     # Заменяем хелперы тестирования на ссылки (MockTDLibFFI, ResponseWaiters, TDLibClient, Update)
     text=$(printf '%s\n' "$text" | sed -E 's/\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b/<doc:\1Tests>/g')

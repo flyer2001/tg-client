@@ -55,7 +55,7 @@ struct AuthenticationFlowTests {
         // Важно: update должен быть добавлен ПОСЛЕ вызова setAuthenticationPhoneNumber()
         // чтобы waiter успел зарегистрироваться
         Task {
-            try await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: .milliseconds(50))
             mockFFI.mockUpdate(AuthorizationStateUpdateResponse.waitCode)
         }
 
@@ -70,7 +70,7 @@ struct AuthenticationFlowTests {
 
         // Мокаем unsolicited update: authorizationStateReady
         Task {
-            try await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: .milliseconds(50))
             mockFFI.mockUpdate(AuthorizationStateUpdateResponse.ready)
         }
 
@@ -113,7 +113,7 @@ struct AuthenticationFlowTests {
         // Мокаем unsolicited update: ERROR вместо authorizationStateReady
         let tdlibError = TDLibErrorResponse(code: 400, message: "PHONE_CODE_INVALID")
         Task {
-            try await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: .milliseconds(50))
             mockFFI.mockUpdate(tdlibError)
         }
 

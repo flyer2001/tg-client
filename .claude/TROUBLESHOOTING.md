@@ -88,6 +88,33 @@ rm -rf ~/.tdlib
 ./scripts/build-clean.sh
 ```
 
+### Swift 6.4: `undefined reference` к старому символу при линковке тестов
+
+**Симптом** (2026-10-06, ubuntu-home, Swift 6.4): после смены сигнатуры (добавили параметр с default)
+линковка `*-test-runner` падает с `undefined reference to '$s9BotBridge…'` — mangled-имя старой сигнатуры.
+Удаление `.build/out/Intermediates.noindex/<Target>*` не помогает.
+
+**Причина**: устаревший артефакт в кэше компиляции (`.build/out/CompilationCache.noindex`).
+
+**Решение**: чистая сборка — `rm -rf .build && swift build --build-tests` (~17 c после удаления Hummingbird).
+
+### Swift 6.4: `--static-swift-stdlib` — undefined reference в Foundation
+
+**Симптом**: `swift build -c release --static-swift-stdlib` падает на линковке:
+`undefined reference to 'CFCharacterSetGetPredefined'`, `_platform_shims_get_environ`, `$s15Synchronization5MutexVMn`.
+
+**Причина**: статические части Foundation (CoreFoundation, _FoundationCShims, Synchronization…) не подтягиваются автоматически.
+
+**Решение**: `./scripts/build-release-linux.sh` — явный список `-Xlinker -l…`. Бинарь (~73 МБ) запускается
+без Swift на целевой машине; рядом нужна `libtdjson` той же версии (`LD_LIBRARY_PATH`).
+
+### Тест бесконечного цикла висит вечно
+
+**Симптом**: `swift test` молчит, а `*-test-runner` остаётся жить после `timeout` (держит lock SwiftPM).
+
+**Решение**: на suite с бесконечными циклами — `.timeLimit(.minutes(1))` (зависание = провал);
+осиротевшие раннеры — `pkill -f '[t]est-runner'`. Пример — `VKLongPollClientTests`.
+
 ### E2E тест падает локально
 
 **Причина**: Отсутствуют credentials или TDLib state.

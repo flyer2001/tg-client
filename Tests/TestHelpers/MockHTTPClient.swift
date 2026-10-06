@@ -36,7 +36,15 @@ public actor MockHTTPClient: HTTPClientProtocol {
     /// История отправленных запросов (для проверки URL/body в тестах).
     private var _sentRequests: [URLRequest] = []
 
+    /// Очередь кончилась → «висеть» до отмены задачи, как реальный long poll запрос (вместо fatalError).
+    private var hangWhenExhausted = false
+
     public init() {}
+
+    /// Включает режим «висеть до отмены», когда очередь stub'ов пуста (для бесконечных циклов: VK Long Poll).
+    public func setHangWhenExhausted(_ value: Bool) {
+        hangWhenExhausted = value
+    }
 
     /// Устанавливает stub результат (single-stub mode).
     public func setStubResult(_ result: Result<Data, Error>) {
@@ -67,6 +75,12 @@ public actor MockHTTPClient: HTTPClientProtocol {
         // Queue mode: берём следующий результат из очереди
         if !stubQueue.isEmpty {
             return try stubQueue.removeFirst().get()
+        }
+
+        // Имитация висящего long poll: не таймер теста, а «сервер молчит» — прерывается только отменой
+        if hangWhenExhausted && stubResult == nil {
+            try await Task.sleep(for: .seconds(86_400))
+            throw CancellationError()
         }
 
         // Single-stub mode

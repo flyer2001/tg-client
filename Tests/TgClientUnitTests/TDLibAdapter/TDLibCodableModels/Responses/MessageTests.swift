@@ -57,6 +57,47 @@ struct MessageTests {
         }
     }
 
+    /// Декодирование отправителя из сырого TDLib JSON.
+    ///
+    /// **TDLib:** `sender_id` — вложенный объект `messageSenderUser`/`messageSenderChat`.
+    @Test("Decode: sender_id и is_outgoing из сырого TDLib JSON")
+    func decodeSenderFields() throws {
+        let json = """
+        {
+          "@type": "message",
+          "id": 1048576,
+          "chat_id": 777000,
+          "date": 1699564800,
+          "is_outgoing": true,
+          "sender_id": {"@type": "messageSenderUser", "user_id": 424242},
+          "content": {"@type": "messageText", "text": {"@type": "formattedText", "text": "hi"}}
+        }
+        """
+        let decoded = try JSONDecoder.tdlib().decode(Message.self, from: Data(json.utf8))
+
+        #expect(decoded.senderId == 424242)
+        #expect(decoded.isOutgoing == true)
+    }
+
+    /// Отправитель-чат (бот пишет от имени канала) и отсутствие is_outgoing.
+    @Test("Decode: messageSenderChat, is_outgoing отсутствует")
+    func decodeSenderChatFallback() throws {
+        let json = """
+        {
+          "@type": "message",
+          "id": 2097152,
+          "chat_id": 777000,
+          "date": 1699564800,
+          "sender_id": {"@type": "messageSenderChat", "chat_id": -1001234567890},
+          "content": {"@type": "messageSticker"}
+        }
+        """
+        let decoded = try JSONDecoder.tdlib().decode(Message.self, from: Data(json.utf8))
+
+        #expect(decoded.senderId == -1001234567890)
+        #expect(decoded.isOutgoing == false)
+    }
+
     /// Edge case: отрицательный chatId (каналы/супергруппы).
     @Test("Round-trip: отрицательный chatId")
     func roundTripNegativeChatId() throws {
