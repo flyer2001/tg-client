@@ -107,12 +107,12 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore", "TestHelpers"],
+            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers"],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(
             name: "TgClientE2ETests",
-            dependencies: ["TDLibAdapter", "DigestCore", "App", "TestHelpers"],
+            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "App", "TestHelpers"],
             path: "Tests/TgClientE2ETests"
         )
     ]
