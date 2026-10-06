@@ -73,6 +73,11 @@ actor GatedHTTPClient: HTTPClientProtocol {
     private var firstRequestWaiters: [CheckedContinuation<Void, Never>] = []
     private var requestCount = 0
 
+    /// `open: true` — без затвора: просто шпион `messages.send`.
+    init(open: Bool = false) {
+        gateOpen = open
+    }
+
     func send(request: URLRequest) async throws -> Data {
         requestCount += 1
         let isFirst = requestCount == 1

@@ -70,6 +70,21 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     private var loadedChats: [Int64: ChatResponse] = [:]
     private var loadedChatOrder: [Int64] = []
 
+    /// Все запросы, отправленные клиентом (сырой JSON), — для проверок «что ушло в TDLib».
+    private var _sentRequests: [String] = []
+
+    /// Запросы заданного `@type` в порядке отправки, распарсенные в словарь.
+    public func sentRequests(ofType type: String) -> [[String: Any]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _sentRequests.compactMap { json in
+            guard let data = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  dict["@type"] as? String == type else { return nil }
+            return dict
+        }
+    }
+
     /// Поток, на котором был первый вызов receive().
     /// Используется для проверки thread safety (как в CTDLibFFI).
     private var expectedThread: pthread_t?
@@ -171,6 +186,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
               let requestType = parsed["@type"] as? String else {
             fatalError("MockTDLibFFI.send(): invalid JSON or missing @type")
         }
+        _sentRequests.append(request)
 
         // Парсим @extra из JSON (OPTIONAL!)
         // Fire-and-forget запросы (auth flow) НЕ имеют @extra
