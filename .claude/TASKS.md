@@ -111,6 +111,13 @@
 
 ---
 
+### 3a. Личные сообщения VK (spike 2026-10-05) — [vk-personal-messages-spike.md](vk-personal-messages-spike.md)
+
+- [ ] Наблюдать заморозку аккаунта: `probe` раз в день на ubuntu-home ~неделю (до ~2026-10-12)
+- [ ] Проверить email-уведомления VK: полный ли текст, беседы, приходят ли когда онлайн → решить, читать ли из почты
+
+---
+
 ### 4. Migration RFC v0.6.0 (VK Bridge → main по TDD)
 
 **Статус:** ✅ **RFC готов** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, запушен)
