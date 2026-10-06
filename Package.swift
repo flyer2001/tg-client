@@ -11,6 +11,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
+        // ВРЕМЕННО: эксперимент HYP-057 (withMainSerialExecutor), удалить после эксперимента
+        .package(url: "https://github.com/pointfreeco/swift-concurrency-extras", from: "1.4.1"),
         // DocC plugin временно отключен для ускорения тестов
         // Включить перед генерацией документации: swift package generate-documentation
         // .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
@@ -105,7 +107,8 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers"],
+            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers",
+                           .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras")],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(

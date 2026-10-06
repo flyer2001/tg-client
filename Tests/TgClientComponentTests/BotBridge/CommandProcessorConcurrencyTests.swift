@@ -46,6 +46,10 @@ struct CommandProcessorConcurrencyTests {
         #expect(texts.filter { $0.contains("alive") }.count == 1)
     }
 
+    static func makeProcessorForExperiment(http: GatedHTTPClient) -> CommandProcessor {
+        CommandProcessorConcurrencyTests().makeProcessor(http: http, owner: 1)
+    }
+
     private func makeProcessor(http: GatedHTTPClient, owner: Int) -> CommandProcessor {
         let tdlib = TDLibClient(ffi: MockTDLibFFI(), appLogger: .noop)  // /test не обращается к TDLib
         return CommandProcessor(
