@@ -1,226 +1,195 @@
 # Задачи проекта
 
-> **Текущая версия:** v0.4.0 ✅
-> **В разработке:** TBD (см. задачи ниже)
+> **Последнее обновление:** 2026-08-19
+> **Текущая версия:** v0.3.0 (релиз) + ветка `feature/vk-bot-bridge` (🧪 spike, запушена)
+> **На origin/main:** v0.4.0 (mark-as-read) + v0.5.0 in progress (TelegramBotNotifier)
+> **RFC миграции:** ✅ готов — `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (1315 строк)
+
+---
+
+## 🧪 SPIKE в feature/vk-bot-bridge (запушен 2026-05-09)
+
+> **Статус:** РАБОТАЕТ как MVP в проде на VPS. Без TDD/тестов. Используется автором лично.
+> **Назначение:** research artifact / боевой spike. **Не для merge в main как есть.**
+> **Реальная реализация:** будет в отдельной ветке `feature/vk-bridge-tdd` от `origin/main` по полному TDD циклу (см. задачу #4 ниже).
+> **Тег `spike/vk-bridge-2026-05-09` удалён** — ветка-морозилка, сама ветка достаточна как reference.
+
+### Что добавлено
+- **Новый таргет `BotBridge`** (Hummingbird-based HTTP сервер, swift-tools 6.1)
+- **VK Callback API webhook** на `https://cashflow-game.ru/vkWebHook` → `127.0.0.1:8082`
+- **Service mode**: `tg-client service` — long-running, держит TDLib сессию
+- **Команды в VK сообществе:**
+  - `/test` — статус
+  - `/digest` — меню непрочитанных (каналы / группы / ЛС)
+  - `/get N` / `/get all` / `/get channels|groups|dm` — взять чаты из меню
+  - `/last N [count]` — последние сообщения чата (включая прочитанные, итеративная подгрузка)
+  - `/reply N <текст>` — ответить в чат N от твоего имени
+  - `/to <username> <текст>` / `/to_alena <текст>` — отправить любому по @username
+  - `/read N` — пометить чат как прочитанный
+
+### Деплой (на текущем сервере)
+- systemd: `/etc/systemd/system/tg-client.service`
+- env: `/etc/tg-client.env` (mode 600, секреты VK + TDLib)
+- nginx: `location /vkWebHook` в `/etc/nginx/sites-enabled/cashflow-game.ru`
+- TDLib state: `/opt/tg-client/.tdlib/`
+- Бинарь: `/opt/tg-client/tg-client` (release ~36 МБ)
+
+### Технический долг этой ветки
+
+| Проблема | Severity | Решение |
+|---|---|---|
+| **Нет тестов вообще** | 🔴 высокая | TDD пройти заново для всего BotBridge таргета |
+| **TDLib SEGV** (continuation leak) | 🟡 средняя | Уже known issue в CLAUDE.md — лечить через ResponseWaiters |
+| **markaread не автоматический** | 🟡 средняя | После `/get N` опционально пометить (флаг? отдельная команда?) |
+| **TG entities → VK** игнорируется | 🟢 низкая | Конвертить в unicode bold/italic, ссылки как plain |
+| **Медиа без caption** теряются | 🟢 низкая | Добавить маркеры `[🎵]`, `[🖼️]` |
+| **CommandProcessor — не actor с протоколом** | 🟢 низкая | Извлечь интерфейс для тестирования |
+| **Concurrent guard работает на одном owner** | 🟢 низкая | Нужно ли больше? |
+
+### Решение про merge в main
+- (a) **Подержать в feature** — погонять 1-2 недели в реальной нагрузке, потом переписать как продакшн (с тестами)
+- (b) **Слить как есть** — рабочее, но нарушает TDD-правила проекта (в CLAUDE.md). Ветка станет "грязной" в истории main.
+
+⚠️ **Решено пока подержать в feature.** Все коммиты атомарные, легко переиспользовать или cherry-pick после ревью.
+
+---
+
+---
+
+## 🔄 НАПОМИНАНИЕ: Проверка ретро (2025-12-11)
+
+**Статус:** ⏳ следующая проверка через 3 дня (2025-12-11)
+
+**Что делать:**
+1. Выполнить промпт: [TASKS.md#проверка-гипотез-ретро](#-проверка-гипотез-ретро)
+2. Append результат в [RETRO-RESULT.md](archived/RETRO-RESULT.md)
+3. Обновить эту дату на +3 дня
+
+**История:**
+- ✅ 2025-12-05 - первая проверка выполнена (инцидент: чуть не создали MockSummaryGenerator)
+- ⏳ 2025-12-08 - пропущена (релиз), следующая 2025-12-11
 
 ---
 
 ## 📋 Текущие задачи
 
-### 1. ✅ SwiftPM Issue #9441 — РЕШЕНО (2025-12-24)
+### 1. Ретроспектива v0.3.0
 
-**Статус:** ✅ **ПРОТЕСТИРОВАНО И ПОДТВЕРЖДЕНО**
+**Приоритет:** 🔥 Высокий (выполнить в течение 3 дней после релиза)
 
-**Фикс:** PR #9493 — фикс deadlock в incremental builds на KVM
-**Merged:** https://github.com/swiftlang/swift-package-manager/pull/9493#event-21526083511
+**Цель:** Проанализировать процесс разработки v0.3.0, зафиксировать инсайты.
 
-**Результаты тестирования:**
-- [x] **Мониторить merge** PR #9493 в ветку `main` или `6.3` ✅ MERGED (2025-12-12)
-- [x] **Проверить доступность snapshot** ✅ READY (2025-12-15)
-- [x] **Протестировать на Linux (UFO Hosting KVM):** ✅ УСПЕШНО (2025-12-24)
-  - Установлен snapshot: `swift-DEVELOPMENT-SNAPSHOT-2025-12-19-a`
-  - Clean build: ~50s ✅
-  - Incremental build #1: 2.96s ✅ (раньше: зависание)
-  - Incremental build #2: 3.04s ✅ (раньше: зависание)
-  - build-clean.sh workaround больше НЕ нужен ✅
-- [x] **Отчёты подготовлены и отправлены:** ✅ DONE (2025-12-24)
-  - GitHub Issue #9441 ✅
-  - Swift Forums ✅
-  - StackOverflow ✅
-
-**Swift на production сервере:**
-- Версия: Swift 6.3-dev (swift-DEVELOPMENT-SNAPSHOT-2025-12-19-a)
-- Incremental builds работают нормально (~2-3 сек)
-- Workaround скрипты удалены
-
-**Ссылки:**
-- GitHub Issue: https://github.com/swiftlang/swift-package-manager/issues/9441
-- Swift Forums: https://forums.swift.org/t/swiftpm-hangs-at-planning-build-on-every-incremental-build-swift-6-2-linux/83562/7
-- StackOverflow: https://stackoverflow.com/questions/79837922/swift-package-manager-hangs-on-incremental-builds-swift-6-2-linux-ubuntu-24-04
+**Шаги:**
+1. Прочитать `.claude/retro-v0.3.0-questions.md` (подготовленные вопросы)
+2. Заполнить метрики и ответить на вопросы
+3. Проверить гипотезы (Research-First, Bugfix процесс, folder фильтрация)
+4. Записать результаты в `.claude/archived/retro-v0.3.0-results.md`
+5. Обновить RETRO-RESULT.md
 
 ---
 
-### 2. BotNotifier v0.5.0 🎯 TDD В ПРОЦЕССЕ
+### 2. Мониторинг SwiftPM Issue #9441
 
-**Статус:** ✅ **Component тесты GREEN** (2025-12-18) → DigestOrchestrator integration следующий шаг
-
-**Scope:**
-- BotNotifier — Telegram Bot API интеграция (send-only, plain text)
-- Plain text формат (БЕЗ parse_mode)
-- Fail-fast если message >4096 chars
-- Retry: withRetry + withTimeout (переиспользуем FoundationExtensions)
-- HTTP: HTTPClientProtocol + URLSessionHTTPClient + MockHTTPClient
-
-**Документы:**
-- ✅ Spike research: `.claude/archived/spike-telegram-bot-api-2025-12-15.md`
-- ✅ Architecture Design: `.claude/archived/architecture-v0.5.0-botnotifier-2025-12-16.md`
-- ✅ User Story: `Sources/TgClient/TgClient.docc/E2E-Scenarios/BotNotifier.md`
-
-**TDD Progress (Outside-In):**
-- ✅ User Story документ (BotNotifier.md)
-- ✅ E2E тест (RED) — `Tests/TgClientE2ETests/BotNotifierE2ETests.swift` (disabled, будет реализован позже)
-- ✅ Протокол BotNotifierProtocol — `Sources/DigestCore/Notifiers/BotNotifierProtocol.swift`
-- ✅ JSONEncoder/Decoder.telegramBot() extension — `Sources/FoundationExtensions/JSONCoding.swift`
-- ✅ Unit Tests для extension — `Tests/TgClientUnitTests/FoundationExtensions/JSONCodingTests.swift` (9 тестов, GREEN)
-- ✅ Unit Tests для моделей — `Tests/TgClientUnitTests/DigestCore/TelegramBotAPIModelsTests.swift` (12 тестов, GREEN)
-- ✅ Models → GREEN:
-  - `Sources/DigestCore/Models/TelegramBotAPI/BotAPIError.swift`
-  - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageRequest.swift`
-  - `Sources/DigestCore/Models/TelegramBotAPI/SendMessageResponse.swift` (+ Message, User, Chat)
-- ✅ **Component тесты (9 тестов, GREEN)** — `Tests/TgClientComponentTests/DigestCore/TelegramBotNotifierTests.swift`
-  - Happy path: успешная отправка plain text (проверка URL/headers/body)
-  - Edge cases: >4096 chars (fail-fast), 4096 chars (граница), 400/401/404 (fail-fast), 429/500 (retry), retry exhausted (3 попытки)
-- ✅ **Implementation → GREEN** — `Sources/DigestCore/Notifiers/TelegramBotNotifier.swift`
-  - Actor isolation, retry 3x (exponential backoff: 1s, 2s, 4s), timeout 30s
-  - Переиспользование: withRetry, HTTPClientProtocol
-- ✅ **MockHTTPClient улучшен** — добавлено `sentRequests: [URLRequest]` для проверки URL/body
-- ✅ **OpenAISummaryGeneratorTests улучшен** — проверка request (URL + Authorization header)
-- [ ] DigestOrchestrator integration — добавить BotNotifier в pipeline
-- [ ] E2E manual test с реальным ботом
-
-**Важные решения (2025-12-18):**
-- **MockHTTPClient sentRequests:** Выбран паттерн `sentRequests: [URLRequest]` (queue) вместо словаря [Request: Response]
-  - **Причина:** Component тесты = 1 endpoint, Queue достаточно для retry сценариев
-  - URLRequest НЕ Hashable → сложность без выигрыша
-- **Codable оптимизация:** НЕ нужна для MVP (проанализирована [Habr статья](https://habr.com/ru/companies/tbank/articles/977694/))
-  - Т-Банк: 200k моделей, 2x speedup → наш проект: ~30 моделей, CLI service
-  - Триггер для пересмотра: профилирование покажет >10% CPU на JSON parsing
-  - Trade-off: несовместимость с автогенерацией TDLib/Bot API моделей
-- **Профилирование и мониторинг:** Добавлена секция в MVP.md "Перед выпуском v1.0 в production"
-  - Performance baseline metrics, Prometheus/Grafana, Alerting через Telegram
-
-**Инциденты (записаны в retro-v0.5.0.md):**
-- Инцидент #4: User Story создан в DocC комментариях вместо MD файла (исправлено)
-- Инцидент #5: JSONEncoder/Decoder extension БЕЗ unit тестов + избыточные тесты для v0.6.0 (исправлено)
-
-**Следующий шаг:**
-1. **Code Review** вчерашних и сегодняшних изменений (ОБЯЗАТЕЛЬНО перед продолжением!)
-2. DigestOrchestrator integration — добавить BotNotifier в pipeline (fetch → digest → **BotNotifier** → markAsRead)
-
----
-
-### 3. Настройка Swift субагентов (HYP-001) 🤖 НОВАЯ ЗАДАЧА
-
-**Приоритет:** 🟢 Высокий (новая фича Claude Code)
-
-**Источник:** HYP-001 из Obsidian vault (проверенная гипотеза)
-
-**Цель:** Настроить субагентов для экономии токенов и специализации по задачам
-
-**Релевантность для telegram-client:**
-- ✅ Research-First workflow уже используется (WebFetch TDLib docs)
-- ✅ Длинные логи сборки (~50 сек) → нужен анализ
-- ✅ Swift Concurrency диагностика → специализированный агент
-
-**Задачи:**
-
-1. **Глобальные Swift агенты** (`~/.claude/agents/swift/`):
-   - [x] `diagnostics-swift.md` — 5-фазный workflow для поиска багов ✅ СОЗДАНО (2025-01-11)
-     - Фаза 1: Статический анализ (Swift Concurrency, SwiftUI, retain cycles)
-     - Фаза 2: Build & Test (xcodebuild, swift test)
-     - Фаза 3: Runtime анализ (Instruments, debug prints)
-     - Фаза 4: Root cause analysis
-     - Фаза 5: Fix proposal
-   - [ ] `test-swift.md` — XCTest/Swift Testing best practices
-   - [ ] `security-ios.md` — OWASP чеклист для iOS
-
-2. **Локальный агент для telegram-client** (`.claude/agents/`):
-   - [x] `tdlib-integration.md` — TDLib async/await integration expert ✅ СОЗДАНО (2025-01-11)
-     - Research TDLib docs (core.telegram.org)
-     - Swift Concurrency patterns для TDLib updates
-     - Known issues и workarounds
-
-3. **Документация:**
-   - [x] `SUBAGENTS-GUIDE.md` — гайд по использованию субагентов ✅ СОЗДАНО (2025-01-11)
-   - [x] `ROLES.md` — роли, субагенты, MCP клиенты (единая точка входа) ✅ ОБНОВЛЕНО (2025-01-11)
-
-4. **Тестирование:**
-   - [ ] Протестировать `diagnostics-swift` на реальной задаче
-   - [ ] Протестировать `tdlib-integration` (например, research getChatHistory)
-   - [ ] Сравнить с текущим WebFetch подходом
-
-**Структура агента (2-уровневая):**
-- **MD файл** — статические правила агента (name, model, execution rules, workflow phases)
-- **JSON prompt** — динамическая задача (goal, inputs, constraints, deliverables, done_when)
-
-**Правило явной индикации (КРИТИЧНО!):**
-
-При работе с субагентом **ВСЕГДА** указывать:
-```
-🤖 СУБАГЕНТ: [name]
-🎭 РОЛЬ: [role из ROLES.md или НЕТ]
-🧠 МОДЕЛЬ: [sonnet/haiku/opus]
----
-```
-
-**Архитектура ролей ↔ субагентов:**
-- **Роль** (ROLES.md) = **КАК думать** (образ мышления, чек-листы)
-- **Субагент** (.claude/agents/) = **ЧТО делать** (workflow, инструменты)
-- **Комбинация:** "swift-diagnostics + Bugfix Specialist" = 5-фазный workflow + баг-фикс мышление
-
-Детали: `.claude/ROLES.md` (секция Субагенты)
-
-**Ссылки:**
-- HYP-001: `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/MyRep/_project-hub/hypotheses/active/HYP-001-subagents-perplexity.md`
-- Kotlin reference: https://github.com/AlexGladkov/claude-code-agents
-- Роли + Субагенты + MCP: `.claude/ROLES.md`
-
----
-
-### 4. Проверка гипотез ретро v0.5.0 🔍 РЕГУЛЯРНАЯ ЗАДАЧА
-
-**Приоритет:** 🟡 Средний (раз в 1-3 дня)
-
-**Цель:** Отслеживание метрик v0.5.0 для оценки эффективности новых правил
-
-**Инструкция:**
-Прочитать `.claude/archived/retro-v0.5.0.md` и выполнить промпт для сбора лога метрик.
-
-**Метрики для отслеживания:**
-1. Research-First: 100% External APIs ✅
-2. Mock только boundaries: 100% соблюдений ✅
-3. TSan: race conditions найдены ДО production ✅
-4. Code Review: 100% (когда промпт содержит "Code Review") 🆕
-5. User Story + spike research ДО TDD: 100% 🆕
-6. Модели через Unit Test ДО Component Test: 100% 🆕
-7. Правило 0 применено (наблюдение) 🆕
-
-**Частота:** Раз в 1-3 дня (или перед началом новой задачи)
-
----
-
-### 5. Swift 6.2 → async defer (SE-0493) 🔄 ОТЛОЖЕНО
-
-**Приоритет:** 🟠 Низкий (ждём релиз Swift 6.2)
+**Статус:** ⏳ Ожидание ответа
 
 **Контекст:**
-- Текущая версия: Swift 6.0 (`swift-tools-version: 6.0`)
-- SE-0493 (async defer): Swift 6.2 (ожидается ~mid 2025)
+- GitHub Issue: https://github.com/swiftlang/swift-package-manager/issues/9441
+- Swift Forums: https://forums.swift.org/t/83562
+- Последний ответ: 2025-12-07 (lldb backtrace отправлен, flock() deadlock)
 
-**Что даёт async defer:**
-```swift
-// Было (Swift 6.0) — cleanup вручную:
-let collectionTask = Task { ... }
-// ... код ...
-collectionTask.cancel()  // легко забыть при раннем return/throw
+**Действия:**
+- Проверять issue раз в неделю
+- Если будет fix → тестировать Swift 6.2.1+ на Linux
+- Если закроют без fix → остаёмся на Swift 6.0
 
-// Станет (Swift 6.2) — гарантированный cleanup:
-let collectionTask = Task { ... }
-defer { await collectionTask.value }  // выполнится при ЛЮБОМ exit
+---
+
+### 3. Хвосты после сессии 2026-08-19 (dump/send)
+
+- [ ] Актуализировать DEPLOY.md: прод-сервера 45.8.145.191 не существует, машина = supervisor-VDS 194.59.245.243; нет `/root/tg-client`, `/opt/tg-client`, `tg-client.service`; TDLib собран из master (v1.8.66) в `/usr/local` (2026-08-16)
+- [ ] MockTDLibFFI: fatalError на незамоканном `getChats` роняет весь `swift test` (ChannelMessageSourceTests, pre-existing) — вернуть мягкую ошибку или домокать
+
+---
+
+### 3a. Личные сообщения VK (spike 2026-10-05) — [vk-personal-messages-spike.md](vk-personal-messages-spike.md)
+
+- [ ] Наблюдать заморозку аккаунта: `probe` раз в день на ubuntu-home ~неделю (до ~2026-10-12)
+- [ ] Проверить email-уведомления VK: полный ли текст, беседы, приходят ли когда онлайн → решить, читать ли из почты
+
+---
+
+### 4. Migration RFC v0.6.0 (VK Bridge → main по TDD)
+
+**Статус:** ✅ **RFC готов** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, запушен)
+
+**Что в RFC:**
+- 10 разделов + закрытые открытые вопросы Q1-Q7
+- 7 User Stories с Acceptance Criteria (US-1 ping → US-7 read)
+- Test Matrix per-story
+- Reuse Map (~64% spike-кода переиспользуется)
+- Architecture v2: **VK Bot Long Poll** (а не webhook!) — отказ от Hummingbird, −5 транзитивных deps, проще деплой open-source
+- 3 фазы реализации (US-1 → US-2+3 → US-4..7), estimate 13-19 дней
+- Cutover plan на VPS с rollback скриптом (downtime ~30 сек)
+
+**Ключевые архитектурные решения:**
+- Транспорт: VK Bot Long Poll API через URLSession (не webhook + Hummingbird)
+- Цель: тот же VK group для тестов и прода (нет separate community)
+- `/to_alena` shortcut удалён (open-source friendliness)
+- `/read N` достаточно, auto-mark не нужен
+- Claude (root) может делать деплой сам
+
+**Следующий шаг — Phase 1 implementation (отдельная сессия):**
+1. `git fetch && git checkout origin/main && git pull`
+2. `git checkout -b feature/vk-bridge-tdd`
+3. **Mini-spike (~1.5ч):** VK Bot Long Poll API contract + URLSession cancellation на Linux
+4. **US-1 `/ping`** по Outside-In TDD:
+   - E2E test (RED) → Component drop-in → Unit → GREEN → REFACTOR
+   - Покрытие: VKLongPollClient (failed=1/2/3, network backoff, graceful shutdown), VKEventDispatcher, WhitelistFilter, AuditLogger, VKBridgeConfig, VKBotNotifier
+5. **Phase 1 DoD:** US-1 закрыта, smoke `/ping` работает на dev VPS
+
+**Документы для следующей сессии:**
+- 🎯 **главный документ:** `.claude/v0.6.0-vk-bridge-tdd-rfc.md`
+- Старый spike RFC: `.claude/vk-bot-bridge-rfc.md` (исторический контекст)
+- Текстовый план фаз: раздел 7 RFC
+
+---
+
+### 5. Деплой v0.4.0/v0.5.0 на сервер?
+
+**Открытый вопрос:** на сервере крутится spike-binary без mark-as-read из main и без `TelegramBotNotifier`. Нужно ли подтягивать последние main-изменения в production до завершения TDD-миграции?
+
+**Варианты:**
+- (a) Не трогать прод до v0.6.0 (минимум хаоса)
+- (b) Параллельный деплой main-binary рядом для дайджестов, spike оставить только для VK команд
+- (c) Что-то ещё
+
+Решение принять при работе над Migration RFC.
+
+---
+
+## 🔄 Проверка гипотез ретро
+
+_Раз в 1-3 дня. Результат записать в [RETRO-RESULT.md](archived/RETRO-RESULT.md)_
+
 ```
+Дата: ____
 
-**Задачи после выхода Swift 6.2:**
-- [ ] Обновить Swift на Linux (UFO Hosting)
-- [ ] Обновить Swift на macOS (локальная разработка)
-- [ ] Обновить `swift-tools-version` в Package.swift
-- [ ] Рефакторинг `ChannelMessageSource.fetchAllChats()` — async defer для `collectionTask.cancel()`
-- [ ] Проверить другие места с Task cleanup
+## Метрики:
+1. Race conditions (TSan): ___
+2. Spike ДО реализации: ___ из ___ external APIs
+3. Новые Mock >100 строк: ___
+4. Закомментированные тесты: ___
 
-**Триггер:** Выход Swift 6.2 stable release
+## Инциденты:
+- [ ] Все с regression тестом?
 
-**Ссылки:**
-- SE-0493: https://github.com/swiftlang/swift-evolution/blob/main/proposals/0493-async-defer.md
-- Swift releases: https://www.swift.org/download/
+## Нарушения правил:
+- Какие? Почему?
+
+## Выводы:
+- Работает:
+- Не работает:
+```
 
 ---
 
@@ -228,57 +197,4 @@ defer { await collectionTask.value }  // выполнится при ЛЮБОМ 
 - [MVP.md](MVP.md) — scope и статус MVP
 - [BACKLOG.md](BACKLOG.md) — бэклог будущих фич
 - [CHANGELOG.md](CHANGELOG.md) — история изменений
-
----
-
-## 🚀 Промпт для следующей сессии
-
-```
-Architecture-First: TelegramBotNotifier для v0.5.0
-
-Роль: Senior Swift Architect
-
-Контекст:
-- ✅ Spike research DONE: .claude/archived/spike-telegram-bot-api-2025-12-15.md
-- ✅ Live эксперимент выполнен (10 тестов, реальные JSON)
-- ✅ Решение: HTTP calls (URLSession) без библиотеки
-- ✅ Scope: send-only (sendMessage, БЕЗ getUpdates/команд)
-- ✅ 2 инцидента записаны в retro-v0.5.0.md
-
-Следующий шаг: Architecture-First анализ (7 блоков)
-
-1. Прочитать файлы:
-   - ROLES.md → Senior Swift Architect (чеклист 7 блоков)
-   - .claude/archived/spike-telegram-bot-api-2025-12-15.md
-   - Секция "Live Experiment Results" (критичные находки)
-
-2. Architecture-First (7 блоков для TelegramBotNotifier):
-
-   1. Concurrency: Actor? Retry sequential? Thread-safety?
-   2. Performance: Rate limits (30 msg/sec). Backpressure нужен?
-   3. Memory: 4096 chars limit. Truncate или split?
-   4. Failure handling: Retry (429, 5xx). Fail-fast (400, 401). Timeout?
-   5. Pipeline: fetch → digest → BotNotifier → markAsRead (sequential)
-   6. Observability: Логи (начало, успех, ошибки, retry attempts)
-   7. Testing: MockHTTPClient, edge cases (4096 limit, MarkdownV2 escape, retry)
-
-3. Критичные находки из spike (учесть):
-   - ⚠️ MarkdownV2 escape ОБЯЗАТЕЛЕН → функция escapeMarkdownV2()
-   - ⚠️ Response содержит `entities` поле (НЕ в docs, найдено в live)
-   - ✅ 4096 chars = точный лимит (не байты)
-   - ✅ Error: {"ok": false, "error_code": 400, "description": "..."}
-
-4. Вопросы для обсуждения:
-   - MarkdownV2 escape: где? (SummaryGenerator ИЛИ BotNotifier?)
-   - Message >4096: truncate ИЛИ split?
-   - HTTPClient: переиспользовать из OpenAISummaryGenerator?
-
-5. Результат:
-   - Ответы на 7 блоков (кратко, 2-3 строки)
-   - Решения по критичным находкам
-   - Готово к TDD → передать Testing Architect
-
-⚠️ НЕ писать код! Только архитектурный анализ.
-
-Давай начнём!
-```
+- [v0.3.0 Release](https://github.com/flyer2001/tg-client/releases/tag/v0.3.0)

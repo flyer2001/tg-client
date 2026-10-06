@@ -1,3 +1,98 @@
+## [2026-08-19] Выгрузка истории чата с ботом + отправка контекста чанками (задача Алены)
+
+**Контекст:** разовая задача — выгрузить переписку Алены с @psyDreambook_bot (бот-толкователь снов, обнулился контекст) и загрузить обратно скомпонованный контекст. Логин под аккаунтом Алены (отдельный TDLIB_STATE_DIR, удалён после задачи).
+
+**Сделано:**
+- ✅ `tg-client dump <@username> [file]` — полная выгрузка истории чата в JSONL (пагинация до первого сообщения, без лимитов; нетекстовые как type=other)
+- ✅ `Message.senderId` / `Message.isOutgoing` — декод вложенного sender_id (messageSenderUser/Chat)
+- ✅ `tg-client send <@username> <blocks.txt>` — отправка документа чанками ≤4000 симв. (блоки через `===`), пауза TG_SEND_DELAY_SECONDS (7 сек), resume через `<input>.sent`
+- ✅ Фиксы: is_outgoing терпим к числу после JSONSerialization (Linux); .env не перезатирает env (setenv overwrite=0); пауза после последнего чанка (иначе TDLib умирал до фактической отправки — маркер завис на сутки); чанкер режет только по строке ровно `===`
+- ✅ TDLib собран из master (v1.8.66) в /usr/local на этой VDS — раньше библиотеки не было вообще
+- ✅ Юнит-тесты: ChatHistoryDumper (3), TelegramChunker (5), Message sender (2). Полный прогон 188 зелёных
+- ✅ Сама задача: 1398 сообщений выгружено (22.06–17.08), документ 3 разделов (41 сон / 11 тем фактов / 6 тем постов), 78 + 17 чанков доставлено боту, подтверждено по серверной истории
+
+**Решения:**
+- «ufohosting-прод» из DEPLOY.md не существует: машина одна (эта VDS, 194.59.245.243), /root/tg-client и tg-client.service отсутствуют — зафиксировано в memory
+- Дампы и документы — только в /root/dumps (вне репо), после задачи удалены; сессия Алены удалена (ей нужно завершить устройство в Telegram → Devices)
+
+**Открытое:**
+- DEPLOY.md устарел (IP 45.8.145.191, пути /opt, systemd) — актуализировать
+- MockTDLibFFI: fatalError на незамоканном getChats роняет весь `swift test` (pre-existing, ChannelMessageSourceTests)
+
+**Файлы:**
+- Sources/App/main.swift (dump/send режимы)
+- Sources/DigestCore/Sources/ChatHistoryDumper.swift (новый)
+- Sources/DigestCore/Sources/TelegramChunker.swift (новый)
+- Sources/TgClientModels/Responses/Message.swift
+- Sources/FoundationExtensions/EnvFileLoader.swift
+- Tests/TgClientUnitTests/DigestCore/{ChatHistoryDumperTests,TelegramChunkerTests}.swift
+- Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/MessageTests.swift
+
+## [2026-05-11] Сессия завершения планирования v0.6.0 (RFC готов)
+
+**Контекст:** safety-push незакоммиченной работы spike + написание полного RFC миграции на TDD-реализацию.
+
+**Сделано:**
+- ✅ **Safety push spike**: 4 коммита (Sources + 2× docs + chore) → `origin/feature/vk-bot-bridge` (ветка-снапшот)
+- ✅ **RFC v0.6.0** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, 10 разделов): spike findings, 7 user stories с AC, test matrix, reuse map, архитектура v2, TDD pipeline, phasing, versioning + cutover plan, acceptance criteria, риски (15 шт), 7 закрытых открытых вопросов
+- ✅ **Архитектурный pivot:** webhook + Hummingbird → **VK Long Poll** через URLSession. Эффект: −5 транзитивных deps, −20-40 сек к build на Linux, простой деплой для open-source (без nginx/HTTPS-домена/cert)
+- ✅ **Решения по миграции зафиксированы:** branch strategy (feature/vk-bridge-tdd от origin/main), тот же VK group для тестов, `/to_alena` удалён, `/read N` достаточно (no auto-mark), Claude=root может деплоить сам
+- ✅ Удалён избыточный тег `spike/vk-bridge-2026-05-09` (ветка-морозилка, сама ветка достаточна как reference)
+
+**Коммиты сессии (7 шт, все в origin/feature/vk-bot-bridge):**
+- `2c5a62f` docs: RFC v0.6.0 — переход с Hummingbird на VK Long Poll
+- `e3f5bc3` docs: RFC v0.6.0 — заполнение разделов 3-10
+- `8e7ef86` docs: RFC v0.6.0 — скелет + spike findings + user stories
+- `a930203` docs: TASKS и CHANGELOG — пометка spike snapshot
+- `f11732a` chore: настройки Claude Code
+- `57313e4` docs: RFC и release materials VK Bot Bridge spike
+- `6a8a227` feat: VK Bot Bridge MVP (spike) — 22 файла, +1843 −90
+
+**Не сделано (намеренно, для следующей сессии):**
+- Phase 1 implementation — должно идти со свежим контекстом, mini-spike VK Long Poll API contract (~1.5ч)
+- Создание ветки `feature/vk-bridge-tdd` от origin/main
+- Деплой v0.4.0/v0.5.0 на сервер — решение отложено до старта v0.6.0
+
+**Следующая сессия:** см. промпт в TASKS.md → задача #4 «Migration RFC v0.6.0 → Следующий шаг — Phase 1 implementation».
+
+
+## [2026-05-09] Safety push spike + planning v0.6.0 миграции
+
+**Контекст:** ветка `feature/vk-bot-bridge` несколько недель крутилась локально с несохранёнными изменениями. Origin/main за это время ушёл вперёд (v0.4.0 релиз, v0.5.0 BotNotifier в работе).
+
+**Сделано:**
+- ✅ Snapshot push: 4 атомарных коммита в `feature/vk-bot-bridge` + push на origin
+- ✅ Тег `spike/vk-bridge-2026-05-09` — точка отката, точка референса
+- ✅ Spike помечен в TASKS.md как research artifact (не для merge как есть)
+- ✅ В очередь добавлена задача: Migration RFC v0.6.0 (TDD-реализация поверх `BotNotifierProtocol` из v0.5.0)
+
+**Стратегия миграции:** spike = боевой spike, а реализация в main — отдельной веткой `feature/vk-bridge-tdd` от `origin/main` с полным outside-in TDD циклом.
+
+**Следующая сессия:** написать `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (user stories, test matrix, phasing).
+
+
+## [2026-05-06] Сессия — VK Bot Bridge MVP (feature/vk-bot-bridge)
+
+**Контекст:** мобильный интернет блокирует ТГ → нужен альтернативный канал команд через VK.
+
+**Реализовано (всё в ветке `feature/vk-bot-bridge`, не merge'ится в main как есть):**
+- ✅ Новый таргет `BotBridge` (Hummingbird 2.22 + swift-tools 6.1)
+- ✅ VK Callback API webhook через nginx (`https://cashflow-game.ru/vkWebHook` → `:8082`)
+- ✅ Service mode `tg-client service` — long-running, держит TDLib сессию
+- ✅ Команды: `/test`, `/digest`, `/get N|all|channels|groups|dm`, `/last N [count]`, `/reply N <text>`, `/to <user> <text>`, `/to_alena`, `/read N`
+- ✅ TDLib wrappers: `getChats`, `sendMessage`, `searchPublicChat`, `viewMessages`
+- ✅ DigestCore расширен на все типы чатов (каналы/группы/ЛС) + iterative pagination для `/last`
+- ✅ Production-фиксы: `Message: TDLibResponse`, `ChatResponse`/`FormattedText` init вне `#if DEBUG`, caption из медиа
+- ✅ Деплой на текущий VPS: systemd unit, nginx location, /etc/tg-client.env (mode 600)
+
+**Известные проблемы:**
+- 🟡 SEGV TDLib (continuation leak — known issue из CLAUDE.md, auto-restart есть)
+- 🟡 Тесты для BotBridge не написаны (out-of-scope этой итерации)
+
+**Деплой статус:** активный сервис на сервере, используется лично.
+
+**Следующие шаги:** см. `.claude/TASKS.md` секцию «Технический долг этой ветки».
+
 ## [2025-01-11] - Настройка Swift субагентов (HYP-001)
 
 **Инфраструктура субагентов:**

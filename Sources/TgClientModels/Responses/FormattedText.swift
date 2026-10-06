@@ -13,13 +13,11 @@ public struct FormattedText: Sendable, Codable, Equatable {
     /// **MVP:** Игнорируем entities, используем только plain text.
     public let entities: [TextEntity]?
 
-    #if DEBUG
-    /// Инициализатор для тестов (создание mock-данных).
+    /// Инициализатор для тестов и production-конструирования (например, sendMessage).
     public init(text: String, entities: [TextEntity]?) {
         self.text = text
         self.entities = entities
     }
-    #endif
 }
 
 /// Text entity (форматирование участка текста).

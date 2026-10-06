@@ -72,6 +72,11 @@ public protocol TDLibClientProtocol: Sendable {
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1load_chats.html
     func loadChats(chatList: ChatList, limit: Int) async throws -> OkResponse
 
+    /// Возвращает chat_ids уже подгруженных в TDLib in-memory cache (без сети).
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chats.html
+    func getChats(chatList: ChatList, limit: Int32) async throws -> ChatsResponse
+
     /// Получает информацию о чате.
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1get_chat.html
@@ -86,6 +91,16 @@ public protocol TDLibClientProtocol: Sendable {
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
     func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool) async throws
+
+    /// Отправляет текстовое сообщение в чат.
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1send_message.html
+    func sendMessage(chatId: Int64, text: String) async throws -> Message
+
+    /// Ищет чат по публичному username.
+    ///
+    /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1search_public_chat.html
+    func searchPublicChat(username: String) async throws -> ChatResponse
 
     // MARK: - Updates
 

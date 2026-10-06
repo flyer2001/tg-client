@@ -59,8 +59,10 @@ public enum EnvFileLoader {
             // Заменяем $HOME и ~ на реальный путь
             value = expandPath(value)
 
-            // Устанавливаем переменную окружения
-            setenv(key, value, 1) // 1 = overwrite existing
+            // Устанавливаем переменную окружения.
+            // 0 = НЕ перезатирать уже установленные: реальное окружение важнее .env
+            // (иначе `TDLIB_STATE_DIR=/x ./tg-client` молча бьётся значением из файла)
+            setenv(key, value, 0)
         }
     }
 
