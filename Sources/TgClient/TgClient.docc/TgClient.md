@@ -14,6 +14,7 @@ CLI-клиент Telegram для получения саммари непроч�
 - <doc:FetchUnreadMessages>
 - <doc:GenerateSummary>
 - <doc:MarkAsRead>
+- <doc:VKBridge>
 
 ### Аудит безопасности
 
