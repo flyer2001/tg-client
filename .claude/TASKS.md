@@ -14,7 +14,7 @@
 ### 1. Релиз v0.5.0
 
 - [ ] GitHub Release для тега `v0.5.0` (тег и main запушены 2026-10-06): текст — `scratchpad`/CHANGELOG; Sergey создаёт в UI или авторизовать `gh` на VDS
-- [ ] Проверить CI после пуша (Linux Build + Documentation на Swift 6.4, TDLib собирался с нуля) и что DocC обновился на GitHub Pages (страница VKBridge)
+- [ ] **CI Documentation упал** на шаге «Generate Documentation» (Swift 6.4, run 37520397268); Linux Build and Test — ✅. Логи без авторизации не достать → воспроизвести `swift package generate-documentation` на ubuntu-home (подозрение: старый swift-docc-plugin 1.4.3 / битые `<doc:>` ссылки), починить, проверить страницу VKBridge на GitHub Pages
 - [ ] Анонс в TG-канал (@aidigestcreator): текст и промпт картинки готовы в сессии 2026-10-06
 
 ### 2. Хвосты после сессии 2026-08-19 (dump/send)
