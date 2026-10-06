@@ -98,6 +98,16 @@ rm -rf ~/.tdlib
 
 **Решение**: чистая сборка — `rm -rf .build && swift build --build-tests` (~17 c после удаления Hummingbird).
 
+### Swift 6.4: `--static-swift-stdlib` — undefined reference в Foundation
+
+**Симптом**: `swift build -c release --static-swift-stdlib` падает на линковке:
+`undefined reference to 'CFCharacterSetGetPredefined'`, `_platform_shims_get_environ`, `$s15Synchronization5MutexVMn`.
+
+**Причина**: статические части Foundation (CoreFoundation, _FoundationCShims, Synchronization…) не подтягиваются автоматически.
+
+**Решение**: `./scripts/build-release-linux.sh` — явный список `-Xlinker -l…`. Бинарь (~73 МБ) запускается
+без Swift на целевой машине; рядом нужна `libtdjson` той же версии (`LD_LIBRARY_PATH`).
+
 ### Тест бесконечного цикла висит вечно
 
 **Симптом**: `swift test` молчит, а `*-test-runner` остаётся жить после `timeout` (держит lock SwiftPM).
