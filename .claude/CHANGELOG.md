@@ -1,3 +1,31 @@
+## [2026-10-06] v0.5.0 (release/v0.5.0): VK Bridge на Long Poll + Swift 6.4 + HYP-057
+
+**Контекст:** возврат к проекту после августа. Цель — ассистент над личкой TG/VK/Mattermost; сначала довести VK Bridge до релиза по TDD.
+
+**Сделано:**
+- ✅ Ресерч доступа к личным сообщениям VK: официального пути нет (право `messages` не выдаётся, платный API с 2026-09-07, отказ поддержки). Spike веб-клиента через Playwright на ubuntu-home — чтение/markAsRead/send работают (`spikes/vk-web`, `.claude/vk-personal-messages-spike.md`)
+- ✅ Ветка `release/v0.5.0` от main + merge `feature/vk-bot-bridge` (7 конфликтов: viewMessages/MessageContent — версия main, + sendMessage/searchPublicChat из spike)
+- ✅ Swift 6.4 на ubuntu-home, разработка перенесена туда (VDS 2 ядра — не для сборок); 0 ворнингов, включая новую диагностику retain-циклов
+- ✅ Spike Long Poll (`spikes/vk-longpoll`): отмена URLSession на Linux работает (2 c), wait=25 → ~22 c, ts строкой, живой message_new в fixtures
+- ✅ `VKLongPollClient` по TDD (8 component): ts, failed:1/2/3, повтор 1→60 c без потери сессии (тест поймал баг), ошибка VK API → run() бросает
+- ✅ service на Long Poll, SIGINT/SIGTERM → отмена цикла; удалены Hummingbird, webhook-сервер, VK_CALLBACK_SECRET/CONFIRMATION_TOKEN; зависимости — только swift-log, чистая сборка 46 → 17 c
+- ✅ Отдельное сообщество «TG Bridge» (club242065128, private, Long Poll) создано через web API; ключ — только в `.env` ubuntu-home
+- ✅ E2E на реальном сообществе: `/test` через Long Poll → ответ владельцу (20 c); 13 component-тестов команд; `/to_alena` удалён (тест-первым)
+- ✅ HYP-057: сериализация (`withMainSerialExecutor`) прячет гонку данных без await, но ловит реентерабельность actor; «шпион и затвор» без библиотеки; инъекция времени функцией `sleep` — 1 параметр. Итоги — `.claude/experiments/HYP-057-results.md`, временная зависимость удалена
+- ✅ Фиксы по пути: MockTDLibFFI — кэш чатов как у TDLib (getChats/getChat), BotNotifier E2E выключен по умолчанию, `generate-docc-from-tests.sh` работает на GNU sed
+- ✅ README: раздел VK Bridge (сообщество, ключ, Long Poll, service, команды)
+- ✅ Тесты: 249 unit + 63 component + 5 E2E зелёные
+
+**Безопасность:**
+- 🔴 В публичном репо (main, `.claude/archived/retro-v0.5.0.md`) лежал живой токен `@private_digest_summary_bot` — бот угнан (webhook на чужой сервер, спам-имя), токен отозван, бот удалён Telegram. В main токен → `<REDACTED>` (коммит `4206dc9`, не запушен)
+
+**Решения:**
+- VK Bridge — в отдельном сообществе, не в ассистентском «tgbot client» (voice-backend): Long Poll двух слушателей одного сообщества не проверен — без риска
+- Тесты на код spike — характеризующие (с разрешения владельца), новый код — строго тест-первым
+- TDLib собирается вручную из master, обновлять по политике (TASKS #5)
+
+---
+
 ## [2026-08-19] Выгрузка истории чата с ботом + отправка контекста чанками (задача Алены)
 
 **Контекст:** разовая задача — выгрузить переписку Алены с @psyDreambook_bot (бот-толкователь снов, обнулился контекст) и загрузить обратно скомпонованный контекст. Логин под аккаунтом Алены (отдельный TDLIB_STATE_DIR, удалён после задачи).

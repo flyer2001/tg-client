@@ -1,169 +1,39 @@
 # Задачи проекта
 
-> **Последнее обновление:** 2026-08-19
-> **Текущая версия:** v0.3.0 (релиз) + ветка `feature/vk-bot-bridge` (🧪 spike, запушена)
-> **На origin/main:** v0.4.0 (mark-as-read) + v0.5.0 in progress (TelegramBotNotifier)
-> **RFC миграции:** ✅ готов — `.claude/v0.6.0-vk-bridge-tdd-rfc.md` (1315 строк)
+> **Последнее обновление:** 2026-10-06
+> **Текущая версия:** v0.5.0 в ветке `release/v0.5.0` (VK Bridge на Long Poll), не запушена
+> **На origin/main:** v0.4.0 + TelegramBotNotifier (заготовка, не подключена — уходит в v0.6.0)
+> **Разработка:** сборка/тесты на ubuntu-home (Swift 6.4, TDLib 1.8.67), git — на VDS
 
----
-
-## 🧪 SPIKE в feature/vk-bot-bridge (запушен 2026-05-09)
-
-> **Статус:** РАБОТАЕТ как MVP в проде на VPS. Без TDD/тестов. Используется автором лично.
-> **Назначение:** research artifact / боевой spike. **Не для merge в main как есть.**
-> **Реальная реализация:** будет в отдельной ветке `feature/vk-bridge-tdd` от `origin/main` по полному TDD циклу (см. задачу #4 ниже).
-> **Тег `spike/vk-bridge-2026-05-09` удалён** — ветка-морозилка, сама ветка достаточна как reference.
-
-### Что добавлено
-- **Новый таргет `BotBridge`** (Hummingbird-based HTTP сервер, swift-tools 6.1)
-- **VK Callback API webhook** на `https://cashflow-game.ru/vkWebHook` → `127.0.0.1:8082`
-- **Service mode**: `tg-client service` — long-running, держит TDLib сессию
-- **Команды в VK сообществе:**
-  - `/test` — статус
-  - `/digest` — меню непрочитанных (каналы / группы / ЛС)
-  - `/get N` / `/get all` / `/get channels|groups|dm` — взять чаты из меню
-  - `/last N [count]` — последние сообщения чата (включая прочитанные, итеративная подгрузка)
-  - `/reply N <текст>` — ответить в чат N от твоего имени
-  - `/to <username> <текст>` / `/to_alena <текст>` — отправить любому по @username
-  - `/read N` — пометить чат как прочитанный
-
-### Деплой (на текущем сервере)
-- systemd: `/etc/systemd/system/tg-client.service`
-- env: `/etc/tg-client.env` (mode 600, секреты VK + TDLib)
-- nginx: `location /vkWebHook` в `/etc/nginx/sites-enabled/cashflow-game.ru`
-- TDLib state: `/opt/tg-client/.tdlib/`
-- Бинарь: `/opt/tg-client/tg-client` (release ~36 МБ)
-
-### Технический долг этой ветки
-
-| Проблема | Severity | Решение |
-|---|---|---|
-| **Нет тестов вообще** | 🔴 высокая | TDD пройти заново для всего BotBridge таргета |
-| **TDLib SEGV** (continuation leak) | 🟡 средняя | Уже known issue в CLAUDE.md — лечить через ResponseWaiters |
-| **markaread не автоматический** | 🟡 средняя | После `/get N` опционально пометить (флаг? отдельная команда?) |
-| **TG entities → VK** игнорируется | 🟢 низкая | Конвертить в unicode bold/italic, ссылки как plain |
-| **Медиа без caption** теряются | 🟢 низкая | Добавить маркеры `[🎵]`, `[🖼️]` |
-| **CommandProcessor — не actor с протоколом** | 🟢 низкая | Извлечь интерфейс для тестирования |
-| **Concurrent guard работает на одном owner** | 🟢 низкая | Нужно ли больше? |
-
-### Решение про merge в main
-- (a) **Подержать в feature** — погонять 1-2 недели в реальной нагрузке, потом переписать как продакшн (с тестами)
-- (b) **Слить как есть** — рабочее, но нарушает TDD-правила проекта (в CLAUDE.md). Ветка станет "грязной" в истории main.
-
-⚠️ **Решено пока подержать в feature.** Все коммиты атомарные, легко переиспользовать или cherry-pick после ревью.
-
----
-
----
-
-## 🔄 НАПОМИНАНИЕ: Проверка ретро (2025-12-11)
-
-**Статус:** ⏳ следующая проверка через 3 дня (2025-12-11)
-
-**Что делать:**
-1. Выполнить промпт: [TASKS.md#проверка-гипотез-ретро](#-проверка-гипотез-ретро)
-2. Append результат в [RETRO-RESULT.md](archived/RETRO-RESULT.md)
-3. Обновить эту дату на +3 дня
-
-**История:**
-- ✅ 2025-12-05 - первая проверка выполнена (инцидент: чуть не создали MockSummaryGenerator)
-- ⏳ 2025-12-08 - пропущена (релиз), следующая 2025-12-11
+Только открытые задачи. Сделанное — [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
 ## 📋 Текущие задачи
 
-### 1. Ретроспектива v0.3.0
+### 1. Релиз v0.5.0
 
-**Приоритет:** 🔥 Высокий (выполнить в течение 3 дней после релиза)
+- [ ] `.env.example`: блок VK Bridge (`VK_BOT_TOKEN`, `VK_BOT_GROUP_ID`, `VK_BOT_OWNER_IDS`), `TELEGRAM_BOT_*` пометить «v0.6.0, не подключено» — **правит Sergey** (`.env*` закрыт агенту правами)
+- [ ] Push `release/v0.5.0` и `main` (коммит `4206dc9` — отозванный токен бота → `<REDACTED>`)
+- [ ] Merge `release/v0.5.0` → `main`, тег `v0.5.0`, публикация DocC
+- [ ] Ручная проверка `tg-client service` с авторизованным TDLib: `/digest` → `/get 1` → `/read 1` в TG Bridge (club242065128)
 
-**Цель:** Проанализировать процесс разработки v0.3.0, зафиксировать инсайты.
+### 2. Хвосты после сессии 2026-08-19 (dump/send)
 
-**Шаги:**
-1. Прочитать `.claude/retro-v0.3.0-questions.md` (подготовленные вопросы)
-2. Заполнить метрики и ответить на вопросы
-3. Проверить гипотезы (Research-First, Bugfix процесс, folder фильтрация)
-4. Записать результаты в `.claude/archived/retro-v0.3.0-results.md`
-5. Обновить RETRO-RESULT.md
+- [ ] Актуализировать DEPLOY.md: прод-сервера 45.8.145.191 не существует, машина = supervisor-VDS 194.59.245.243; нет `/root/tg-client`, `/opt/tg-client`, `tg-client.service`; TDLib на VDS — 1.8.66 (`/usr/local`), на ubuntu-home — 1.8.67 (master `42e6a5259`); где жить сервису VK Bridge
 
----
-
-### 2. Мониторинг SwiftPM Issue #9441
-
-**Статус:** ⏳ Ожидание ответа
-
-**Контекст:**
-- GitHub Issue: https://github.com/swiftlang/swift-package-manager/issues/9441
-- Swift Forums: https://forums.swift.org/t/83562
-- Последний ответ: 2025-12-07 (lldb backtrace отправлен, flock() deadlock)
-
-**Действия:**
-- Проверять issue раз в неделю
-- Если будет fix → тестировать Swift 6.2.1+ на Linux
-- Если закроют без fix → остаёмся на Swift 6.0
-
----
-
-### 3. Хвосты после сессии 2026-08-19 (dump/send)
-
-- [ ] Актуализировать DEPLOY.md: прод-сервера 45.8.145.191 не существует, машина = supervisor-VDS 194.59.245.243; нет `/root/tg-client`, `/opt/tg-client`, `tg-client.service`; TDLib собран из master (v1.8.66) в `/usr/local` (2026-08-16)
-- [ ] MockTDLibFFI: fatalError на незамоканном `getChats` роняет весь `swift test` (ChannelMessageSourceTests, pre-existing) — вернуть мягкую ошибку или домокать
-
----
-
-### 3a. Личные сообщения VK (spike 2026-10-05) — [vk-personal-messages-spike.md](vk-personal-messages-spike.md)
+### 3. Личные сообщения VK (spike 2026-10-05) — [vk-personal-messages-spike.md](vk-personal-messages-spike.md)
 
 - [ ] Наблюдать заморозку аккаунта: `probe` раз в день на ubuntu-home ~неделю (до ~2026-10-12)
 - [ ] Проверить email-уведомления VK: полный ли текст, беседы, приходят ли когда онлайн → решить, читать ли из почты
 
----
+### 4. v0.6.0 — сводка агенту / в бота (следующая фича)
 
-### 4. Migration RFC v0.6.0 (VK Bridge → main по TDD)
+- [ ] Груминг: CLI-команды для агента (`unread --json`, `history`, `read`, `send`) vs доставка в TG-бота (новый бот после компрометации `@private_digest_summary_bot`); порядок fetch → digest → send → markAsRead
 
-**Статус:** ✅ **RFC готов** (`.claude/v0.6.0-vk-bridge-tdd-rfc.md`, 1315 строк, запушен)
+### 5. TDLib
 
-**Что в RFC:**
-- 10 разделов + закрытые открытые вопросы Q1-Q7
-- 7 User Stories с Acceptance Criteria (US-1 ping → US-7 read)
-- Test Matrix per-story
-- Reuse Map (~64% spike-кода переиспользуется)
-- Architecture v2: **VK Bot Long Poll** (а не webhook!) — отказ от Hummingbird, −5 транзитивных deps, проще деплой open-source
-- 3 фазы реализации (US-1 → US-2+3 → US-4..7), estimate 13-19 дней
-- Cutover plan на VPS с rollback скриптом (downtime ~30 сек)
-
-**Ключевые архитектурные решения:**
-- Транспорт: VK Bot Long Poll API через URLSession (не webhook + Hummingbird)
-- Цель: тот же VK group для тестов и прода (нет separate community)
-- `/to_alena` shortcut удалён (open-source friendliness)
-- `/read N` достаточно, auto-mark не нужен
-- Claude (root) может делать деплой сам
-
-**Следующий шаг — Phase 1 implementation (отдельная сессия):**
-1. `git fetch && git checkout origin/main && git pull`
-2. `git checkout -b feature/vk-bridge-tdd`
-3. **Mini-spike (~1.5ч):** VK Bot Long Poll API contract + URLSession cancellation на Linux
-4. **US-1 `/ping`** по Outside-In TDD:
-   - E2E test (RED) → Component drop-in → Unit → GREEN → REFACTOR
-   - Покрытие: VKLongPollClient (failed=1/2/3, network backoff, graceful shutdown), VKEventDispatcher, WhitelistFilter, AuditLogger, VKBridgeConfig, VKBotNotifier
-5. **Phase 1 DoD:** US-1 закрыта, smoke `/ping` работает на dev VPS
-
-**Документы для следующей сессии:**
-- 🎯 **главный документ:** `.claude/v0.6.0-vk-bridge-tdd-rfc.md`
-- Старый spike RFC: `.claude/vk-bot-bridge-rfc.md` (исторический контекст)
-- Текстовый план фаз: раздел 7 RFC
-
----
-
-### 5. Деплой v0.4.0/v0.5.0 на сервер?
-
-**Открытый вопрос:** на сервере крутится spike-binary без mark-as-read из main и без `TelegramBotNotifier`. Нужно ли подтягивать последние main-изменения в production до завершения TDD-миграции?
-
-**Варианты:**
-- (a) Не трогать прод до v0.6.0 (минимум хаоса)
-- (b) Параллельный деплой main-binary рядом для дайджестов, spike оставить только для VK команд
-- (c) Что-то ещё
-
-Решение принять при работе над Migration RFC.
+- [ ] Политика обновления: коммит сборки — в DEPLOY.md; перед деплоем на VDS собрать тот же коммит (сейчас 1.8.66 vs 1.8.67); обновлять раз в квартал или по ошибке версии
 
 ---
 

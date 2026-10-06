@@ -88,6 +88,23 @@ rm -rf ~/.tdlib
 ./scripts/build-clean.sh
 ```
 
+### Swift 6.4: `undefined reference` к старому символу при линковке тестов
+
+**Симптом** (2026-10-06, ubuntu-home, Swift 6.4): после смены сигнатуры (добавили параметр с default)
+линковка `*-test-runner` падает с `undefined reference to '$s9BotBridge…'` — mangled-имя старой сигнатуры.
+Удаление `.build/out/Intermediates.noindex/<Target>*` не помогает.
+
+**Причина**: устаревший артефакт в кэше компиляции (`.build/out/CompilationCache.noindex`).
+
+**Решение**: чистая сборка — `rm -rf .build && swift build --build-tests` (~17 c после удаления Hummingbird).
+
+### Тест бесконечного цикла висит вечно
+
+**Симптом**: `swift test` молчит, а `*-test-runner` остаётся жить после `timeout` (держит lock SwiftPM).
+
+**Решение**: на suite с бесконечными циклами — `.timeLimit(.minutes(1))` (зависание = провал);
+осиротевшие раннеры — `pkill -f '[t]est-runner'`. Пример — `VKLongPollClientTests`.
+
 ### E2E тест падает локально
 
 **Причина**: Отсутствуют credentials или TDLib state.
