@@ -16,7 +16,7 @@
 - [ ] `.env.example`: блок VK Bridge (`VK_BOT_TOKEN`, `VK_BOT_GROUP_ID`, `VK_BOT_OWNER_IDS`), `TELEGRAM_BOT_*` пометить «v0.6.0, не подключено» — **правит Sergey** (`.env*` закрыт агенту правами)
 - [ ] Push `release/v0.5.0` и `main` (коммит `4206dc9` — отозванный токен бота → `<REDACTED>`)
 - [ ] Merge `release/v0.5.0` → `main`, тег `v0.5.0`, публикация DocC
-- [ ] Ручная проверка `tg-client service` с авторизованным TDLib: `/digest` → `/get 1` → `/read 1` в TG Bridge (club242065128)
+- [ ] Где жить сервису постоянно: ubuntu-home (TDLib через tinyproxy VDS:8388, сейчас запущен `nohup`) + systemd, или VDS (`/opt/tg-client`: release-бинарь 73 МБ + libtdjson 1.8.67, проверен запуск) — решить и оформить unit
 
 ### 2. Хвосты после сессии 2026-08-19 (dump/send)
 
@@ -32,6 +32,8 @@
 - [ ] Груминг: CLI-команды для агента (`unread --json`, `history`, `read`, `send`) vs доставка в TG-бота (новый бот после компрометации `@private_digest_summary_bot`); порядок fetch → digest → send → markAsRead
 
 ### 5. TDLib
+
+- [ ] **Баг (найден 2026-10-06):** `updateAuthorizationState`, пришедший до регистрации ожидающего в `ResponseWaiters`, теряется → цикл авторизации может зависнуть (в тестах воспроизводится; в проде пока спасает медленный TDLib). Тест-первым: буферизовать последнее состояние авторизации
 
 - [ ] Политика обновления: коммит сборки — в DEPLOY.md; перед деплоем на VDS собрать тот же коммит (сейчас 1.8.66 vs 1.8.67); обновлять раз в квартал или по ошибке версии
 
