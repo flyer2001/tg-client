@@ -20,8 +20,8 @@ struct ChatHistoryDumperTests {
             .appendingPathComponent("dump-\(UUID().uuidString).jsonl")
     }
 
-    private static func message(id: Int64, date: Int32, text: String?) -> Message {
-        Message(
+    private static func message(id: Int64, date: Int32, text: String?) -> TgClientModels.Message {
+        TgClientModels.Message(
             id: id,
             chatId: 42,
             date: date,

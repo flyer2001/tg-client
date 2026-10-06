@@ -44,7 +44,7 @@ struct BotNotifierE2ETests {
     ///    source .env && swift test --filter sendDigestToTelegramBot
     ///    ```
     /// 3. Проверить в Telegram: бот отправил сообщение
-    @Test("Отправка дайджеста через реальный Telegram Bot API")
+    @Test("Отправка дайджеста через реальный Telegram Bot API", .disabled("E2E: требует TELEGRAM_BOT_TOKEN, запускать вручную"))
     func sendDigestToTelegramBot() async throws {
         // ⚠️ Bot Token — секрет, ТОЛЬКО из env!
         guard let botToken = ProcessInfo.processInfo.environment["TELEGRAM_BOT_TOKEN"] else {

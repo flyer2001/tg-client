@@ -65,6 +65,11 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     /// Updates приходят асинхронно и НЕ привязаны к конкретному запросу.
     private var pendingUpdates: [String] = []
 
+    /// In-memory cache чатов, как у Real TDLib: наполняется updates, выданными через loadChats.
+    /// Нужен для `getChats` (snapshot id) и `getChat` без явного мока.
+    private var loadedChats: [Int64: ChatResponse] = [:]
+    private var loadedChatOrder: [Int64] = []
+
     /// Поток, на котором был первый вызов receive().
     /// Используется для проверки thread safety (как в CTDLibFFI).
     private var expectedThread: pthread_t?
@@ -192,6 +197,17 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             return
         }
 
+        // getChats без явного мока — snapshot id из кэша (как Real TDLib)
+        if requestType == "getChats", mockedResponses["getChats"] == nil, let extra = extra {
+            let response = ChatsResponse(chatIds: loadedChatOrder, totalCount: Int32(loadedChatOrder.count))
+            do {
+                responsesByExtra[extra] = try response.toTDLibJSON(withExtra: extra)
+            } catch {
+                fatalError("MockTDLibFFI.send(): failed to encode getChats: \(error)")
+            }
+            return
+        }
+
         // Обычная FIFO логика для других запросов
         guard var queue = mockedResponses[requestType], !queue.isEmpty else {
             // Fire-and-forget (без @extra) и нет мокнутого response → OK (игнорируем)
@@ -243,6 +259,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
 
         for i in 0..<toEmit {
             let update = queuedUpdates[updatesProcessed + i]
+            cache(update)
             do {
                 // Updates не получают @extra (они асинхронные, не response)
                 let json = try update.toTDLibJSON()
@@ -271,6 +288,24 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         }
     }
 
+    /// Обновляет кэш чатов по update (newChat / chatPosition).
+    private func cache(_ update: Update) {
+        switch update {
+        case .newChat(let chat):
+            if loadedChats[chat.id] == nil { loadedChatOrder.append(chat.id) }
+            loadedChats[chat.id] = chat
+        case .chatPosition(let chatId, let position):
+            guard let chat = loadedChats[chatId] else { return }
+            let positions = chat.positions.filter { $0.list != position.list } + [position]
+            loadedChats[chatId] = ChatResponse(
+                id: chat.id, type: chat.chatType, title: chat.title, unreadCount: chat.unreadCount,
+                lastReadInboxMessageId: chat.lastReadInboxMessageId, positions: positions
+            )
+        default:
+            break
+        }
+    }
+
     /// Специальная логика для getChat: копирует chat_id из request в response.
     ///
     /// **Имитация Real TDLib API:**
@@ -293,9 +328,17 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             fatalError("MockTDLibFFI.handleGetChat(): request missing chat_id")
         }
 
-        // Берём ЛЮБОЙ мокнутый ChatResponse из FIFO очереди
+        // Нет явного мока — отдаём чат из кэша (как Real TDLib после loadChats)
         guard var queue = mockedResponses["getChat"], !queue.isEmpty else {
-            fatalError("MockTDLibFFI.handleGetChat(): no mocked response for getChat")
+            guard let cached = loadedChats[chatId] else {
+                fatalError("MockTDLibFFI.handleGetChat(): no mocked response and no cached chat \(chatId)")
+            }
+            do {
+                responsesByExtra[extra] = try cached.toTDLibJSON(withExtra: extra)
+            } catch {
+                fatalError("MockTDLibFFI.handleGetChat(): failed to encode cached chat: \(error)")
+            }
+            return
         }
 
         let result = queue.removeFirst()

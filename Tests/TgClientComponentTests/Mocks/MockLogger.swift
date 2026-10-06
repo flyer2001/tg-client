@@ -78,13 +78,7 @@ private struct MockLogHandler: LogHandler {
         set { metadata[key] = newValue }
     }
 
-    func log(level: Logger.Level,
-             message: Logger.Message,
-             metadata: Logger.Metadata?,
-             source: String,
-             file: String,
-             function: String,
-             line: UInt) {
-        mockLogger.log(level: level, message: message.description)
+    func log(event: LogEvent) {
+        mockLogger.log(level: event.level, message: event.message.description)
     }
 }
