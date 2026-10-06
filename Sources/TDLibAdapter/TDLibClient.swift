@@ -375,7 +375,7 @@ public final class TDLibClient: @unchecked Sendable {
                     // Прокси — до запроса номера: без него из России TDLib не дойдёт до серверов
                     if let proxy = config.proxy {
                         send(AddProxyRequest(proxy: proxy))
-                        appLogger.info("TDLib proxy enabled: socks5 \(proxy.server):\(proxy.port)")
+                        appLogger.info("TDLib proxy enabled: \(proxy.logDescription)")
                     }
                 } else {
                     appLogger.info("TDLib parameters already set, skipping...")

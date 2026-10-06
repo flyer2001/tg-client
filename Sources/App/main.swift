@@ -55,11 +55,11 @@ struct TGClient {
             exit(2)
         }
 
-        // TDLIB_PROXY=socks5://[user:pass@]host:port — где Telegram недоступен напрямую (Россия)
+        // TDLIB_PROXY=socks5:// или http://[user:pass@]host:port — где Telegram недоступен напрямую (Россия)
         var proxy: TDProxy?
         if let raw = env["TDLIB_PROXY"], !raw.isEmpty {
             guard let parsed = TDProxy(url: raw) else {
-                FileHandle.standardError.write(Data("TDLIB_PROXY: ожидается socks5://[user:pass@]host:port\n".utf8))
+                FileHandle.standardError.write(Data("TDLIB_PROXY: ожидается socks5:// или http://[user:pass@]host:port\n".utf8))
                 exit(2)
             }
             proxy = parsed
