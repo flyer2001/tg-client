@@ -36,28 +36,15 @@ struct ProxyStartupTests {
         #expect(ffi.sentRequests(ofType: "addProxy").isEmpty)
     }
 
-    /// Цикл авторизации ловит `updateAuthorizationState`, только если ожидающий уже зарегистрирован
-    /// (ранний update теряется — см. `ResponseWaiters`). Поэтому подаём состояние повторно, пока клиент
-    /// не отреагирует: повтор безвреден (`parametersSet`), ожидание — по условию, не фиксированная пауза.
+    /// Оба состояния подаются заранее: ранний `updateAuthorizationState` буферизуется в `ResponseWaiters`
+    /// (до фикса 2026-10-07 терялся, и `start()` висел — этот тест был бы вечным).
     private func startClient(proxy: TDProxy?) async throws -> MockTDLibFFI {
         let ffi = MockTDLibFFI()
         let client = TDLibClient(ffi: ffi, appLogger: Logger(label: "test") { _ in SwiftLogNoOpLogHandler() })
+        ffi.mockUpdate(AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters")))
+        ffi.mockUpdate(AuthorizationStateUpdateResponse.ready)
         let config = TDConfig(apiId: 1, apiHash: "h", stateDir: NSTemporaryDirectory() + "proxy-test", logPath: "/dev/null", proxy: proxy)
-        let started = Task { try await client.start(config: config) { _ in "" } }
-
-        let waitParams = AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters"))
-        while !ffi.sentRequestTypes().contains("setTdlibParameters") {
-            ffi.mockUpdate(waitParams)
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        let ready = Task {
-            while !Task.isCancelled {
-                ffi.mockUpdate(AuthorizationStateUpdateResponse.ready)
-                try? await Task.sleep(for: .milliseconds(5))
-            }
-        }
-        try await started.value
-        ready.cancel()
+        try await client.start(config: config) { _ in "" }
         return ffi
     }
 }

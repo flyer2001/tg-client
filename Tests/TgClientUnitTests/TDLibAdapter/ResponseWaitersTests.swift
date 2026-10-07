@@ -49,7 +49,7 @@ extension ResponseWaiters {
 ///
 /// **Используется в:**
 /// - TDLibClient (Real) - для обработки ответов от TDLib
-@Suite("Unit: ResponseWaiters - @extra matching")
+@Suite("Unit: ResponseWaiters - @extra matching", .timeLimit(.minutes(1)))
 struct ResponseWaitersTests {
 
     // MARK: - Basic @extra Matching
@@ -314,6 +314,31 @@ struct ResponseWaitersTests {
 
         #expect(!result.wasResumed)
         #expect(result == .noWaiter)
+    }
+
+    /// Update по типу, пришедший ДО регистрации ожидающего, не теряется (баг 2026-10-06).
+    ///
+    /// **Сценарий в проде:** цикл авторизации отправил `setTdlibParameters`, а TDLib прислал следующий
+    /// `updateAuthorizationState` раньше, чем цикл снова встал в ожидание → состояние терялось, вход висел.
+    ///
+    /// **Given:** resume по типу без ожидающего (`.noWaiter`)
+    /// **When:** затем `addWaiter(forType:)`
+    /// **Then:** ожидающий сразу получает последнее пришедшее состояние
+    @Test("update по типу до addWaiter — не теряется, отдаётся последний")
+    func earlyTypeUpdateIsBuffered() async throws {
+        let waiters = ResponseWaiters()
+        let type = "updateAuthorizationState"
+        let waitCode = try TDLibJSON(parsing: ["@type": type, "authorization_state": ["@type": "authorizationStateWaitCode"]])
+        let ready = try TDLibJSON(parsing: ["@type": type, "authorization_state": ["@type": "authorizationStateReady"]])
+
+        #expect(await waiters.resumeWaiter(forType: type, with: waitCode) == .noWaiter)
+        #expect(await waiters.resumeWaiter(forType: type, with: ready) == .noWaiter)
+
+        let received = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<TDLibJSON, Error>) in
+            Task { await waiters.addWaiter(forType: type, continuation: continuation) }
+        }
+        let state = received["authorization_state"] as? [String: Any]
+        #expect(state?["@type"] as? String == "authorizationStateReady")
     }
 
     /// Смешанный сценарий: @extra и @type waiters одновременно (изоляция).
