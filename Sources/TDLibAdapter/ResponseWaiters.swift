@@ -41,6 +41,12 @@ public actor ResponseWaiters {
     /// **Значение:** continuation для этого запроса
     private var waiters: [String: CheckedContinuation<TDLibJSON, Error>] = [:]
 
+    /// Последний update по @type, пришедший без ожидающего (latest wins).
+    ///
+    /// Без буфера `updateAuthorizationState`, присланный TDLib между итерациями цикла авторизации,
+    /// терялся — вход зависал (баг 2026-10-06). Отдаётся следующему `addWaiter(forType:)`.
+    private var pendingTypeUpdates: [String: TDLibJSON] = [:]
+
     public init() {}
 
     /// Регистрирует continuation для ожидания ответа по @extra.
@@ -61,6 +67,10 @@ public actor ResponseWaiters {
     ///   - type: Тип update (@type field, например "updateAuthorizationState")
     ///   - continuation: Continuation для resume с результатом
     public func addWaiter(forType type: String, continuation: CheckedContinuation<TDLibJSON, Error>) {
+        if let pending = pendingTypeUpdates.removeValue(forKey: type) {
+            continuation.resume(returning: pending)
+            return
+        }
         waiters[type] = continuation
     }
 
@@ -99,9 +109,10 @@ public actor ResponseWaiters {
     /// - Parameters:
     ///   - type: Тип update (@type field)
     ///   - update: TDLib update как `TDLibJSON`
-    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет
+    /// - Returns: `.resumed` если waiter был найден, `.noWaiter` если нет (update сохраняется в буфер)
     public func resumeWaiter(forType type: String, with update: TDLibJSON) -> ResumeResult {
         guard let continuation = waiters.removeValue(forKey: type) else {
+            pendingTypeUpdates[type] = update  // ожидающий ещё не встал — сохраняем для него
             return .noWaiter
         }
         continuation.resume(returning: update)
