@@ -86,7 +86,8 @@ jobs:
           sed -i '/DocC resources временно отключены/d' Package.swift
 
           # Раскомментировать и исправить dependencies
-          sed -i 's|.package(url: "https://github.com/apple/swift-log", from: "1.6.4")|.package(url: "https://github.com/apple/swift-log", from: "1.6.4"),|' Package.swift
+          # запятая после swift-log — ровно одна, есть она в исходнике или нет
+          sed -E -i 's|(\.package\(url: "https://github.com/apple/swift-log", from: "1\.6\.4"\)),?|\1,|' Package.swift
           sed -i 's|// \.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")|.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")|' Package.swift
 
           # Раскомментировать DocC resources в TgClient target
