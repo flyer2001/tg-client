@@ -52,4 +52,4 @@
 удалён следующим коммитом вместе с зависимостью.
 
 ---
-Связанное: [vk-personal-messages-spike.md](../vk-personal-messages-spike.md) · [TESTING.md](../TESTING.md) · [TESTING-PATTERNS.md](../TESTING-PATTERNS.md)
+Связанное: [TESTING.md](../TESTING.md) · [TESTING-PATTERNS.md](../TESTING-PATTERNS.md)

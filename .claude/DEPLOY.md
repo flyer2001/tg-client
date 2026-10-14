@@ -121,4 +121,4 @@ swift build && swift test
 
 ---
 
-Связанное: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) · [README](../README.md) (VK Bridge) · [vk-personal-messages-spike.md](vk-personal-messages-spike.md)
+Связанное: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) · [README](../README.md) (VK Bridge)
