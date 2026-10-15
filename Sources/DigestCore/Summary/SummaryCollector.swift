@@ -11,8 +11,8 @@ public struct SummaryCollector {
         let chats = try await source.fetchUnreadChats()
         var out: [SummaryChat] = []
         for chat in chats {
-            let messages = try await source.fetchMessages(for: chat)          // oldest→newest
-            let last = messages.map(\.messageId).max() ?? chat.lastReadInboxMessageId
+            let (messages, newestId) = try await source.fetchMessagesWithNewestId(for: chat)   // oldest→newest
+            let last = newestId ?? chat.lastReadInboxMessageId
             out.append(SummaryChat(
                 chatId: chat.id, title: chat.title, kind: chat.kind, unreadCount: chat.unreadCount,
                 messages: messages.map { SummaryMessage(messageId: $0.messageId, text: $0.content) },

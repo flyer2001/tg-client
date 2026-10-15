@@ -283,6 +283,12 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
     ///
     /// **Порядок:** TDLib возвращает newest-first, мы реверсируем — old→new как в Telegram чате.
     public func fetchMessages(for chat: UnreadChatInfo) async throws -> [SourceMessage] {
+        try await fetchMessagesWithNewestId(for: chat).messages
+    }
+
+    /// То же + id новейшего собранного сообщения **любого типа** (фото без подписи, стикер) — для курсора `read`:
+    /// по одним текстовым курсор не дойдёт до нетекстового непрочитанного, и чат не пометится.
+    public func fetchMessagesWithNewestId(for chat: UnreadChatInfo) async throws -> (messages: [SourceMessage], newestId: Int64?) {
         let target: Int
         switch chat.kind {
         case .channel:
@@ -290,7 +296,8 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         case .group, .dm:
             target = max(Int(chat.unreadCount), 30)
         }
-        return try await fetchLastMessages(for: chat, count: target)
+        let raw = try await collectLastMessages(for: chat, count: target)
+        return (toSourceMessages(raw, chat: chat), raw.map(\.id).max())
     }
 
     /// Подгружает последние `count` сообщений чата (включая прочитанные).
@@ -302,6 +309,11 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
     ///
     /// Безопасный лимит итераций — 5, чтобы случайно не зациклиться.
     public func fetchLastMessages(for chat: UnreadChatInfo, count: Int) async throws -> [SourceMessage] {
+        toSourceMessages(try await collectLastMessages(for: chat, count: count), chat: chat)
+    }
+
+    /// Сырые последние `count` сообщений (newest-first), включая нетекстовые.
+    private func collectLastMessages(for chat: UnreadChatInfo, count: Int) async throws -> [TgClientModels.Message] {
         let target = min(max(count, 1), maxChatHistoryLimit)
         let perRequest = Int32(target)
 
@@ -339,9 +351,13 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         let textCount = collected.filter { $0.content.textOrCaption != nil }.count
         logger.info("fetchLastMessages: total collected \(collected.count), text \(textCount), non-text \(collected.count - textCount)")
 
-        // Берём ровно target (не больше) и реверсируем для отображения oldest→newest
-        let trimmed = Array(collected.prefix(target))
-        return trimmed.reversed().compactMap { message -> SourceMessage? in
+        // Берём ровно target (не больше)
+        return Array(collected.prefix(target))
+    }
+
+    /// Только сообщения с текстом/подписью, oldest→newest как в Telegram чате.
+    private func toSourceMessages(_ raw: [TgClientModels.Message], chat: UnreadChatInfo) -> [SourceMessage] {
+        raw.reversed().compactMap { message -> SourceMessage? in
             guard let text = message.content.textOrCaption else {
                 return nil
             }
