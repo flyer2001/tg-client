@@ -1,3 +1,35 @@
+## [2026-10-15] get-summary/read — руки агенту по Telegram; MVP переосмыслен → путь к v1.0.0
+
+**Сделано:**
+- ✅ Домен `SummaryCollector` + `Cursor` (DigestCore): сбор непрочитанного в снапшот с курсором (состояние не меняет) и пометка прочитанным по курсору через `MarkAsReadService`. Тонкий `SummaryMessage` (текст+id) — MVP
+- ✅ Команды App: `get-summary` (JSON снапшота в stdout + курсор в файл `TG_CURSOR_FILE`/`TDLIB_STATE_DIR/last-cursor.json`) и `read [--cursor]` (viewMessages по курсору)
+- ✅ TDD: component на `MockTDLibFFI` (снапшот+курсор не метит; разбор+apply курсора; частичный отказ), unit нормализации/snake_case. Полный прогон стабилен (3×): 257 unit + 72 component + 5 E2E
+- ✅ E2E на реальном аккаунте: get-summary(5 чатов)→read 1→get-summary(4), помеченный ушёл. Вход не понадобился
+- ✅ Починен флейк `ProxyStartupTests` (ready подаём после setTdlibParameters — буфер ResponseWaiters иначе отдаёт ready первым)
+- ✅ MVP.md переписан под видение «руки агенту» (62 строки; старое детальное — в archived/MVP-bot-digester-2025-12.md)
+- ✅ vk-inbox (отдельный приватный репозиторий): spike вынесен из публичного tg-client; user story + guard от автономного запуска (CI/cron/loop + подтверждение человека) + rate-limit; команды unread/send в петле E2E через бота TG Bridge; наблюдение за заморозкой 9 дней — чисто
+- ✅ TROUBLESHOOTING: одна сессия TDLib (служба vs CLI), задержка unread_count после read
+
+**Решения:**
+- Доставка саммари — агенту как JSON (вариант a), не через бота. Пометка прочитанным — отдельным шагом `read` по курсору (не теряем сообщения, если агент упал между «собрал» и «доставил»)
+- Курсор (`chat_id → up_to_message_id`) метит ровно собранное; новые сообщения за паузу остаются непрочитанными. Пауза любой длины безопасна
+- Версия: get-summary + CLI-обвязка = одна **v1.0.0**, один анонс. Промежуточного релиза get-summary не делаем
+- Личка VK (чтение через веб-клиент) — только в приватном vk-inbox, не в публичном tg-client. Мимикрию под человека не делаем (театр + обход анти-бот); защита = низкая частота + запуск только человеком
+
+**Открытое:**
+- CLI-обвязка — финальный шаг к v1.0.0: контракт команд (`--input-json`, коды 0/2/3/>10, JSON-ошибка в stderr) + **разделение сессии TDLib**, чтобы агент звал команды не останавливая службу моста (отдельная сессия или вызов через работающую службу)
+- Незакоммичен `CLAUDE.md` (frontmatter version 1.0.0 от 2026-07-21) — правка Sergey с начала сессии, оставлена ему
+- Анонс v0.5.0 в канал и GitHub Release — за Sergey (текст: .claude/release-v0.5.0-notes.md, на mac-work ~/Downloads)
+
+**Файлы:**
+- Sources/DigestCore/Summary/{SummarySnapshot,SummaryCollector,Cursor}.swift
+- Sources/App/main.swift (режимы get-summary/read)
+- Tests/TgClientComponentTests/DigestCore/{SummaryCollectorTests,CursorApplyTests}.swift
+- Tests/TgClientComponentTests/TDLibAdapter/ProxyStartupTests.swift (фикс флейка)
+- .claude/MVP.md (переписан), .claude/archived/MVP-bot-digester-2025-12.md
+- .claude/{TROUBLESHOOTING,BACKLOG}.md, Sources/TgClient/TgClient.docc/E2E-Scenarios/GetSummary.md
+- vk-inbox (отдельный репо): src/{session,normalize,guard,ratelimit}.mjs, bin/vk-inbox.mjs, docs/
+
 ## [2026-10-06] v0.5.0 (release/v0.5.0): VK Bridge на Long Poll + Swift 6.4 + HYP-057
 
 **Контекст:** возврат к проекту после августа. Цель — ассистент над личкой TG/VK/Mattermost; сначала довести VK Bridge до релиза по TDD.
