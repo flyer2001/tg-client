@@ -20,6 +20,14 @@ struct TGClient {
 
         // Парсим режим из CLI: oneshot (default), service или dump
         let args = Array(CommandLine.arguments.dropFirst())
+
+        // get-summary / read — клиенты службы через сокет: TDLib здесь не открываем (сессия одна, у службы)
+        if args.first == "get-summary" || args.first == "read" {
+            let env = ProcessInfo.processInfo.environment
+            if args.first == "get-summary" { runGetSummary(env: env) } else { runRead(env: env, args: args) }
+            return
+        }
+
         let mode: RunMode
         if args.contains("service") {
             mode = .service
@@ -36,22 +44,17 @@ struct TGClient {
             }
             let output = args.count >= 3 ? args[2] : "/root/dumps/\(args[1].trimmingCharacters(in: CharacterSet(charactersIn: "@"))).jsonl"
             mode = .dump(username: args[1], output: output)
-        } else if args.first == "get-summary" {
-            mode = .getSummary
-        } else if args.first == "read" {
-            let i = args.firstIndex(of: "--cursor")
-            mode = .read(cursorPath: (i != nil && args.count > i! + 1) ? args[i! + 1] : nil)
         } else {
             mode = .oneshot
         }
 
         var logger = Logger(label: "tg-client")
-        logger.logLevel = (mode == .oneshot || mode == .getSummary || { if case .read = mode { return true } else { return false } }()) ? .warning : .info
+        logger.logLevel = mode == .oneshot ? .warning : .info
 
         let env = ProcessInfo.processInfo.environment
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
         let apiHash = env["TELEGRAM_API_HASH"] ?? ""
-        let stateDir = env["TDLIB_STATE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tdlib").path
+        let stateDir = stateDirPath(env: env)
         let databaseEncryptionKey = env["TDLIB_DATABASE_ENCRYPTION_KEY"] ?? ""
         try? FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
 
@@ -89,7 +92,7 @@ struct TGClient {
         do {
             try await td.start(config: config) { promptType in
                 switch mode {
-                case .oneshot, .dump, .send, .getSummary, .read:
+                case .oneshot, .dump, .send:
                     switch promptType {
                     case .phoneNumber:
                         return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
@@ -132,10 +135,6 @@ struct TGClient {
             await runDump(td: td, username: username, output: output, logger: logger)
         case .send(let username, let input):
             await runSend(td: td, username: username, input: input, logger: logger)
-        case .getSummary:
-            await runGetSummary(td: td, env: env, logger: logger)
-        case .read(let cursorPath):
-            await runRead(td: td, env: env, cursorPath: cursorPath, logger: logger)
         }
     }
 
@@ -319,6 +318,20 @@ struct TGClient {
             await processor.handle(message: message)
         }
 
+        // Сокет для CLI (get-summary/read): служба — единственный владелец сессии TDLib.
+        // Не поднялся — мост VK важнее, работаем без него (CLI получит unavailable).
+        let broker = Broker(source: messageSource, markAsRead: MarkAsReadService(tdlib: td, logger: Logger(label: "MarkAsReadService")), logger: Logger(label: "Broker"))
+        let socketPath = socketPath(env: ProcessInfo.processInfo.environment)
+        var server: UnixSocket.Server?
+        do {
+            server = try UnixSocket.Server(path: socketPath)
+            server?.start { await broker.handle($0) }
+            logger.info("Service mode: сокет CLI \(socketPath)")
+        } catch {
+            logger.error("Service mode: сокет CLI \(socketPath) не поднялся (\(error)) — get-summary/read недоступны")
+        }
+        defer { server?.stop() }
+
         logger.info("Service mode: VK Long Poll, group \(botConfig.vkBotGroupId)")
         let loop = Task { try await poller.run() }
 
@@ -344,52 +357,94 @@ struct TGClient {
 
     // MARK: - Get-summary / read (руки агенту: собрать непрочитанное → данные + курсор; пометить по курсору)
 
+    private static func stateDirPath(env: [String: String]) -> String {
+        env["TDLIB_STATE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tdlib").path
+    }
+
     private static func cursorFilePath(env: [String: String]) -> String {
         if let f = env["TG_CURSOR_FILE"], !f.isEmpty { return f }
-        let stateDir = env["TDLIB_STATE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tdlib").path
-        return stateDir + "/last-cursor.json"
+        return stateDirPath(env: env) + "/last-cursor.json"
     }
 
-    /// get-summary: собрать непрочитанное, вывести JSON в stdout, курсор продублировать в файл. Состояние не меняется.
-    private static func runGetSummary(td: TDLibClient, env: [String: String], logger: Logger) async {
-        let source = ChannelMessageSource(tdlib: td, logger: logger)
+    private static func socketPath(env: [String: String]) -> String {
+        if let s = env["TG_SOCKET"], !s.isEmpty { return s }
+        return stateDirPath(env: env) + "/tg-client.sock"
+    }
+
+    /// Ошибка по контракту Factor 4: первая строка stderr — JSON, код выхода 2/3/>10.
+    private static func fail(_ code: Int32, _ error: BrokerError) -> Never {
+        let line = (try? SummarySnapshot.encoder().encode(error)) ?? Data(error.message.utf8)
+        FileHandle.standardError.write(line + Data("\n".utf8))
+        exit(code)
+    }
+
+    /// Запрос к службе. Код выхода по типу ошибки: 2 — чинить аргументы, 3 — к человеку, 11/12 — повтор позже.
+    private static func callService<T: Codable>(_ request: BrokerRequest, env: [String: String], as: T.Type) -> T {
+        let path = socketPath(env: env)
+        let raw: Data
         do {
-            let snapshot = try await SummaryCollector(source: source).collect()
-            let encoder = SummarySnapshot.encoder()
-            encoder.outputFormatting.insert(.prettyPrinted)
-            let data = try encoder.encode(snapshot)
-            FileHandle.standardOutput.write(data)
-            FileHandle.standardOutput.write(Data("\n".utf8))
-            // Курсор — отдельным файлом (компактно, для последующего `read`)
-            let cursorData = try SummarySnapshot.encoder().encode(snapshot.cursor)
-            try cursorData.write(to: URL(fileURLWithPath: cursorFilePath(env: env)))
-            logger.info("get-summary: \(snapshot.chats.count) чатов, курсор → \(cursorFilePath(env: env))")
+            raw = try UnixSocket.request(path: path, try JSONEncoder().encode(request))
+        } catch UnixSocketError.unavailable(let message) {
+            fail(11, BrokerError(errorType: "upstream_failure", field: nil, message: "служба не отвечает: \(message)",
+                                 hint: "служба tg-client должна быть запущена (systemctl status tg-client); путь сокета — TG_SOCKET"))
         } catch {
-            FileHandle.standardError.write(Data("{\"error_type\":\"upstream_failure\",\"message\":\"get-summary: \(error)\"}\n".utf8))
-            exit(12)
+            fail(12, BrokerError(errorType: "upstream_failure", field: nil, message: "сокет \(path): \(error)", hint: "повторить позже"))
+        }
+        guard let response = try? JSONDecoder.broker().decode(BrokerResponse<T>.self, from: raw) else {
+            fail(12, BrokerError(errorType: "upstream_failure", field: nil, message: "ответ службы не разобран: \(String(decoding: raw.prefix(200), as: UTF8.self))"))
+        }
+        if let result = response.result, response.ok { return result }
+        let error = response.error ?? BrokerError(errorType: "upstream_failure", field: nil, message: "служба вернула ok=false без ошибки")
+        switch error.errorType {
+        case "schema_validation", "parse_error": fail(2, error)
+        case "permission_denied": fail(3, error)
+        default: fail(12, error)
         }
     }
 
-    /// read: пометить прочитанными чаты из курсора (файл по умолчанию или --cursor). Меняет состояние.
-    private static func runRead(td: TDLibClient, env: [String: String], cursorPath: String?, logger: Logger) async {
-        let path = cursorPath ?? cursorFilePath(env: env)
+    private static func writeJSON<T: Encodable>(_ value: T) {
+        let encoder = SummarySnapshot.encoder()
+        encoder.outputFormatting.insert(.prettyPrinted)
+        FileHandle.standardOutput.write(((try? encoder.encode(value)) ?? Data()) + Data("\n".utf8))
+    }
+
+    /// get-summary: снапшот непрочитанного от службы → stdout, курсор → файл (для `read`). Состояние не меняется.
+    private static func runGetSummary(env: [String: String]) {
+        let snapshot = callService(BrokerRequest(op: "get-summary"), env: env, as: SummarySnapshot.self)
+        writeJSON(snapshot)
+        let path = cursorFilePath(env: env)
+        do {
+            try SummarySnapshot.encoder().encode(snapshot.cursor).write(to: URL(fileURLWithPath: path))
+        } catch {
+            fail(12, BrokerError(errorType: "upstream_failure", field: nil, message: "курсор не записан в \(path): \(error)"))
+        }
+    }
+
+    /// read: пометить прочитанным по курсору. Источник: `--input-json f.json` (`{"cursor":[…]}`,
+    /// schemas/wrapper-read-input.v1.json), `--cursor <path>` (голый массив, совместимость) или файл последнего get-summary.
+    private static func runRead(env: [String: String], args: [String]) {
+        func value(_ flag: String) -> String? {
+            args.firstIndex(of: flag).flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+        }
         let cursor: [CursorEntry]
-        do {
-            cursor = try Cursor.parse(try Data(contentsOf: URL(fileURLWithPath: path)))
-        } catch {
-            FileHandle.standardError.write(Data("{\"error_type\":\"schema_validation\",\"message\":\"курсор \(path): \(error)\"}\n".utf8))
-            exit(2)
+        if let input = value("--input-json") {
+            struct ReadInput: Decodable { let cursor: [CursorEntry] }
+            do {
+                cursor = try JSONDecoder().decode(ReadInput.self, from: Data(contentsOf: URL(fileURLWithPath: input))).cursor
+            } catch {
+                fail(2, BrokerError(errorType: "schema_validation", field: "cursor", message: "\(input): \(error)",
+                                    hint: "ожидается {\"cursor\":[{\"chat_id\":…,\"up_to_message_id\":…}]}"))
+            }
+        } else {
+            let path = value("--cursor") ?? cursorFilePath(env: env)
+            do {
+                cursor = try Cursor.parse(Data(contentsOf: URL(fileURLWithPath: path)))
+            } catch {
+                fail(2, BrokerError(errorType: "schema_validation", field: "cursor", message: "курсор \(path): \(error)",
+                                    hint: "сначала get-summary или --input-json"))
+            }
         }
-        let service = MarkAsReadService(tdlib: td, logger: logger)
-        let results = await Cursor.apply(cursor, using: service)
-        let report = results.map { (chatId, r) -> [String: Any] in
-            if case .failure(let e) = r { return ["chat_id": chatId, "ok": false, "error": "\(e)"] }
-            return ["chat_id": chatId, "ok": true]
-        }
-        let out: [String: Any] = ["marked": report.filter { $0["ok"] as? Bool == true }.count, "chats": report]
-        let data = try! JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])
-        FileHandle.standardOutput.write(data)
-        FileHandle.standardOutput.write(Data("\n".utf8))
+        writeJSON(callService(BrokerRequest(op: "read", cursor: cursor), env: env, as: ReadReport.self))
     }
 
     // MARK: - Dump mode (полная выгрузка истории одного чата в JSONL)
@@ -509,7 +564,5 @@ struct TGClient {
         case service
         case dump(username: String, output: String)
         case send(username: String, input: String)
-        case getSummary
-        case read(cursorPath: String?)
     }
 }
