@@ -53,6 +53,25 @@ struct SummaryCollectorTests {
         #expect(ffi.sentRequests(ofType: "viewMessages").isEmpty)
     }
 
+    /// Регрессия E2E 2026-10-15: канал, где непрочитанное — фото без подписи. Текста нет, но курсор обязан
+    /// дойти до этого сообщения, иначе `read` метит до старого last_read и чат остаётся непрочитанным навсегда.
+    @Test("непрочитанное без текста (фото) → messages пусто, курсор = id этого сообщения")
+    func cursorCoversNonTextMessages() async throws {
+        let ffi = MockTDLibFFI()
+        ffi.queueUpdate(.newChat(chat: ChatResponse(id: 321, type: .supergroup(supergroupId: 321, isChannel: true), title: "Broadcast", unreadCount: 1, lastReadInboxMessageId: 200)))
+        ffi.queueUpdate(.chatPosition(chatId: 321, position: ChatPosition(list: .main, order: 1321, isPinned: false)))
+        ffi.mockResponse(forRequestType: "getChatHistory", return: .success(MessagesResponse(totalCount: 1, messages: [
+            TgClientModels.Message(id: 205, chatId: 321, date: 5, content: .photo(caption: nil)),
+        ])))
+
+        let snapshot = try await SummaryCollector(source: makeSource(ffi)).collect(now: Date(timeIntervalSince1970: 1_700_000_000))
+
+        let chat = try #require(snapshot.chats.first)
+        #expect(chat.messages.isEmpty)
+        #expect(chat.lastMessageId == 205)
+        #expect(snapshot.cursor == [CursorEntry(chatId: 321, upToMessageId: 205)])
+    }
+
     @Test("нет непрочитанных → пустой снапшот и пустой курсор")
     func emptyWhenNoUnread() async throws {
         let ffi = MockTDLibFFI()
