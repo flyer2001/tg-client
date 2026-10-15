@@ -1,3 +1,8 @@
+---
+version: 1.0.0
+bumped: 2026-07-21
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
