@@ -1,3 +1,14 @@
+## [2026-10-15] CLI-обвязка (b): get-summary/read через сокет службы
+
+**Сделано:**
+- ✅ `UnixSocket` (FoundationExtensions, POSIX без зависимостей): сокет 0600, один запрос→ответ на соединение, обработка по одному, замена оставшегося сокета, обычный файл не трогается
+- ✅ `Broker` (DigestCore): протокол `{"op":…}` → `{"ok","result"|"error"}`, только R0 `get-summary` / R1 `read`, остальное `permission_denied`; `ReadReport`, `BrokerError`
+- ✅ `main.swift`: служба поднимает `$TDLIB_STATE_DIR/tg-client.sock` (`TG_SOCKET`); `get-summary`/`read` — клиенты сокета, TDLib не открывают; контракт Factor 4 (коды 0/2/3/11/12, JSON-ошибка первой строкой stderr); `read --input-json` по `schemas/wrapper-read-input.v1.json`, `--cursor` — совместимость на неделю
+- ✅ Тесты: +10 (BrokerTests, UnixSocketTests), весь набор зелёный (262 + 77)
+- ✅ Деплой на ubuntu-home + E2E при работающей службе: get-summary 5 чатов за 5 с, read пустым курсором, `op=send` → отказ; `~/.tdlib` → 700
+
+**Грабли:** `swift build -c release` всего пакета падает на TestHelpers (@testable) — нужен `--product tg-client` (DEPLOY.md). Цепочка через `;` в первой попытке поставила в /opt старый release-бинарь на ~30 с; бэкап до деплоя — `/opt/tg-client/tg-client.bak`.
+
 ## [2026-10-15] Зонтик comms, решение (b) для сессии TDLib, разбор endsession-коммита
 
 **Сделано:**

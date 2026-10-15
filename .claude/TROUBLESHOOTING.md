@@ -126,11 +126,12 @@ rm -rf ~/.tdlib
 
 ---
 
-### get-summary / read: сессия TDLib одна
+### get-summary / read: код 11 «служба не отвечает»
 
-Служба моста (`tg-client service`) держит сессию в `TDLIB_STATE_DIR` — второй процесс (`get-summary`/`read`)
-в ту же папку TDLib не пустит. Пока CLI-обвязка не решает это (отдельная сессия или вызов через службу —
-следующая история), для ручного/E2E прогона: `sudo systemctl stop tg-client` → команды → `start`.
+Сессия TDLib одна, её держит служба (`tg-client service`); `get-summary`/`read` ходят к ней через сокет
+`${TG_SOCKET:-$TDLIB_STATE_DIR/tg-client.sock}`. Код 11 = сокета нет: `systemctl status tg-client`, в журнале
+строка `Service mode: сокет CLI …` (или `не поднялся` с причиной). Останавливать службу для команд не нужно.
+CLI и служба должны видеть один `TDLIB_STATE_DIR` (или один `TG_SOCKET`).
 
 ### get-summary сразу после read может показать чат ещё непрочитанным
 

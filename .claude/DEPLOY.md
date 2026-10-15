@@ -97,6 +97,8 @@ WantedBy=multi-user.target
 ```
 
 ```bash
+# --product обязателен: release-сборка всего пакета падает на TestHelpers (@testable)
+swift build -c release --product tg-client && \
 sudo install -m 755 "$(swift build -c release --show-bin-path)/tg-client" /opt/tg-client/tg-client
 sudo systemctl daemon-reload && sudo systemctl enable --now tg-client
 journalctl -u tg-client -f
