@@ -38,13 +38,17 @@ struct ProxyStartupTests {
 
     /// Оба состояния подаются заранее: ранний `updateAuthorizationState` буферизуется в `ResponseWaiters`
     /// (до фикса 2026-10-07 терялся, и `start()` висел — этот тест был бы вечным).
+    /// Детерминированно: `ready` подаём только ПОСЛЕ ухода `setTdlibParameters` — иначе буфер
+    /// `ResponseWaiters` отдаст циклу `ready` первым, минуя установку параметров (флейк в полном прогоне).
     private func startClient(proxy: TDProxy?) async throws -> MockTDLibFFI {
         let ffi = MockTDLibFFI()
         let client = TDLibClient(ffi: ffi, appLogger: Logger(label: "test") { _ in SwiftLogNoOpLogHandler() })
-        ffi.mockUpdate(AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters")))
-        ffi.mockUpdate(AuthorizationStateUpdateResponse.ready)
         let config = TDConfig(apiId: 1, apiHash: "h", stateDir: NSTemporaryDirectory() + "proxy-test", logPath: "/dev/null", proxy: proxy)
-        try await client.start(config: config) { _ in "" }
+        let started = Task { try await client.start(config: config) { _ in "" } }
+        ffi.mockUpdate(AuthorizationStateUpdateResponse(authorizationState: AuthorizationStateInfo(type: "authorizationStateWaitTdlibParameters")))
+        while !ffi.sentRequestTypes().contains("setTdlibParameters") { try await Task.sleep(for: .milliseconds(5)) }
+        ffi.mockUpdate(AuthorizationStateUpdateResponse.ready)
+        try await started.value
         return ffi
     }
 }
