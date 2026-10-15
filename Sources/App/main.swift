@@ -36,12 +36,17 @@ struct TGClient {
             }
             let output = args.count >= 3 ? args[2] : "/root/dumps/\(args[1].trimmingCharacters(in: CharacterSet(charactersIn: "@"))).jsonl"
             mode = .dump(username: args[1], output: output)
+        } else if args.first == "get-summary" {
+            mode = .getSummary
+        } else if args.first == "read" {
+            let i = args.firstIndex(of: "--cursor")
+            mode = .read(cursorPath: (i != nil && args.count > i! + 1) ? args[i! + 1] : nil)
         } else {
             mode = .oneshot
         }
 
         var logger = Logger(label: "tg-client")
-        logger.logLevel = mode == .oneshot ? .warning : .info
+        logger.logLevel = (mode == .oneshot || mode == .getSummary || { if case .read = mode { return true } else { return false } }()) ? .warning : .info
 
         let env = ProcessInfo.processInfo.environment
         let apiId = env["TELEGRAM_API_ID"].flatMap { Int32($0) } ?? 0
@@ -84,7 +89,7 @@ struct TGClient {
         do {
             try await td.start(config: config) { promptType in
                 switch mode {
-                case .oneshot, .dump, .send:
+                case .oneshot, .dump, .send, .getSummary, .read:
                     switch promptType {
                     case .phoneNumber:
                         return readLineSecure(message: "Phone (E.164, e.g. +31234567890): ")
@@ -127,6 +132,10 @@ struct TGClient {
             await runDump(td: td, username: username, output: output, logger: logger)
         case .send(let username, let input):
             await runSend(td: td, username: username, input: input, logger: logger)
+        case .getSummary:
+            await runGetSummary(td: td, env: env, logger: logger)
+        case .read(let cursorPath):
+            await runRead(td: td, env: env, cursorPath: cursorPath, logger: logger)
         }
     }
 
@@ -333,6 +342,56 @@ struct TGClient {
         }
     }
 
+    // MARK: - Get-summary / read (руки агенту: собрать непрочитанное → данные + курсор; пометить по курсору)
+
+    private static func cursorFilePath(env: [String: String]) -> String {
+        if let f = env["TG_CURSOR_FILE"], !f.isEmpty { return f }
+        let stateDir = env["TDLIB_STATE_DIR"] ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tdlib").path
+        return stateDir + "/last-cursor.json"
+    }
+
+    /// get-summary: собрать непрочитанное, вывести JSON в stdout, курсор продублировать в файл. Состояние не меняется.
+    private static func runGetSummary(td: TDLibClient, env: [String: String], logger: Logger) async {
+        let source = ChannelMessageSource(tdlib: td, logger: logger)
+        do {
+            let snapshot = try await SummaryCollector(source: source).collect()
+            let encoder = SummarySnapshot.encoder()
+            encoder.outputFormatting.insert(.prettyPrinted)
+            let data = try encoder.encode(snapshot)
+            FileHandle.standardOutput.write(data)
+            FileHandle.standardOutput.write(Data("\n".utf8))
+            // Курсор — отдельным файлом (компактно, для последующего `read`)
+            let cursorData = try SummarySnapshot.encoder().encode(snapshot.cursor)
+            try cursorData.write(to: URL(fileURLWithPath: cursorFilePath(env: env)))
+            logger.info("get-summary: \(snapshot.chats.count) чатов, курсор → \(cursorFilePath(env: env))")
+        } catch {
+            FileHandle.standardError.write(Data("{\"error_type\":\"upstream_failure\",\"message\":\"get-summary: \(error)\"}\n".utf8))
+            exit(12)
+        }
+    }
+
+    /// read: пометить прочитанными чаты из курсора (файл по умолчанию или --cursor). Меняет состояние.
+    private static func runRead(td: TDLibClient, env: [String: String], cursorPath: String?, logger: Logger) async {
+        let path = cursorPath ?? cursorFilePath(env: env)
+        let cursor: [CursorEntry]
+        do {
+            cursor = try Cursor.parse(try Data(contentsOf: URL(fileURLWithPath: path)))
+        } catch {
+            FileHandle.standardError.write(Data("{\"error_type\":\"schema_validation\",\"message\":\"курсор \(path): \(error)\"}\n".utf8))
+            exit(2)
+        }
+        let service = MarkAsReadService(tdlib: td, logger: logger)
+        let results = await Cursor.apply(cursor, using: service)
+        let report = results.map { (chatId, r) -> [String: Any] in
+            if case .failure(let e) = r { return ["chat_id": chatId, "ok": false, "error": "\(e)"] }
+            return ["chat_id": chatId, "ok": true]
+        }
+        let out: [String: Any] = ["marked": report.filter { $0["ok"] as? Bool == true }.count, "chats": report]
+        let data = try! JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+    }
+
     // MARK: - Dump mode (полная выгрузка истории одного чата в JSONL)
 
     /// Выгружает всю переписку с ботом/пользователем в JSONL.
@@ -450,5 +509,7 @@ struct TGClient {
         case service
         case dump(username: String, output: String)
         case send(username: String, input: String)
+        case getSummary
+        case read(cursorPath: String?)
     }
 }
