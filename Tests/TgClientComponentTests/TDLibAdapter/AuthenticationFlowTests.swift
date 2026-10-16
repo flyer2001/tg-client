@@ -20,7 +20,7 @@ import TestHelpers
 /// - Unit-тесты моделей: `ResponseDecodingTests` (декодирование AuthorizationStateUpdateResponse)
 /// - E2E тест: `scripts/manual_e2e_auth.sh` (реальный TDLib)
 /// - TDLib docs: https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1set_authentication_phone_number.html
-@Suite("TDLibAdapter: Процесс авторизации (High-Level API)")
+@Suite("TDLibAdapter: Процесс авторизации (High-Level API)", .timeLimit(.minutes(1)))
 struct AuthenticationFlowTests {
 
     // MARK: - Phone + Code (Success)

@@ -16,7 +16,7 @@ import TestHelpers
 ///
 /// **Связанная документация:**
 /// - E2E сценарий: <doc:FetchUnreadMessages>
-@Suite("Component: ChannelMessageSource")
+@Suite("Component: ChannelMessageSource", .timeLimit(.minutes(1)))
 struct ChannelMessageSourceTests {
 
     /// Получение непрочитанных сообщений из каналов.

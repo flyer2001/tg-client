@@ -22,7 +22,7 @@ import TestHelpers
 /// - E2E сценарий: <doc:MarkAsRead>
 /// - Unit тесты модели: ViewMessagesRequestTests.swift
 /// - RFC: MVP.md § v0.4.0
-@Suite("Component: Отметка сообщений как прочитанных")
+@Suite("Component: Отметка сообщений как прочитанных", .timeLimit(.minutes(1)))
 struct MarkAsReadFlowTests {
 
     /// Happy path: отметка сообщений для одного чата.

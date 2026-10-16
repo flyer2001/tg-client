@@ -9,7 +9,7 @@ import TestHelpers
 ///
 /// Тестируют РЕАЛЬНУЮ логику TDLibClient (ResponseWaiters, JSON парсинг, обработка ошибок)
 /// используя MockTDLibFFI для изоляции от C-библиотеки TDLib.
-@Suite("TDLibClient Unit Tests")
+@Suite("TDLibClient Unit Tests", .timeLimit(.minutes(1)))
 struct TDLibClientTests {
 
     @Test("getMe() возвращает успешный ответ через FFI")

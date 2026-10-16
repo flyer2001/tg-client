@@ -16,7 +16,7 @@ import Logging
 /// - ✅ Успешный запрос (200 OK)
 /// - ❌ HTTP ошибки (401, 429, 500)
 /// - ❌ JSON parsing errors
-@Suite("OpenAISummaryGenerator Component Tests")
+@Suite("OpenAISummaryGenerator Component Tests", .timeLimit(.minutes(1)))
 struct OpenAISummaryGeneratorTests {
 
     @Test("Успешная генерация саммари через OpenAI API")

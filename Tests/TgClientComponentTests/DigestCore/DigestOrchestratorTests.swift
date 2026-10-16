@@ -13,13 +13,13 @@ import Logging
 /// **Scope:** Тестируем координацию pipeline через SummaryGenerator.
 ///
 /// **Правило мокирования:** Используем реальный OpenAISummaryGenerator + MockHTTPClient.
-/// НЕ создаём MockSummaryGenerator (см. TESTING.md#правила-мокирования).
+/// НЕ создаём MockSummaryGenerator (см. TESTING.md#тест-даблы-и-правила-мокирования).
 ///
 /// **Тестируемые сценарии:**
 /// - ✅ Успешная генерация дайджеста
 /// - ✅ Пустой массив сообщений
 /// - ❌ Пробрасывание ошибок от SummaryGenerator
-@Suite("DigestOrchestrator Component Tests")
+@Suite("DigestOrchestrator Component Tests", .timeLimit(.minutes(1)))
 struct DigestOrchestratorTests {
 
     @Test("Успешная генерация дайджеста")

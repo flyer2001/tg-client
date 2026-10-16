@@ -14,7 +14,7 @@ import Logging
 /// **Модели:**
 /// - ``SendMessageRequest`` — request body для /sendMessage
 /// - ``SendMessageResponse`` — response (success/error)
-@Suite("TelegramBotNotifier Component Tests")
+@Suite("TelegramBotNotifier Component Tests", .timeLimit(.minutes(1)))
 struct TelegramBotNotifierTests {
 
     @Test("Успешная отправка plain text сообщения")
