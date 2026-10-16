@@ -91,20 +91,25 @@ public struct BrokerError: Codable, Equatable, Sendable, Error {
 public struct ReadReport: Codable, Equatable, Sendable {
     public struct Chat: Codable, Equatable, Sendable {
         public let chatId: Int64
+        /// Тема форума; `nil` — обычный чат.
+        public let forumTopicId: Int32?
         public let ok: Bool
         public let error: String?
-        public init(chatId: Int64, ok: Bool, error: String?) { self.chatId = chatId; self.ok = ok; self.error = error }
-        enum CodingKeys: String, CodingKey { case chatId = "chat_id", ok, error }
+        public init(chatId: Int64, forumTopicId: Int32? = nil, ok: Bool, error: String?) {
+            self.chatId = chatId; self.forumTopicId = forumTopicId; self.ok = ok; self.error = error
+        }
+        enum CodingKeys: String, CodingKey { case chatId = "chat_id", forumTopicId = "forum_topic_id", ok, error }
     }
     public let marked: Int
     public let chats: [Chat]
 
     public init(marked: Int, chats: [Chat]) { self.marked = marked; self.chats = chats }
 
-    public init(_ results: [Int64: Result<Void, Error>]) {
-        let chats = results.sorted { $0.key < $1.key }.map { chatId, r -> Chat in
-            if case .failure(let e) = r { return Chat(chatId: chatId, ok: false, error: "\(e)") }
-            return Chat(chatId: chatId, ok: true, error: nil)
+    /// Из результата `Cursor.apply` (порядок сохраняется).
+    public init(_ results: [(entry: CursorEntry, result: Result<Void, Error>)]) {
+        let chats = results.map { entry, r -> Chat in
+            if case .failure(let e) = r { return Chat(chatId: entry.chatId, forumTopicId: entry.forumTopicId, ok: false, error: "\(e)") }
+            return Chat(chatId: entry.chatId, forumTopicId: entry.forumTopicId, ok: true, error: nil)
         }
         self.init(marked: chats.filter(\.ok).count, chats: chats)
     }

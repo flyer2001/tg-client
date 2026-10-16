@@ -263,7 +263,8 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
                 title: chat.title,
                 kind: kind,
                 unreadCount: chat.unreadCount,
-                lastReadInboxMessageId: chat.lastReadInboxMessageId
+                lastReadInboxMessageId: chat.lastReadInboxMessageId,
+                supergroupId: { if case .supergroup(let id, _) = chat.chatType { return id } else { return nil } }()
             )
         }
 
@@ -312,8 +313,42 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         toSourceMessages(try await collectLastMessages(for: chat, count: count), chat: chat)
     }
 
+    // MARK: - Форумы (чаты с темами)
+
+    /// Темы форума с непрочитанным; `nil` — чат не форум. Форум = супергруппа-группа с `is_forum`.
+    /// У каждой темы своя граница прочитанного, чатовый `unread_count` = сумма тем (спайк 2026-10-16).
+    public func forumTopicsWithUnread(for chat: UnreadChatInfo) async throws -> [ForumTopic]? {
+        guard chat.kind == .group, let supergroupId = chat.supergroupId else { return nil }
+        guard try await tdlib.getSupergroup(supergroupId: supergroupId).isForum else { return nil }
+        let topics = try await tdlib.getForumTopics(chatId: chat.id, limit: 100).topics
+        logger.info("forum \(chat.id) (\(chat.title)): \(topics.count) тем, с непрочитанным \(topics.filter { $0.unreadCount > 0 }.count)")
+        return topics.filter { $0.unreadCount > 0 }
+    }
+
+    /// Непрочитанные сообщения темы (новее её `last_read`), oldest→newest, + id новейшего собранного
+    /// **любого типа** — для курсора (как `fetchMessagesWithNewestId`).
+    public func fetchTopicMessages(chat: UnreadChatInfo, topic: ForumTopic) async throws -> (messages: [SourceMessage], newestId: Int64?) {
+        let raw = try await collectLast(chatId: chat.id, title: "\(chat.title) / \(topic.info.name)",
+                                        count: Int(topic.unreadCount)) { from, limit in
+            try await self.tdlib.getForumTopicHistory(chatId: chat.id, forumTopicId: topic.info.forumTopicId,
+                                                      fromMessageId: from, limit: limit)
+        }.filter { $0.id > topic.lastReadInboxMessageId }
+        return (toSourceMessages(raw, chat: chat), raw.map(\.id).max())
+    }
+
     /// Сырые последние `count` сообщений (newest-first), включая нетекстовые.
     private func collectLastMessages(for chat: UnreadChatInfo, count: Int) async throws -> [TgClientModels.Message] {
+        try await collectLast(chatId: chat.id, title: chat.title, count: count) { from, limit in
+            try await self.tdlib.getChatHistory(chatId: chat.id, fromMessageId: from, offset: 0, limit: limit)
+        }
+    }
+
+    /// Итеративная подгрузка истории до `count` сообщений: страница newest-first, следующая — от самого старого.
+    private func collectLast(
+        chatId: Int64, title: String, count: Int,
+        page: (_ fromMessageId: Int64, _ limit: Int32) async throws -> MessagesResponse
+    ) async throws -> [TgClientModels.Message] {
+        let chat = (id: chatId, title: title)
         let target = min(max(count, 1), maxChatHistoryLimit)
         let perRequest = Int32(target)
 
@@ -325,12 +360,7 @@ public final class ChannelMessageSource: MessageSourceProtocol, Sendable {
         let maxAttempts = 5
 
         for attempt in 1...maxAttempts {
-            let resp = try await tdlib.getChatHistory(
-                chatId: chat.id,
-                fromMessageId: fromMessageId,
-                offset: 0,
-                limit: perRequest
-            )
+            let resp = try await page(fromMessageId, perRequest)
             if resp.messages.isEmpty {
                 logger.info("fetchLastMessages: empty response on attempt \(attempt), stopping")
                 break

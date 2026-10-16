@@ -2,20 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "wrapper-read-input.v1.json",
   "title": "tg-client read --input-json",
-  "description": "Пометить прочитанным до up_to_message_id на каждый чат (курсор из get-summary).",
+  "description": "Пометить прочитанным до up_to_message_id на каждый чат или тему форума (курсор из get-summary).",
   "type": "object",
-  "required": ["cursor"],
+  "required": [
+    "cursor"
+  ],
   "additionalProperties": false,
   "properties": {
     "cursor": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["chat_id", "up_to_message_id"],
+        "required": [
+          "chat_id",
+          "up_to_message_id"
+        ],
         "additionalProperties": false,
         "properties": {
-          "chat_id": { "type": "integer" },
-          "up_to_message_id": { "type": "integer" }
+          "chat_id": {
+            "type": "integer"
+          },
+          "up_to_message_id": {
+            "type": "integer"
+          },
+          "forum_topic_id": {
+            "type": "integer",
+            "description": "тема форума: у каждой темы своя граница прочитанного"
+          }
         }
       }
     }

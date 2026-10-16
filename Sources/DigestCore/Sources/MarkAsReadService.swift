@@ -102,6 +102,32 @@ public actor MarkAsReadService {
         }
     }
 
+    /// Пометить темы форума прочитанными: `viewMessages(up_to, source: .forumTopicHistory, force_read)` на запись.
+    /// Спайк 2026-10-16: метит ровно эту тему, остальные темы чата не трогает.
+    public func markForumTopicsAsRead(_ entries: [CursorEntry]) async -> [(entry: CursorEntry, result: Result<Void, Error>)] {
+        guard !entries.isEmpty else { return [] }
+        logger.info("Starting mark-as-read for \(entries.count) forum topics")
+        // ponytail: без лимита параллелизма — тем с непрочитанным единицы; лимит как в markAsRead, если станут сотни
+        return await withTaskGroup(of: (entry: CursorEntry, result: Result<Void, Error>).self) { group in
+            for entry in entries {
+                group.addTask {
+                    do {
+                        try await self.tdlib.viewMessages(chatId: entry.chatId, messageIds: [entry.upToMessageId],
+                                                          source: .forumTopicHistory, forceRead: true)
+                        self.logger.info("✅ Forum \(entry.chatId) topic \(entry.forumTopicId ?? 0) marked as read up to \(entry.upToMessageId)")
+                        return (entry, .success(()))
+                    } catch {
+                        self.logger.error("❌ Failed to mark forum \(entry.chatId) topic \(entry.forumTopicId ?? 0): \(error)")
+                        return (entry, .failure(error))
+                    }
+                }
+            }
+            var results: [(entry: CursorEntry, result: Result<Void, Error>)] = []
+            for await r in group { results.append(r) }
+            return results
+        }
+    }
+
     // MARK: - Private Logging
 
     private func logStart(chatId: Int64, messageIds: [Int64]) {

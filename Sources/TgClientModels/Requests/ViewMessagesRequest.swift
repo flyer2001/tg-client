@@ -18,16 +18,36 @@ public struct ViewMessagesRequest: TDLibRequest, Sendable {
     /// Принудительная отметка (игнорировать серверный unread count).
     public let forceRead: Bool
 
+    /// Откуда сообщения просмотрены; `nil` — TDLib угадывает. Тема форума — `.forumTopicHistory`
+    /// (спайк 2026-10-16: метит ровно эту тему, остальные не трогает).
+    public let source: MessageSource?
+
     enum CodingKeys: String, CodingKey {
         case type = "@type"
         case chatId
         case messageIds
         case forceRead
+        case source
     }
 
-    public init(chatId: Int64, messageIds: [Int64], forceRead: Bool) {
+    public init(chatId: Int64, messageIds: [Int64], forceRead: Bool, source: MessageSource? = nil) {
         self.chatId = chatId
         self.messageIds = messageIds
         self.forceRead = forceRead
+        self.source = source
     }
+}
+
+/// Источник просмотра сообщений (`MessageSource` в TDLib).
+///
+/// **TDLib API:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_message_source.html
+public struct MessageSource: Codable, Sendable, Equatable {
+    public let type: String
+
+    enum CodingKeys: String, CodingKey {
+        case type = "@type"
+    }
+
+    /// Сообщения из истории темы форума.
+    public static let forumTopicHistory = MessageSource(type: "messageSourceForumTopicHistory")
 }

@@ -69,16 +69,36 @@ extension TDLibClient: TDLibClientProtocol {
     }
 
     public func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool) async throws {
+        try await viewMessages(chatId: chatId, messageIds: messageIds, source: nil, forceRead: forceRead)
+    }
+
+    public func getSupergroup(supergroupId: Int64) async throws -> SupergroupResponse {
+        try await sendAndWait(GetSupergroupRequest(supergroupId: supergroupId), expecting: SupergroupResponse.self)
+    }
+
+    public func getForumTopics(chatId: Int64, limit: Int32) async throws -> ForumTopicsResponse {
+        try await sendAndWait(GetForumTopicsRequest(chatId: chatId, limit: limit), expecting: ForumTopicsResponse.self)
+    }
+
+    public func getForumTopicHistory(chatId: Int64, forumTopicId: Int32, fromMessageId: Int64, limit: Int32) async throws -> MessagesResponse {
+        try await sendAndWait(
+            GetForumTopicHistoryRequest(chatId: chatId, forumTopicId: forumTopicId, fromMessageId: fromMessageId, offset: 0, limit: limit),
+            expecting: MessagesResponse.self
+        )
+    }
+
+    public func viewMessages(chatId: Int64, messageIds: [Int64], source: MessageSource?, forceRead: Bool) async throws {
         // 🔍 ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ: запрос viewMessages
         appLogger.info("🔍 TDLibClient.viewMessages REQUEST", metadata: [
             "chatId": .stringConvertible(chatId),
             "messageIds": .string(messageIds.map { String($0) }.joined(separator: ", ")),
             "messageCount": .stringConvertible(messageIds.count),
-            "forceRead": .stringConvertible(forceRead)
+            "forceRead": .stringConvertible(forceRead),
+            "source": .string(source?.type ?? "-")
         ])
 
         let response = try await sendAndWait(
-            ViewMessagesRequest(chatId: chatId, messageIds: messageIds, forceRead: forceRead),
+            ViewMessagesRequest(chatId: chatId, messageIds: messageIds, forceRead: forceRead, source: source),
             expecting: OkResponse.self
         )
 

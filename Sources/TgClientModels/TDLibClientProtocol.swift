@@ -92,6 +92,20 @@ public protocol TDLibClientProtocol: Sendable {
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1view_messages.html
     func viewMessages(chatId: Int64, messageIds: [Int64], forceRead: Bool) async throws
 
+    /// `viewMessages` с источником просмотра (тема форума — `.forumTopicHistory`).
+    func viewMessages(chatId: Int64, messageIds: [Int64], source: MessageSource?, forceRead: Bool) async throws
+
+    // MARK: - Forum Methods (чаты с темами)
+
+    /// Супергруппа — ради `isForum`.
+    func getSupergroup(supergroupId: Int64) async throws -> SupergroupResponse
+
+    /// Темы форума с per-topic непрочитанным (первая страница, ≤ `limit`).
+    func getForumTopics(chatId: Int64, limit: Int32) async throws -> ForumTopicsResponse
+
+    /// История темы, newest-first.
+    func getForumTopicHistory(chatId: Int64, forumTopicId: Int32, fromMessageId: Int64, limit: Int32) async throws -> MessagesResponse
+
     /// Отправляет текстовое сообщение в чат.
     ///
     /// **TDLib docs:** https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1send_message.html

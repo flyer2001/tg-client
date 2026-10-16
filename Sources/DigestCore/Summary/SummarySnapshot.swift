@@ -42,18 +42,33 @@ public struct SummaryChat: Codable, Equatable, Sendable {
     }
 }
 
-/// Тонкое сообщение MVP: текст + id (обогащение — BACKLOG).
+/// Тонкое сообщение MVP: текст + id (обогащение — BACKLOG). В форуме — ещё тема.
 public struct SummaryMessage: Codable, Equatable, Sendable {
     public let messageId: Int64
     public let text: String
-    public init(messageId: Int64, text: String) { self.messageId = messageId; self.text = text }
-    enum CodingKeys: String, CodingKey { case messageId = "message_id", text }
+    /// Тема форума; `nil` (поля нет в JSON) — обычный чат.
+    public let topic: SummaryTopic?
+    public init(messageId: Int64, text: String, topic: SummaryTopic? = nil) {
+        self.messageId = messageId; self.text = text; self.topic = topic
+    }
+    enum CodingKeys: String, CodingKey { case messageId = "message_id", text, topic }
 }
 
-/// Запись курсора: пометить чат прочитанным до `upToMessageId`.
+/// Тема форума у сообщения: `forum_topic_id` и название.
+public struct SummaryTopic: Codable, Equatable, Sendable {
+    public let id: Int32
+    public let name: String
+    public init(id: Int32, name: String) { self.id = id; self.name = name }
+}
+
+/// Запись курсора: пометить чат (или тему форума, если `forumTopicId`) прочитанным до `upToMessageId`.
 public struct CursorEntry: Codable, Equatable, Sendable {
     public let chatId: Int64
     public let upToMessageId: Int64
-    public init(chatId: Int64, upToMessageId: Int64) { self.chatId = chatId; self.upToMessageId = upToMessageId }
-    enum CodingKeys: String, CodingKey { case chatId = "chat_id", upToMessageId = "up_to_message_id" }
+    /// Тема форума: у каждой темы своя граница прочитанного → своя запись.
+    public let forumTopicId: Int32?
+    public init(chatId: Int64, upToMessageId: Int64, forumTopicId: Int32? = nil) {
+        self.chatId = chatId; self.upToMessageId = upToMessageId; self.forumTopicId = forumTopicId
+    }
+    enum CodingKeys: String, CodingKey { case chatId = "chat_id", upToMessageId = "up_to_message_id", forumTopicId = "forum_topic_id" }
 }

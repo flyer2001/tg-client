@@ -39,12 +39,15 @@ public struct UnreadChatInfo: Sendable, Codable, Equatable {
     public let kind: ChatKind
     public let unreadCount: Int32
     public let lastReadInboxMessageId: Int64
+    /// Id супергруппы (группы и каналы-супергруппы) — по нему проверяется, форум ли это.
+    public let supergroupId: Int64?
 
-    public init(id: Int64, title: String, kind: ChatKind, unreadCount: Int32, lastReadInboxMessageId: Int64) {
+    public init(id: Int64, title: String, kind: ChatKind, unreadCount: Int32, lastReadInboxMessageId: Int64, supergroupId: Int64? = nil) {
         self.id = id
         self.title = title
         self.kind = kind
         self.unreadCount = unreadCount
         self.lastReadInboxMessageId = lastReadInboxMessageId
+        self.supergroupId = supergroupId
     }
 }
