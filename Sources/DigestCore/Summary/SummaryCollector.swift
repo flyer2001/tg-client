@@ -13,7 +13,9 @@ public struct SummaryCollector {
         var cursor: [CursorEntry] = []
         for chat in chats {
             if let topics = try await source.forumTopicsWithUnread(for: chat) {
-                // Форум: по темам, курсор — запись на тему (у каждой своя граница прочитанного)
+                // Форум: по темам, курсор — запись на тему (у каждой своя граница прочитанного).
+                // Правда — в темах: чатовый unread после пометки тем ещё отстаёт (E2E 2026-10-16)
+                guard !topics.isEmpty else { continue }
                 var messages: [SummaryMessage] = []
                 var last = chat.lastReadInboxMessageId
                 for topic in topics {
