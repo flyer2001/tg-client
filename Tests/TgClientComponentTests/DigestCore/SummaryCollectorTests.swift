@@ -48,6 +48,56 @@ struct SummaryCollectorTests {
         #expect(snapshot.cursor == [CursorEntry(chatId: 321, upToMessageId: 205)])
     }
 
+    /// Форум (чат с темами): у каждой темы своя граница прочитанного (спайк 2026-10-16). Сбор — по темам
+    /// с непрочитанным, только сообщения новее `last_read` темы; курсор — запись на тему.
+    @Test("форум: сообщения тем с непрочитанным, у сообщения тема; курсор — запись на тему; прочитанное не попадает")
+    func collectsForumByTopics() async throws {
+        let tg = TDLibScenario()
+        tg.givenForum(500, title: "Podlodka AI Crew", topics: [
+            .init(id: 1, name: "General", unread: 1, lastRead: 10, history: [.text(10, "уже прочитано"), .text(12, "новое")]),
+            .init(id: 7, name: "Sharing", unread: 2, lastRead: 20, history: [.text(21, "ссылка"), .photo(23)]),
+            .init(id: 9, name: "Pains", unread: 0, lastRead: 30, history: [.text(30, "прочитано")]),
+        ])
+
+        let snapshot = try await tg.makeCollector().collect(now: now)
+
+        let chat = try #require(snapshot.chats.first)
+        #expect(chat.kind == .group)
+        #expect(chat.unreadCount == 3)
+        #expect(chat.messages == [SummaryMessage(messageId: 12, text: "новое", topic: SummaryTopic(id: 1, name: "General")),
+                                  SummaryMessage(messageId: 21, text: "ссылка", topic: SummaryTopic(id: 7, name: "Sharing"))])
+        #expect(chat.lastMessageId == 23)
+        #expect(snapshot.cursor == [CursorEntry(chatId: 500, upToMessageId: 12, forumTopicId: 1),
+                                    CursorEntry(chatId: 500, upToMessageId: 23, forumTopicId: 7)])
+        tg.expectNothingViewed()
+    }
+
+    /// Счётчики TDLib отстают (спайк 2026-10-16: чатовый unread обновился не сразу). Если `unread` темы больше,
+    /// чем реально новых сообщений, прочитанные (до `last_read` темы) в сводку не попадают.
+    @Test("форум: счётчик темы отстаёт (unread 2, новое одно) → прочитанное не попадает")
+    func forumStaleUnreadCount() async throws {
+        let tg = TDLibScenario()
+        tg.givenForum(500, topics: [.init(id: 1, name: "General", unread: 2, lastRead: 10,
+                                          history: [.text(10, "уже прочитано"), .text(12, "новое")])])
+
+        let snapshot = try await tg.makeCollector().collect(now: now)
+
+        #expect(snapshot.chats.first?.messages.map(\.messageId) == [12])
+        #expect(snapshot.cursor == [CursorEntry(chatId: 500, upToMessageId: 12, forumTopicId: 1)])
+    }
+
+    @Test("обычная группа (не форум) → сбор как раньше, курсор без темы")
+    func plainGroupIsNotForum() async throws {
+        let tg = TDLibScenario()
+        tg.givenChat(600, title: "Team", kind: .group, unread: 1)
+        tg.givenHistory(600, [.text(41, "привет")])
+
+        let snapshot = try await tg.makeCollector().collect(now: now)
+
+        #expect(snapshot.chats.first?.messages == [SummaryMessage(messageId: 41, text: "привет")])
+        #expect(snapshot.cursor == [CursorEntry(chatId: 600, upToMessageId: 41)])
+    }
+
     @Test("нет непрочитанных → пустой снапшот и пустой курсор")
     func emptyWhenNoUnread() async throws {
         let tg = TDLibScenario()

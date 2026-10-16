@@ -81,6 +81,9 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     /// очередь кончилась — пустой ответ (конец истории, как у Real TDLib). Порядок параллельных запросов не важен.
     private var historyByChat: [Int64: [MessagesResponse]] = [:]
 
+    /// Ответы по параметрам запроса (`mockResponse(forRequestType:matching:return:)`): тип + значения полей.
+    private var matchedResponses: [(type: String, params: [String: Int64], queue: [Result<any TDLibResponse, TDLibErrorResponse>])] = []
+
     /// Все запросы, отправленные клиентом (сырой JSON), — для проверок «что ушло в TDLib».
     private var _sentRequests: [String] = []
 
@@ -144,6 +147,24 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             mockedResponses[requestType, default: []].append(.success(response))
         case .failure(let error):
             mockedResponses[requestType, default: []].append(.failure(error))
+        }
+    }
+
+    /// Ответ на запрос `requestType`, у которого поля `params` равны заданным (например `["chat_id": 5, "forum_topic_id": 7]`).
+    /// Нужен, когда запросы одного типа идут параллельно по разным объектам. Несколько вызовов — ответы по очереди;
+    /// очередь кончилась — issue «нет стаба». Запросы, не подошедшие ни под одно правило, — в общую FIFO по типу.
+    public func mockResponse<Response: TDLibResponse>(
+        forRequestType requestType: String,
+        matching params: [String: Int64],
+        return result: Result<Response, TDLibErrorResponse>
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        let boxed: Result<any TDLibResponse, TDLibErrorResponse> = result.map { $0 as any TDLibResponse }
+        if let i = matchedResponses.firstIndex(where: { $0.type == requestType && $0.params == params }) {
+            matchedResponses[i].queue.append(boxed)
+        } else {
+            matchedResponses.append((requestType, params, [boxed]))
         }
     }
 
@@ -255,6 +276,26 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 return fail("send(): getChat без @extra (вызывать через sendAndWait)")
             }
             handleGetChat(parsed: parsed, extra: extra)
+            return
+        }
+
+        // Ответ по параметрам запроса (mockResponse(forRequestType:matching:))
+        if let i = matchedResponses.firstIndex(where: { rule in
+            rule.type == requestType && rule.params.allSatisfy { key, value in (parsed[key] as? NSNumber)?.int64Value == value }
+        }) {
+            guard let extra else { return }
+            guard !matchedResponses[i].queue.isEmpty else {
+                return fail("нет стаба для \(requestType) \(matchedResponses[i].params) — ответы кончились", extra: extra)
+            }
+            let result = matchedResponses[i].queue.removeFirst()
+            do {
+                switch result {
+                case .success(let response): responsesByExtra[extra] = try response.toTDLibJSON(withExtra: extra)
+                case .failure(let error): responsesByExtra[extra] = try error.toTDLibJSON(withExtra: extra)
+                }
+            } catch {
+                fail("\(requestType): не удалось закодировать ответ: \(error)", extra: extra)
+            }
             return
         }
 
