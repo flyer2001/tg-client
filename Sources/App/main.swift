@@ -85,7 +85,8 @@ struct TGClient {
         // ВАЖНО: настройка TDLib логирования должна быть ДО создания клиента
         TDLibClient.configureTDLibLogging(config: config)
 
-        let td = TDLibClient(appLogger: logger)
+        // TG_TDLIB_RECORD=<путь> — запись трафика TDLib для контрактных тестов (сырьё — только локально)
+        let td = TDLibClient(appLogger: logger, recordingPath: env["TG_TDLIB_RECORD"].flatMap { $0.isEmpty ? nil : $0 })
 
         // Авторизация: интерактив доступен только в oneshot. В service mode неинтерактивно
         // (предполагаем что oneshot уже был запущен ранее и сессия в stateDir сохранена).

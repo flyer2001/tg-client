@@ -72,9 +72,17 @@ public final class TDLibClient: @unchecked Sendable {
         appLogger: Logger,
         authorizationPollTimeout: Double = 1.0,
         maxAuthorizationAttempts: Int = 500,
-        authorizationTimeout: TimeInterval = 300
+        authorizationTimeout: TimeInterval = 300,
+        recordingPath: String? = nil
     ) {
-        self.ffi = CTDLibFFI()
+        // recordingPath — запись трафика TDLib в JSONL для контрактных тестов (RecordingTDLibFFI)
+        let real = CTDLibFFI()
+        if let recordingPath, let recording = RecordingTDLibFFI(inner: real, path: recordingPath) {
+            appLogger.warning("TDLib трафик пишется в \(recordingPath) — содержит личные сообщения")
+            self.ffi = recording
+        } else {
+            self.ffi = real
+        }
         self.appLogger = appLogger
         self.authorizationPollTimeout = authorizationPollTimeout
         self.maxAuthorizationAttempts = maxAuthorizationAttempts
