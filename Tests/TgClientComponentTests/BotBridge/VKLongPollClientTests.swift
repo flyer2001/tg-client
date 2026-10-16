@@ -224,19 +224,6 @@ extension VKLongPollClientTests {
     }
 }
 
-/// Записывает запрошенные паузы, не ожидая реального времени.
-actor SleepRecorder {
-    private(set) var durations: [Duration] = []
-
-    nonisolated var sleep: @Sendable (Duration) async throws -> Void {
-        { [self] duration in await self.record(duration) }
-    }
-
-    private func record(_ duration: Duration) {
-        durations.append(duration)
-    }
-}
-
 extension URLRequest {
     var isGetLongPollServer: Bool { url?.path.hasSuffix("groups.getLongPollServer") == true }
 }

@@ -208,11 +208,13 @@ struct TelegramBotNotifierTests {
             .success(successData)  // 2й попытка: success
         ])
 
+        let sleeps = SleepRecorder()
         let notifier = TelegramBotNotifier(
             botToken: "test-token",
             chatId: 456,
             httpClient: mockClient,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            sleep: sleeps.sleep
         )
 
         // Должен успешно отправить после retry
@@ -221,6 +223,8 @@ struct TelegramBotNotifierTests {
         // Проверяем что было 2 вызова
         let callCount = await mockClient.callCount
         #expect(callCount == 2)
+        let durations = await sleeps.durations   // вне #expect: с await он не печатает значения
+        #expect(durations == [.seconds(1)])   // бэкофф 1s·2^n, без реального ожидания
     }
 
     @Test("Retry на 500 Server Error → success после 2й попытки")
@@ -250,17 +254,21 @@ struct TelegramBotNotifierTests {
             .success(successData)  // 2й попытка: success
         ])
 
+        let sleeps = SleepRecorder()
         let notifier = TelegramBotNotifier(
             botToken: "test-token",
             chatId: 456,
             httpClient: mockClient,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            sleep: sleeps.sleep
         )
 
         try await notifier.send("Test message")
 
         let callCount = await mockClient.callCount
         #expect(callCount == 2)
+        let durations = await sleeps.durations   // вне #expect: с await он не печатает значения
+        #expect(durations == [.seconds(1)])   // бэкофф 1s·2^n, без реального ожидания
     }
 
     @Test("Retry exhausted (все 3 попытки 429) → throw BotAPIError")
@@ -280,11 +288,13 @@ struct TelegramBotNotifierTests {
             .success(errorData)   // 3й попытка
         ])
 
+        let sleeps = SleepRecorder()
         let notifier = TelegramBotNotifier(
             botToken: "test-token",
             chatId: 456,
             httpClient: mockClient,
-            logger: Logger(label: "test")
+            logger: Logger(label: "test"),
+            sleep: sleeps.sleep
         )
 
         // Должен выбросить ошибку после исчерпания попыток
@@ -295,6 +305,8 @@ struct TelegramBotNotifierTests {
         // Проверяем что было 3 вызова
         let callCount = await mockClient.callCount
         #expect(callCount == 3)
+        let durations = await sleeps.durations   // вне #expect: с await он не печатает значения
+        #expect(durations == [.seconds(1), .seconds(2)])   // бэкофф 1s·2^n, без реального ожидания
     }
 
     @Test("Fail-fast на 404 Chat Not Found")

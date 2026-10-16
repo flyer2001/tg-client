@@ -2,8 +2,9 @@ import Testing
 import Foundation
 import Logging
 @testable import FoundationExtensions
+import TestHelpers
 
-@Suite("RetryHelpers Tests")
+@Suite("RetryHelpers Tests", .timeLimit(.minutes(1)))
 struct RetryHelpersTests {
 
     // MARK: - withRetry Tests
@@ -34,7 +35,7 @@ struct RetryHelpersTests {
         logger.logLevel = .critical
 
         let result = try await withRetry(
-            baseDelay: .milliseconds(100),  // Быстрые тесты
+            baseDelay: .milliseconds(100),
             operation: {
                 await counter.increment()
                 if await counter.get() == 1 {
@@ -45,7 +46,8 @@ struct RetryHelpersTests {
             shouldRetry: { error, _ in
                 error is TestError
             },
-            logger: logger
+            logger: logger,
+            sleep: { _ in }
         )
 
         #expect(result == "success")
@@ -61,13 +63,14 @@ struct RetryHelpersTests {
         await #expect(throws: TestError.self) {
             try await withRetry(
                 maxAttempts: 3,
-                baseDelay: .milliseconds(100),  // Быстрые тесты
+                baseDelay: .milliseconds(100),
                 operation: {
                     await counter.increment()
                     throw TestError.temporary
                 },
                 shouldRetry: { _, _ in true },
-                logger: logger
+                logger: logger,
+                sleep: { _ in }
             )
         }
 
@@ -100,42 +103,32 @@ struct RetryHelpersTests {
         #expect(await counter.get() == 1)  // Нет retry для permanent ошибки
     }
 
-    @Test("Exponential backoff delays: 0.1s, 0.2s")
+    /// Паузы — те, что код **попросил** (SleepRecorder), а не замер по ContinuousClock: детерминированно и мгновенно.
+    /// 4 попытки → 3 паузы: при 3 попытках (100, 200) экспонента неотличима от линейного роста — мутация это показала.
+    @Test("Exponential backoff delays: 0.1s, 0.2s, 0.4s")
     func exponentialBackoffDelays() async throws {
         let counter = CallCounter()
-        let recorder = DelayRecorder()
+        let sleeps = SleepRecorder()
         var logger = Logger(label: "test")
         logger.logLevel = .critical
-        let startTime = ContinuousClock.now
 
         await #expect(throws: TestError.self) {
             try await withRetry(
-                maxAttempts: 3,
-                baseDelay: .milliseconds(100),  // Быстрые тесты: 100ms, 200ms, 400ms
+                maxAttempts: 4,
+                baseDelay: .milliseconds(100),
                 operation: {
                     await counter.increment()
-                    if await counter.get() > 1 {
-                        let elapsed = ContinuousClock.now - startTime
-                        await recorder.record(elapsed)
-                    }
                     throw TestError.temporary
                 },
                 shouldRetry: { _, _ in true },
-                logger: logger
+                logger: logger,
+                sleep: sleeps.sleep
             )
         }
 
-        #expect(await counter.get() == 3)
-        #expect(await recorder.count() == 2)  // 2 retry = 2 задержки
-
-        let delays = await recorder.getAll()
-        // Первый retry: ~100ms задержка
-        #expect(delays[0] >= .milliseconds(100))
-        #expect(delays[0] < .milliseconds(200))
-
-        // Второй retry: ~300ms всего (100ms + 200ms)
-        #expect(delays[1] >= .milliseconds(300))
-        #expect(delays[1] < .milliseconds(400))
+        #expect(await counter.get() == 4)
+        let durations = await sleeps.durations   // вне #expect: с await он не печатает значения
+        #expect(durations == [.milliseconds(100), .milliseconds(200), .milliseconds(400)])  // 100ms·2^n
     }
 
     // MARK: - withTimeout Tests
@@ -143,8 +136,7 @@ struct RetryHelpersTests {
     @Test("Операция завершается до timeout")
     func operationCompletesBeforeTimeout() async throws {
         let result = try await withTimeout(.seconds(1)) {
-            try await Task.sleep(for: .milliseconds(50))
-            return "success"
+            "success"
         }
 
         #expect(result == "success")
@@ -190,7 +182,6 @@ struct RetryHelpersTests {
             timeout: .seconds(1),
             operation: {
                 await counter.increment()
-                try await Task.sleep(for: .milliseconds(50))
                 return "success"
             },
             shouldRetry: { _, _ in true },
@@ -209,7 +200,7 @@ struct RetryHelpersTests {
 
         let result = try await withRetry(
             maxAttempts: 3,
-            baseDelay: .milliseconds(100),  // Быстрые тесты
+            baseDelay: .milliseconds(100),
             timeout: .milliseconds(100),
             operation: {
                 await counter.increment()
@@ -223,7 +214,8 @@ struct RetryHelpersTests {
             shouldRetry: { error, _ in
                 error is TimeoutError
             },
-            logger: logger
+            logger: logger,
+            sleep: { _ in }
         )
 
         #expect(result == "success")
@@ -239,15 +231,16 @@ struct RetryHelpersTests {
         await #expect(throws: TimeoutError.self) {
             try await withRetry(
                 maxAttempts: 3,
-                baseDelay: .milliseconds(100),  // Быстрые тесты
+                baseDelay: .milliseconds(100),
                 timeout: .milliseconds(50),
                 operation: {
                     await counter.increment()
-                    try await Task.sleep(for: .seconds(2))
+                    try await Task.sleep(for: .seconds(2))   // висит, пока таймаут не отменит
                     return "never reached"
                 },
                 shouldRetry: { _, _ in true },
-                logger: logger
+                logger: logger,
+                sleep: { _ in }
             )
         }
 

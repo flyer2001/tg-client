@@ -179,7 +179,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)  // Быстрые тесты
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
@@ -232,7 +233,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
@@ -283,7 +285,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
@@ -323,7 +326,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
@@ -368,7 +372,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
@@ -409,7 +414,8 @@ struct DigestOrchestratorTests {
         let orchestrator = DigestOrchestrator(
             summaryGenerator: summaryGenerator,
             logger: Logger(label: "test"),
-            baseDelay: .milliseconds(100)
+            baseDelay: .milliseconds(100),
+            sleep: { _ in }   // бэкофф без реального ожидания
         )
 
         let messages = [
