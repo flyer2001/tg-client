@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 #if os(Linux)
 import FoundationNetworking
 #endif
@@ -36,10 +37,20 @@ public actor MockHTTPClient: HTTPClientProtocol {
     /// История отправленных запросов (для проверки URL/body в тестах).
     private var _sentRequests: [URLRequest] = []
 
-    /// Очередь кончилась → «висеть» до отмены задачи, как реальный long poll запрос (вместо fatalError).
+    /// Очередь кончилась → «висеть» до отмены задачи, как реальный long poll запрос.
     private var hangWhenExhausted = false
 
-    public init() {}
+    /// Строка теста, где создан стаб, — туда указывает issue о незастабленном вызове.
+    private let createdAt: SourceLocation
+
+    public init(sourceLocation: SourceLocation = #_sourceLocation) {
+        self.createdAt = sourceLocation
+    }
+
+    /// Ошибка «вызов без стаба» — клиент получает её вместо ответа.
+    public struct UnstubbedCall: Error, CustomStringConvertible {
+        public let description: String
+    }
 
     /// Включает режим «висеть до отмены», когда очередь stub'ов пуста (для бесконечных циклов: VK Long Poll).
     public func setHangWhenExhausted(_ value: Bool) {
@@ -85,7 +96,9 @@ public actor MockHTTPClient: HTTPClientProtocol {
 
         // Single-stub mode
         guard let result = stubResult else {
-            fatalError("MockHTTPClient: stubResult not configured. Set stubResult or stubQueue before calling send().")
+            let message = "MockHTTPClient: нет стаба для \(request.httpMethod ?? "GET") \(request.url?.absoluteString ?? "?") — setStubResult/setStubQueue"
+            Issue.record(Comment(rawValue: message), sourceLocation: createdAt)
+            throw UnstubbedCall(description: message)
         }
         return try result.get()
     }

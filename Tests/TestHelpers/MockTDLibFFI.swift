@@ -1,6 +1,7 @@
 import TgClientModels
 import TGClientInterfaces
 import Foundation
+import Testing
 @testable import TDLibAdapter
 
 /// Mock реализация TDLibFFI для Unit-тестов и Component-тестов.
@@ -41,6 +42,12 @@ import Foundation
 ///
 /// При первом вызове `receive()` запоминается текущий pthread, последующие вызовы
 /// проверяют что поток не изменился (через `precondition`).
+///
+/// ## Ошибки настройки теста (И2)
+///
+/// Незастабленный запрос, битый JSON, сбой кодирования — не падение процесса, а `Issue.record` **на строке,
+/// где тест создал фейк** (`sourceLocation` захватывается в `init`), плюс TDLib-ошибка клиенту: тест падает сам,
+/// остальные тесты прогона выполняются.
 public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
 
     /// Lock для защиты shared mutable state (mockedResponses, responsesByExtra, pendingUpdates, queuedUpdates).
@@ -100,7 +107,22 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     /// Используется для проверки thread safety (как в CTDLibFFI).
     private var expectedThread: pthread_t?
 
-    public init() {}
+    /// Строка теста, где создан фейк, — туда указывают issue об ошибках настройки.
+    private let createdAt: SourceLocation
+
+    public init(sourceLocation: SourceLocation = #_sourceLocation) {
+        self.createdAt = sourceLocation
+    }
+
+    /// Ошибка настройки теста: issue на строке создания фейка; если запрос ждёт ответа — TDLib-ошибка по `@extra`.
+    /// Вызывать под `lock`.
+    private func fail(_ message: String, extra: String? = nil) {
+        Issue.record(Comment(rawValue: "MockTDLibFFI: \(message)"), sourceLocation: createdAt)
+        guard let extra else { return }
+        let error = TDLibErrorResponse(code: 500, message: "MockTDLibFFI: \(message)")
+        responsesByExtra[extra] = (try? error.toTDLibJSON(withExtra: extra))
+            ?? #"{"@type":"error","code":500,"message":"MockTDLibFFI","@extra":"\#(extra)"}"#
+    }
 
     public func create() throws {
         // Mock клиент уже готов
@@ -161,7 +183,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         let encoder = JSONEncoder.tdlib()
         guard let data = try? encoder.encode(update),
               let json = String(data: data, encoding: .utf8) else {
-            fatalError("MockTDLibFFI.mockUpdate(): failed to encode update")
+            return fail("mockUpdate(): не удалось закодировать update \(update)")
         }
         pendingUpdates.append(json)
     }
@@ -183,7 +205,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         let encoder = JSONEncoder.tdlib()
         guard let data = try? encoder.encode(response),
               let json = String(data: data, encoding: .utf8) else {
-            fatalError("MockTDLibFFI.mockUpdate(): failed to encode response")
+            return fail("mockUpdate(): не удалось закодировать \(R.self)")
         }
         pendingUpdates.append(json)
     }
@@ -195,7 +217,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         guard let data = request.data(using: .utf8),
               let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let requestType = parsed["@type"] as? String else {
-            fatalError("MockTDLibFFI.send(): invalid JSON or missing @type")
+            return fail("send(): невалидный JSON или нет @type: \(request.prefix(200))")
         }
         _sentRequests.append(request)
 
@@ -208,7 +230,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         // loadChats всегда вызывается через sendAndWait() → требует @extra
         if requestType == "loadChats" {
             guard let extra = extra else {
-                fatalError("MockTDLibFFI.send(): loadChats requires @extra (must be called via sendAndWait)")
+                return fail("send(): loadChats без @extra (вызывать через sendAndWait)")
             }
             handleLoadChats(parsed: parsed, extra: extra)
             return
@@ -218,7 +240,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         // getChat всегда вызывается через sendAndWait() → требует @extra
         if requestType == "getChat" {
             guard let extra = extra else {
-                fatalError("MockTDLibFFI.send(): getChat requires @extra (must be called via sendAndWait)")
+                return fail("send(): getChat без @extra (вызывать через sendAndWait)")
             }
             handleGetChat(parsed: parsed, extra: extra)
             return
@@ -230,7 +252,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             do {
                 responsesByExtra[extra] = try response.toTDLibJSON(withExtra: extra)
             } catch {
-                fatalError("MockTDLibFFI.send(): failed to encode getChats: \(error)")
+                fail("send(): не удалось закодировать getChats: \(error)", extra: extra)
             }
             return
         }
@@ -242,7 +264,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             if extra == nil {
                 return
             }
-            fatalError("MockTDLibFFI.send(): no mocked response for @type='\(requestType)'")
+            return fail("нет стаба для запроса @type='\(requestType)' — добавь mockResponse(forRequestType: \"\(requestType)\", …)", extra: extra)
         }
 
         let result = queue.removeFirst()
@@ -267,7 +289,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 jsonString = try error.toTDLibJSON(withExtra: extra)
             }
         } catch {
-            fatalError("MockTDLibFFI.send(): failed to encode response: \(error)")
+            return fail("send(): не удалось закодировать ответ на \(requestType): \(error)", extra: extra)
         }
 
         // Сохраняем response по @extra для точного матчинга
@@ -292,7 +314,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 let json = try update.toTDLibJSON()
                 pendingUpdates.append(json)
             } catch {
-                fatalError("MockTDLibFFI.handleLoadChats(): failed to encode update: \(error)")
+                fail("loadChats: не удалось закодировать update: \(error)")
             }
         }
         updatesProcessed += toEmit
@@ -311,7 +333,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 responsesByExtra[extra] = json
             }
         } catch {
-            fatalError("MockTDLibFFI.handleLoadChats(): failed to encode response: \(error)")
+            fail("loadChats: не удалось закодировать ответ: \(error)", extra: extra)
         }
     }
 
@@ -352,18 +374,18 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     private func handleGetChat(parsed: [String: Any], extra: String) {
         // Парсим chat_id из request
         guard let chatId = parsed["chat_id"] as? Int64 else {
-            fatalError("MockTDLibFFI.handleGetChat(): request missing chat_id")
+            return fail("getChat без chat_id", extra: extra)
         }
 
         // Нет явного мока — отдаём чат из кэша (как Real TDLib после loadChats)
         guard var queue = mockedResponses["getChat"], !queue.isEmpty else {
             guard let cached = loadedChats[chatId] else {
-                fatalError("MockTDLibFFI.handleGetChat(): no mocked response and no cached chat \(chatId)")
+                return fail("getChat(\(chatId)): нет стаба и чата в кэше — добавь queueUpdate(.newChat) или mockResponse(\"getChat\")", extra: extra)
             }
             do {
                 responsesByExtra[extra] = try cached.toTDLibJSON(withExtra: extra)
             } catch {
-                fatalError("MockTDLibFFI.handleGetChat(): failed to encode cached chat: \(error)")
+                fail("getChat: не удалось закодировать чат из кэша: \(error)", extra: extra)
             }
             return
         }
@@ -380,7 +402,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
             switch result {
             case .success(let response):
                 guard let chatResponse = response as? ChatResponse else {
-                    fatalError("MockTDLibFFI.handleGetChat(): mocked response is not ChatResponse")
+                    return fail("getChat: стаб не ChatResponse, а \(type(of: response))", extra: extra)
                 }
 
                 // Создаём новый ChatResponse с chat_id из request
@@ -401,7 +423,7 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 responsesByExtra[extra] = json
             }
         } catch {
-            fatalError("MockTDLibFFI.handleGetChat(): failed to encode response: \(error)")
+            fail("getChat: не удалось закодировать ответ: \(error)", extra: extra)
         }
     }
 
