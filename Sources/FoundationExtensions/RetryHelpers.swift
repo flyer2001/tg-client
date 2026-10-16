@@ -21,7 +21,10 @@ public func withRetry<T: Sendable>(
     timeout: Duration? = nil,  // Опциональный timeout для каждой попытки
     operation: @escaping @Sendable () async throws -> T,
     shouldRetry: @escaping @Sendable (Error, Int) -> Bool,
-    logger: Logger
+    logger: Logger,
+    // Пауза бэкоффа — зависимость: тест подставляет мгновенную/записывающую (SleepRecorder), не ждёт реально.
+    // Таймаут попытки (withTimeout) остаётся на реальных часах — это верхняя граница реального времени.
+    sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
 ) async throws -> T {
     var lastError: Error?
 
@@ -45,7 +48,7 @@ public func withRetry<T: Sendable>(
                     "attempt": "\(attempt + 1)/\(maxAttempts)",
                     "error": "\(error)"
                 ])
-                try await Task.sleep(for: delay)
+                try await sleep(delay)
             } else {
                 throw error
             }

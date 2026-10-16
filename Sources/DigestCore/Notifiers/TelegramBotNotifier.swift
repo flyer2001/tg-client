@@ -27,13 +27,18 @@ public actor TelegramBotNotifier: BotNotifierProtocol {
         botToken: String,
         chatId: Int64,
         httpClient: HTTPClientProtocol,
-        logger: Logger
+        logger: Logger,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.botToken = botToken
         self.chatId = chatId
         self.httpClient = httpClient
         self.logger = logger
+        self.sleep = sleep
     }
+
+    /// Пауза бэкоффа между попытками (в тестах — мгновенная, см. SleepRecorder).
+    private let sleep: @Sendable (Duration) async throws -> Void
 
     public func send(_ message: String) async throws {
         logger.info("Sending message to Telegram bot", metadata: [
@@ -83,7 +88,8 @@ public actor TelegramBotNotifier: BotNotifierProtocol {
                 }
                 return false
             },
-            logger: logger
+            logger: logger,
+            sleep: sleep
         )
     }
 }

@@ -30,12 +30,17 @@ public actor DigestOrchestrator {
     public init(
         summaryGenerator: SummaryGeneratorProtocol,
         logger: Logger,
-        baseDelay: Duration = .seconds(1)
+        baseDelay: Duration = .seconds(1),
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.summaryGenerator = summaryGenerator
         self.logger = logger
         self.baseDelay = baseDelay
+        self.sleep = sleep
     }
+
+    /// Пауза бэкоффа между попытками (в тестах — мгновенная).
+    private let sleep: @Sendable (Duration) async throws -> Void
 
     /// Генерирует дайджест из массива сообщений.
     ///
@@ -112,7 +117,8 @@ public actor DigestOrchestrator {
                 ])
                 return false
             },
-            logger: logger
+            logger: logger,
+            sleep: sleep
         )
     }
 }
