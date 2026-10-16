@@ -107,6 +107,16 @@ E2E на реальном форуме: 4 темы помечены, остал�
 
 Итог гипотезы — таблица «что дала / сколько стоила» в CHANGELOG и вердикт.
 
+**Шаг 1 — сделан 2026-10-16 (эксперимент на копии, затем в репо):**
+
+| Библиотека | Что дала | Цена | Вердикт |
+|---|---|---|---|
+| CustomDump 1.7.3 + IssueReportingTestSupport (swift-issue-reporting 2.1.1) | дифф `− name: "General!" / + name: "General"` вместо обрезанной строки `#expect` | чистая сборка 17 → 19 с, `.build` +35 МБ | **берём** (только тесты) |
+| ConcurrencyExtras | ничего: 3 `sleep` в AuthenticationFlowTests устарели сами (ResponseWaiters буферизует ранний update, 0/30 + 0/10 без sleep), остальные — реальное время (И5) или цикл receive на DispatchQueue, которым serial executor не управляет | — | **не берём** |
+
+Подвох: без `IssueReportingTestSupport` `expectNoDifference` под Swift Testing тест **не роняет**. swift-issue-reporting 2.1.2
+вышла 2026-10-13 (< 2 недель) — закреплена 2.1.1. Следующий шаг H-PF — снепшоты (И4.2), решать после И5.
+
 ### И5. Время как зависимость (P2)
 
 `ChannelMessageSource` (пагинация, сбор updates), `RetryHelpers`, `MarkAsReadService` таймауты → `any Clock<Duration>`.
