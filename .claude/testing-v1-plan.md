@@ -71,6 +71,11 @@ TESTING.md переписать коротко (~100 строк): карта у�
 Вариант: фейк отвечает TDLib-ошибкой `{"@type":"error","message":"unmocked <type>"}` + `reportIssue` с
 `sourceLocation`, захваченным при создании сценария. Критерий: мутационная проверка — забытый стаб даёт падение
 с именем запроса и строкой теста, процесс не падает.
+**Сделано 2026-10-16.** `MockTDLibFFI(sourceLocation:)` / `MockHTTPClient(sourceLocation:)` захватывают строку создания;
+незастабленное → `Issue.record` там + ошибка клиенту (`fatalError` в TestHelpers 17 → 0). `send()` фейка вызывается
+из `Task` внутри `sendAndWait` — task-local текущего теста наследуется, issue привязывается к тесту. Мутация
+(убран стаб `viewMessages` в `BrokerTests.read`): раньше — падение всего прогона, теперь — issue на строке фейка
+с подсказкой `добавь mockResponse(forRequestType: "viewMessages", …)`, остальные тесты выполнились.
 
 ### И3. DSL над фейком TDLib (P1)
 
