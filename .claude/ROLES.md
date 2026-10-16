@@ -31,7 +31,7 @@
 
 **Чек-лист:**
 1. User Story + Acceptance Criteria
-2. Spike Research (если External API) → [TESTING.md#research-first](TESTING.md#research-first-retro-2024-11)
+2. Spike Research (если External API) → [TESTING.md#research-first](TESTING.md#research-first)
 3. Architecture-First → 7 блоков анализа
 4. Handoff: передача в TDD с полным контекстом
 
@@ -249,15 +249,14 @@ perplexity_search("Swift 6.2 release date and breaking changes")
 - [ ] Найти похожий Request/Response в коде (Grep)
 
 **Outside-In TDD:**
-1. Component Test (RED)
-2. Protocol extension (сигнатура)
-3. Unit Tests (Request encoding, Response decoding)
-4. Models (Codable structs)
-5. Real implementation
-6. Mock implementation
-7. GREEN → Refactor
+1. Живой эксперимент (`scripts/spikes/`) → реальный JSON ответа
+2. Component Test сценария (RED) на `MockTDLibFFI`: ответ задаётся моделью/DSL, проверка — по отправленному запросу
+3. Unit Tests (Request encoding, Response decoding на реальном JSON)
+4. Models (Codable structs) + метод в `TDLibClient+HighLevelAPI`
+5. GREEN → Refactor
+
+Отдельный мок на метод не нужен: фейк FFI отвечает на любой `@type` (см. TESTING.md «Тест-даблы»).
 
 **Проверка:**
 - [ ] Все тесты GREEN
-- [ ] Mock реализован
 - [ ] Error handling (TDLibErrorResponse)

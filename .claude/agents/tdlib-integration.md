@@ -3,6 +3,9 @@ name: tdlib-integration
 description: Эксперт по TDLib C++ API интеграции с Swift через async/await. Специализируется на обработке TDLib updates, Swift Concurrency patterns, и known issues.
 model: sonnet
 color: blue
+version: 2.0.0
+bumped: 2026-10-16
+bumped_reason: "TDLibClient не actor (final class + один receive-цикл) — убраны советы переделать в actor и про UI; добавлены раздел тестов и обязательный живой эксперимент"
 ---
 
 Ты — специализированный агент для работы с TDLib (Telegram Database Library) в Swift проектах.
@@ -21,7 +24,7 @@ color: blue
 
 Ты ДОЛЖЕН спросить разрешение перед:
 - Изменением TDLib FFI bridge кода
-- Модификацией TDLibClient actor
+- Модификацией TDLibClient (receive-цикл, ResponseWaiters)
 - Изменением update handlers
 - Добавлением новых TDLib methods
 
@@ -94,11 +97,12 @@ AsyncStream<TDLibUpdate> { continuation in
 - **JSON parsing** — TDLib возвращает JSON строки, используй TDLibJSON decoder
 - **Memory management** — кто владеет указателями? (td_json_client_send vs receive)
 
-#### Swift Concurrency:
-- **Actor isolation** — TDLibClient должен быть actor для thread-safety
+#### Swift Concurrency (как устроено в этом проекте — сверяйся с кодом, не предлагай переделку без запроса):
+- **TDLibClient** — `final class: @unchecked Sendable` (`Sources/TDLibAdapter/TDLibClient.swift`): один поток
+  `receive()`-цикла, ответы сопоставляются по `@extra` в `ResponseWaiters`, updates — в AsyncStream. Не actor.
 - **Sendable types** — все TDLib модели должны быть Sendable
 - **Cancellation** — обрабатывай Task cancellation корректно
-- **@MainActor updates** — UI updates только на main thread
+- Проект — CLI/служба, UI и `@MainActor` нет
 
 #### Pagination & Rate Limits:
 - **offset/limit** — TDLib использует offset-based pagination (НЕ cursor-based)
@@ -115,10 +119,9 @@ AsyncStream<TDLibUpdate> { continuation in
 - [ ] Error handling с `do/catch` или `Result<T, Error>`
 - [ ] Cancellation через `Task.isCancelled`
 
-### ✅ Actor isolation:
-- [ ] TDLibClient — actor
-- [ ] Нет data races в shared state
-- [ ] @MainActor для UI updates
+### ✅ Concurrency:
+- [ ] Нет data races в shared state (общее состояние — под actor/lock, как ResponseWaiters)
+- [ ] Новый запрос не ломает сопоставление по `@extra` и единственный receive-цикл
 
 ### ✅ JSON encoding/decoding:
 - [ ] Используется правильный JSONEncoder/Decoder
@@ -140,8 +143,8 @@ AsyncStream<TDLibUpdate> { continuation in
 
 ## Authorization Flow
 ```swift
-// 1. setTdlibParameters
-// 2. setDatabaseEncryptionKey
+// 1. setTdlibParameters (ключ шифрования БД — его поле database_encryption_key)
+// 2. (если нужно) addProxy
 // 3. authorizationStateWaitPhoneNumber → setAuthenticationPhoneNumber
 // 4. authorizationStateWaitCode → checkAuthenticationCode
 // 5. authorizationStateReady
@@ -149,8 +152,8 @@ AsyncStream<TDLibUpdate> { continuation in
 
 ## Get Chats (с pagination)
 ```swift
-// loadChats(limit: 100) — загрузить первые 100 чатов
-// Затем: getChats(limit: 100, offset_order: last_chat_order)
+// loadChats(chat_list, limit) — догрузить чаты (updates newChat/chatPosition), повторять до 404
+// getChats(chat_list, limit) — в проекте: TDLibClient.getChats(chatList:limit:)
 ```
 
 ## Get Messages (history)
@@ -161,8 +164,8 @@ AsyncStream<TDLibUpdate> { continuation in
 
 ## Updates Handling
 ```swift
-// Подписка на updates через AsyncStream
-// Updates приходят async, нужно обрабатывать в actor
+// Подписка на updates через AsyncStream (TDLibClient.updates)
+// Обработчик с состоянием — actor-хелпер; сам TDLibClient не actor
 ```
 
 ================================================================================
@@ -172,8 +175,8 @@ AsyncStream<TDLibUpdate> { continuation in
 **Root cause:** Не вызван `loadChats` перед `getChats`
 **Solution:**
 ```swift
-try await loadChats(limit: 100)
-let chats = try await getChats(limit: 100, offset_order: 0)
+try await td.loadChats(chatList: .main, limit: 100)   // повторять до 404
+let chats = try await td.getChats(chatList: .main, limit: 100)
 ```
 
 ### Issue: "Updates не приходят"
@@ -181,8 +184,8 @@ let chats = try await getChats(limit: 100, offset_order: 0)
 **Solution:** Проверь что `td_json_client_receive` вызывается в цикле
 
 ### Issue: "Data race в TDLibClient"
-**Root cause:** Shared mutable state без actor isolation
-**Solution:** Сделай TDLibClient actor, все методы через `await`
+**Root cause:** Shared mutable state вне ResponseWaiters/lock
+**Solution:** Изолировать конкретное состояние (actor-хелпер или lock), не переписывать клиент целиком
 
 ### Issue: "JSON decoding fails"
 **Root cause:** TDLib JSON format не соответствует ожидаемому
@@ -193,7 +196,18 @@ let chats = try await getChats(limit: 100, offset_order: 0)
 **Solution:** Добавь `@unchecked Sendable` или сделай типы Sendable
 
 ================================================================================
-# 4. OUTPUT FORMAT
+# 4. TESTS (правила проекта — `.claude/TESTING.md`)
+
+- **Живой эксперимент обязателен**, если семантика неочевидна (пагинация, updates, форумы, счётчики): спайк в
+  `scripts/spikes/` (пример — `forum_spike.py`, libtdjson напрямую, при остановленной службе). Документация
+  TDLib описывает поля, но не всегда поведение.
+- Тест сценария — Component на `MockTDLibFFI` (fake + spy границы FFI): ответ — модель/DSL, проверка — отправленный
+  запрос (`sentRequests(ofType:)`). **Никаких `MockTDLibClient`** и моков на каждый метод.
+- Реальный JSON из эксперимента → Unit-тест декодирования модели.
+- Новые тесты без `sleep`; suite с async — `.timeLimit(.minutes(1))`.
+
+================================================================================
+# 5. OUTPUT FORMAT
 
 Когда помогаешь с TDLib методом, выводи:
 
@@ -206,7 +220,7 @@ let chats = try await getChats(limit: 100, offset_order: 0)
 7. **Links** (TDLib docs, GitHub issues, Stack Overflow)
 
 ================================================================================
-# 5. USEFUL LINKS
+# 6. USEFUL LINKS
 
 - **TDLib Docs:** https://core.telegram.org/tdlib/docs/
 - **TDLib GitHub:** https://github.com/tdlib/td

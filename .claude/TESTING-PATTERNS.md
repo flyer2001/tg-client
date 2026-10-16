@@ -2,7 +2,7 @@
 
 > **Назначение:** Детальные алгоритмы и примеры для сложных случаев.
 > **Когда читать:** По ссылке из TESTING.md когда нужен конкретный паттерн.
-> **Обновлено:** 2025-12-01
+> **Обновлено:** 2026-10-16 (async: что реально доступно в проекте)
 
 ---
 
@@ -188,19 +188,25 @@ https://developer.apple.com/documentation/testing/confirmation
 
 ### Паттерн 2: withMainSerialExecutor
 
-**Когда:** Проверка порядка, детерминированные тесты.
+> Гипотеза H-PF — в проекте пока нет.
+
+**Когда:** Проверка порядка, детерминированные тесты. Требует `swift-concurrency-extras` — подключение решается в
+И4 ([testing-v1-plan.md](testing-v1-plan.md)); спайк 2026-10-16: на Linux работает. Swift 6 не даёт мутировать
+захваченный `var` из `Task` — состояние через `LockIsolated`.
 
 ```swift
 import ConcurrencyExtras
 
 @Test func processesSequentially() async throws {
     await withMainSerialExecutor {
-        var order: [Int] = []
-        await handler.start { order.append($0.id) }
-        #expect(order == [1, 2, 3])
+        let order = LockIsolated<[Int]>([])
+        await handler.start { id in order.withValue { $0.append(id) } }
+        #expect(order.value == [1, 2, 3])
     }
 }
 ```
+
+Сейчас для порядка — «затвор» на continuation (`CommandProcessorConcurrencyTests`).
 
 https://www.pointfree.co/blog/posts/110-reliably-testing-async-code-in-swift
 

@@ -1,6 +1,7 @@
 ---
-version: 1.0.0
-bumped: 2026-07-21
+version: 2.0.0
+bumped: 2026-10-16
+bumped_reason: "сборка — на ubuntu-home Swift 6.4 инкрементально (build-clean.sh только при зависании); Research-First: эксперимент до падающего теста; подменяем FFI/HTTP/время, файлы настоящие; ссылки на TESTING.md"
 ---
 
 # CLAUDE.md
@@ -39,11 +40,10 @@ CLI-клиент Telegram: логин → чтение непрочитанны�
   - Перед деструктивной операцией ОБЯЗАТЕЛЬНО: показать `git status`, перечислить ЧТО ИМЕННО будет потеряно, спросить подтверждение
   - Если есть unstaged/uncommitted изменения → сначала спросить пользователя что с ними делать (stash, commit, discard)
   - Для отката изменений использовать `git stash` вместо `git reset --hard` (stash можно восстановить)
-- **⚠️ КРИТИЧНО: Проверка окружения перед сборкой:**
-  - В начале сессии ВСЕГДА проверяй `Platform` из `<env>` тега
-  - **Linux** → ОБЯЗАТЕЛЬНО используй `./scripts/build-clean.sh` (НЕ `swift build`)
-  - **macOS** → можно `swift build` напрямую
-  - **Причина**: на Linux SwiftPM зависает без kill процессов и очистки .build
+- **⚠️ КРИТИЧНО: Где собирать:**
+  - **VDS — не собирать** (2 ядра / 4 ГБ). Сборка и тесты — на **ubuntu-home** (Swift 6.4): rsync (с `--exclude .env`) → `swift build` / `swift test` по ssh; инкрементальная сборка работает
+  - `./scripts/build-clean.sh` — только если SwiftPM завис (наследие Swift 6.2)
+  - **macOS** → `swift build` напрямую
 - **⚠️ КРИТИЧНО: НИКОГДА не используй pipe с swift test:**
   - **ЗАПРЕЩЕНО:** `swift test | head`, `swift test | tail`, `swift test | grep`
   - **Причина:** SIGPIPE убивает swift test и вызывает зависание
@@ -71,7 +71,7 @@ CLI-клиент Telegram: логин → чтение непрочитанны�
 
 #### Workflow при получении задачи (TDD)
 
-**⚠️ Новый API или новый метод существующего API** → Research-First обязателен! См. [TESTING.md#research-first](.claude/TESTING.md#research-first-для-external-apis-retro-2024-11)
+**⚠️ Новый API или новый метод существующего API** → Research-First обязателен! См. [TESTING.md#research-first](.claude/TESTING.md#research-first)
 
 **🔴 Правило 0 (ДО начала написания кода) [RETRO-v0.4.0]:**
 
@@ -111,16 +111,16 @@ CLI-клиент Telegram: логин → чтение непрочитанны�
 
 ```
 ☐ WebFetch документация (параметры + behaviour + edge cases)
-☐ Failing test с краевыми сценариями
-☐ Live эксперимент (если семантика неочевидна: offset, pagination, async updates)
+☐ Live эксперимент / спайк (если семантика неочевидна: offset, pagination, async updates, форумы)
+☐ Failing test с краевыми сценариями (на реальном JSON из эксперимента)
 ☐ Только потом реализация
 ```
 
-Детали: [TESTING.md#research-first](.claude/TESTING.md#research-first-retro-2024-11)
+Детали: [TESTING.md#research-first](.claude/TESTING.md#research-first)
 
 #### Mock только boundaries
 
-**Правило:** Mock ТОЛЬКО внешние boundaries (FFI, network, filesystem), НЕ internal logic.
+**Правило:** подменяем ТОЛЬКО внешние boundaries (FFI TDLib, HTTP, время), НЕ internal logic. Файлы и сокеты — настоящие во временной папке.
 
 | Что мокаем | Правильно ✅ | Неправильно ❌ |
 |------------|-------------|----------------|
@@ -173,21 +173,15 @@ CLI-клиент Telegram: логин → чтение непрочитанны�
 ### Быстрые команды (для активной разработки)
 
 ```bash
-# ⚠️ ВАЖНО: Сборка на Linux (Swift 6.2)
+# Сборка/тесты — на ubuntu-home (Swift 6.4, /opt/swift-6.4.0), код синкается с VDS:
+rsync -az --delete --exclude .build --exclude .git --exclude .env ./ ubuntu-home:tg-client/
+ssh ubuntu-home 'cd ~/tg-client && export PATH=/opt/swift-6.4.0/usr/bin:$PATH && swift build'
+# Зависание SwiftPM → ./scripts/build-clean.sh
 
-# ЕДИНСТВЕННЫЙ РАБОЧИЙ ВАРИАНТ (~50-60 сек):
-./scripts/build-clean.sh
-# - Убивает зависшие процессы Swift
-# - Очищает кеш SwiftPM (purge-cache + reset)
-# - Полная пересборка каждый раз
-# - ПРИЧИНА: SwiftPM 6.2 зависает при инкрементальных сборках на Linux
-
-# macOS: можно swift build напрямую (инкрементальная сборка работает ~5-10 сек)
-
-# Тесты
-# ⚠️ НЕ используй pipe (| head/tail) с swift test - вызывает SIGPIPE зависание!
-swift test --verbose 2>&1                    # Правильно
-swift test --filter MyTest --verbose 2>&1    # С фильтром
+# Тесты: ⚠️ НЕ pipe (| head/tail/grep) — SIGPIPE зависание. Лог в файл, потом grep
+swift test --skip TgClientE2ETests > /tmp/tg-test.log 2>&1
+swift test --filter MyTest > /tmp/tg-test.log 2>&1
+scripts/test-metrics.sh /tmp/tg-test.log     # метрики тестов
 
 # Запуск приложения
 swift run tg-client
@@ -229,7 +223,7 @@ swift run tg-client
 
 **🔄 Регулярная проверка (раз в 1-3 дня) — ОБЯЗАТЕЛЬНО:**
 Claude должен активно предлагать проверку ретро. Промпт: [TASKS.md](.claude/TASKS.md#-проверка-гипотез-ретро)
-Результат записать в [.claude/archived/RETRO-RESULT.md](.claude/archived/RETRO-RESULT.md) (append с датой)
+Результат записать в `.claude/archived/RETRO-RESULT.md` (append с датой; файл создаётся при первой записи)
 
 ---
 

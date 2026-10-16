@@ -1,191 +1,121 @@
 # Стратегия тестирования
 
-> **Обновлено:** 2025-12-11
+> **Обновлено:** 2026-10-16 (переписано по [testing-v1-plan.md](testing-v1-plan.md): разбор книги М. Рубанова
+> «Про тестирование на iOS» + аудит проекта). Метрики — `scripts/test-metrics.sh`.
 
----
+## Критичные правила
 
-## ⚠️ Критичные правила
+1. **Swift Testing**, не XCTest. **TDD обязателен:** падающий тест раньше кода.
+2. **`swift test` без `| head/tail/grep`** (SIGPIPE, зависание). Лог — в файл (`> file` или `| tee file`), потом grep. Сборка и тесты — на ubuntu-home.
+3. **Research-First** для внешнего API: документация → живой эксперимент → падающий тест → код ([ниже](#research-first)).
+4. **Подменяем только границы** (FFI TDLib, HTTP, время). Внутренняя логика в тестах — настоящая ([ниже](#тест-даблы-и-правила-мокирования)).
+5. **Новые тесты — без `sleep`.** Время — зависимость (`Clock`), асинхронность — ожиданием задачи, не паузой. Старые `sleep` убираем в И5.
 
-1. **Swift Testing** — только Swift Testing, НЕ XCTest
-2. **TDD обязателен** — тесты ДО реализации ([workflow](#tdd-workflow-outside-in))
-3. **swift test без pipe** — `swift test | head/tail/grep` вызывает SIGPIPE зависание
-4. **Async без sleep** — используй async паттерны ([см. ниже](#async-тестирование))
-5. **Не raw JSON** — используй модели + encode
-6. **🔴 Research-First для External API** — WebFetch docs + failing test ДО реализации ([чеклист](#research-first-retro-2024-11))
-7. **🔴 Mock только boundaries** — FFI/network/filesystem, НЕ internal logic ([детали](#правила-мокирования))
+## Уровни: что проверяем → каким тестом
+
+Уровень определяется тем, **что настоящее, а что подменено**, а не папкой. Правило выбора: самый высокий уровень,
+на котором ещё видно проверяемое; ниже спускаемся, только если наверху это не видно или медленно.
+
+| Что проверяем | Тест | Что подменено |
+|---|---|---|
+| Модель / декодер JSON TDLib, VK | Unit | ничего; вход — **реальный JSON** из доки или живого прогона |
+| Чистая логика (курсор, нарезка текста, разбор аргументов) | Unit | ничего |
+| Адаптер TDLib (ожидание ответов, авторизация, updates) | Component | FFI → `MockTDLibFFI` |
+| Сценарий модуля (сбор сводки, брокер, пометка, мост VK) | Component | FFI / HTTP → фейки, всё остальное настоящее |
+| Транспорт (сокет, файлы) | Component | ничего: настоящий сокет / временная папка |
+| Данные как в жизни (нетекстовые сообщения, форумы…) | Contract — **И6, пока нет** | FFI → запись реального трафика |
+| User story на реальном аккаунте | E2E | ничего; меняющий шаг (`read`) — только с согласия Sergey |
+
+Исторически часть Component-тестов лежит в таргете Unit (`TDLibClientTests`) — смотреть на подменённое, не на таргет.
+
+## Тест-даблы и правила мокирования
+
+| Вид | Что делает | У нас |
+|---|---|---|
+| Dummy | нужен для сборки, не используется | — |
+| Stub | отдаёт заготовленный ответ (вход) | `MockHTTPClient.setStubResult/Queue` |
+| Spy | запоминает вызовы (выход) | `sentRequests(ofType:)`, `SleepRecorder`, `MockLogger` |
+| Fake | упрощённая рабочая реализация | `MockTDLibFFI` (кэш чатов, пагинация, `@extra`) = fake + spy |
+| Mock | ожидания зашиты внутрь дабла | **не используем** |
+
+- Подменяем **зависимость с внешним состоянием** (TDLib, HTTP, время), а не соседний класс: `MockTDLibClient`,
+  `MockSummaryGenerator` — запрещены, протокол «ради теста» не заводим.
+- Фейк — за **DSL** (И3): тест говорит на языке предметной области (`givenChat`, `expectViewed`), не разбирает сырой JSON.
+- Незастабленный запрос должен ронять **тест на его строке**, а не процесс (И2; сейчас `fatalError` в фейке).
+- Имена `Mock*` исторические; по смыслу это fake/stub/spy (таблица выше).
+
+## Как пишем тест
+
+- `sut` собирается **одной функцией** (`makeBroker()`, `makeSource()`), без флагов-переключателей.
+- Структура Arrange / Act / Assert, блоки разделены пустой строкой. Имя теста: «условие → результат».
+- `#require` для предусловий (останавливает тест), `#expect` для сравнений; сравнивать `Equatable` целиком, а не
+  поля по одному. Не глотать ошибки (`try?`, пустой `catch`) — тест должен падать сам.
+- Повторяющаяся проверка → ассерт-хелпер с параметром `sourceLocation: SourceLocation = #_sourceLocation`, который
+  передаётся в `#expect` — падение показывается на строке теста.
+- Комментарий **внутри** теста — сигнал вынести шаг в функцию с говорящим именем.
+- Много входов для чистой функции → `@Test(arguments:)` со структурой параметров (не кортежем).
+- Падающий тест сначала видим красным и читаем вывод: понятно ли, **где** и **что** разошлось.
+- Мутационная проверка для важной логики: сломать код — тест обязан упасть.
+
+## Async
+
+- Не прятать `Task {}` внутри функций: функция `async`, тест ждёт её; сохранённый таск — `await task.value` в хелпере.
+- Время — параметр `any Clock<Duration>` (И5); в тесте — управляемые часы, а не укороченный реальный таймаут.
+- Поток событий — `confirmation(expectedCount:)` или `AsyncStream` + `first`/`prefix`; порядок — «затвор» на
+  continuation (`CommandProcessorConcurrencyTests`).
+- Все suite с async — `.timeLimit(.minutes(1))`: зависание = падение (проставлено всем suite 2026-10-16). Общий глобальный ресурс → `.serialized`.
+
+## Research-First
+
+Новый API или новый метод существующего:
+
+```
+☐ Документация (параметры, поведение, краевые случаи) — TDLib: core.telegram.org/tdlib/docs и api/*
+☐ Живой эксперимент / спайк (scripts/spikes/), если семантика неочевидна (пагинация, updates, форумы)
+☐ Реальный JSON из эксперимента → Unit-тест модели
+☐ Падающий тест сценария → код
+```
+
+Без этого шага были все баги v0.3.0 (статистика — `archived/`).
+
+## TDD: Outside-In
+
+```
+☐ Спецификация: E2E-Scenarios/*.md (story, критерии приёмки)
+☐ Research-First (если внешний API)
+☐ Падающий Component-тест сценария → модели + Unit → код → GREEN → REFACTOR
+☐ E2E на реальном аккаунте (полный цикл, включая меняющий шаг — с согласия Sergey)
+☐ В конце: сверить тесты и спецификацию — план мог уйти в сторону
+```
+
+**Баг с живого прогона:** воспроизвести тестом на самом низком уровне, где он виден, с комментарием
+«Регрессия E2E <дата>», красный → фикс → зелёный.
+
+Декомпозиция больших тестов, матрица edge cases, REFACTOR — [TESTING-PATTERNS.md](TESTING-PATTERNS.md).
+
+## Документация в тестах
+
+Тесты — источник знаний о внешних API и решениях; из `///` (и `//`-шагов внутри теста) генерируется DocC
+(`scripts/generate-docc-from-tests.sh`, страницы локальные, в `.gitignore`).
+
+| Уровень | Что писать в `///` |
+|---|---|
+| Unit (внешний API) | ссылка на доку, реальный JSON ([ChatTests.swift](../Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/ChatTests.swift)) |
+| Unit (своя модель) | контракт, краевые случаи, причина решения |
+| Component | user story (`<doc:…>`), что подменено, незадокументированное поведение API |
+| E2E | сценарий и ручные шаги проверки |
+
+## Запуск
 
 ```bash
-# Запуск тестов
-✅ swift test 2>&1
-✅ swift test --filter MyTest 2>&1
+# ubuntu-home, после rsync (см. memory dev-on-ubuntu-home / DEPLOY.md)
+swift test --skip TgClientE2ETests > /tmp/tg-test.log 2>&1; grep -E "✘|Test run with" /tmp/tg-test.log
+swift test --filter BrokerTests > /tmp/tg-test.log 2>&1
+scripts/test-metrics.sh /tmp/tg-test.log
 ```
+
+Структура: `Tests/TestHelpers` (фейки, общие хелперы), `TgClientUnitTests`, `TgClientComponentTests`, `TgClientE2ETests`
+(выключены, включение по env — И7).
 
 ---
-
-## Уровни тестирования
-
-| Уровень | Что тестирует | Mock |
-|---------|---------------|------|
-| **E2E** | User story целиком | Реальный TDLib |
-| **Component** | Один компонент | MockTDLibClient |
-| **Unit** | Функция/модель | Нет зависимостей |
-
-```
-Новая user story?           → E2E + Component тесты
-Часть существующей story?   → Component тест
-Модель/encoder/decoder?     → Unit тест
-```
-
-### Правила мокирования
-
-**Принцип:** Mock ТОЛЬКО внешние boundaries (FFI, network, filesystem), НЕ high-level API.
-
-| Что мокаем | Правильно ✅ | Неправильно ❌ |
-|------------|-------------|----------------|
-| TDLib | MockTDLibFFI (rawSend/rawReceive) | MockTDLibClient (весь API) |
-| HTTP | MockHTTPClient (send request) | MockSummaryGenerator (логика) |
-| Filesystem | MockFileSystem (read/write) | MockConfig (парсинг) |
-
-**Причина:** Переиспользуем реальную логику (ResponseWaiters, JSON парсинг, error handling) → меньше дублирования, больше покрытие.
-
-**История:** [retro-2024-11-analysis.md](archived/retro-2024-11-analysis.md#блок-4-overhead-от-mockclient-дублирование-логики-real-клиента)
-
-### Документация в тестах
-
-**Принцип:** тесты = источник знаний о внешних API, внутренних решениях и моделях.
-
-| Уровень | Что документировать | Пример |
-|---------|---------------------|--------|
-| **Unit** (внешний API) | Ссылки на API docs, примеры реальных JSON | [ChatTests.swift](../Tests/TgClientUnitTests/TDLibAdapter/TDLibCodableModels/Responses/ChatTests.swift) |
-| **Unit** (внутренняя модель) | Контракт, edge cases, причины решений | [ResponseWaitersTests.swift](../Tests/TgClientUnitTests/TDLibAdapter/ResponseWaitersTests.swift) |
-| **Component** | Ссылки на unit тесты/модели, незадокументированное поведение | [AuthenticationFlowTests.swift](../Tests/TgClientComponentTests/TDLibAdapter/AuthenticationFlowTests.swift) |
-| **E2E** | Пользовательский сценарий, ручная/полуручная проверка | `Tests/TgClientE2ETests/` или `scripts/manual_*.sh` |
-
----
-
-## Research-First [RETRO-2024-11]
-
-**Когда:** новый API или новый метод существующего API (TDLib, HTTP, библиотека).
-
-### 🔴 Чеклист: External API
-
-```
-☐ WebFetch документация (параметры + behaviour + edge cases)
-☐ Failing test с краевыми сценариями
-☐ Live эксперимент (если семантика неочевидна: offset, pagination, async updates)
-☐ Только потом реализация
-```
-
-### 🔴 Чеклист: External API модели
-
-```
-☐ WebFetch docs (типы полей)
-☐ Manual E2E для получения реального JSON (debug лог)
-☐ Unit test модели с реальным JSON (ПОСЛЕ E2E, не ДО)
-```
-
-| Шаг | Действие | Результат |
-|-----|----------|-----------|
-| 1. Spike | Документация + **throwaway код** для проверки реального поведения (≤30 мин) | "API работает так" |
-| 2. Architecture | Edge cases? Concurrency? Memory? | Проговорить вслух |
-| 3. ADR | Если >50 строк — записать в ARCHITECTURE.md | Документ решения |
-| 4. TDD | Только после шагов 1-3 | RED → GREEN → REFACTOR |
-
-### 🔴 После spike research [RETRO-v0.4.0]
-
-**Вернуться к TDD Workflow:**
-
-```
-☐ User Story документ (E2E тест в DocC) — описать что делаем
-☐ Unit Test для моделей (если новые модели) — сначала тест структуры данных
-☐ Component Test (RED) — тест компонента с моками
-☐ Реализация → GREEN
-☐ Spike код удалить или архивировать (.claude/archived/)
-```
-
-**Принцип:** Spike → понять API. TDD → реализовать правильно.
-
-**Почему:** v0.4.0 — после spike сразу в код, минуя TDD → технический долг.
-
-**⚠️ Spike = код!** Реальное поведение API может расходиться с документацией.
-
-**Причина правила:** Пропуск spike → критический баг (архивные каналы v0.3.0, Race Condition v0.2.0).
-
-**Статистика v0.3.0:**
-- Без Research-First: **100% багов**
-- С Research-First: **0% багов**
-
----
-
-## TDD Workflow: Outside-In
-
-```
-RED → GREEN → REFACTOR
-```
-
-### Быстрый чек-лист
-
-```
-☐ User Story документ (E2E-Scenarios/*.md) — что делаем, зачем, как проверить
-☐ Research-First (если External API — см. ниже)
-☐ Architecture-First (если concurrency — см. ниже)
-☐ E2E Test (RED) — автоматизированный full scenario
-☐ Component Test (RED) — детали компонентов
-☐ Models + Unit Tests → GREEN
-☐ Implementation → GREEN (E2E + Component тесты)
-☐ REFACTOR
-☐ E2E validation (manual — если что-то не автоматизировано)
-```
-
-**Подробный алгоритм:** [TESTING-PATTERNS.md#декомпозиция-тестов](TESTING-PATTERNS.md#декомпозиция-тестов)
-
-### Декомпозиция тестов
-
-Если Component Test > 30-40 строк → разбей на части:
-
-```
-Test 1: первый шаг (happy)
-Test 2: первый шаг (error)
-...
-Integration Test: вся цепочка
-```
-
-### Для каждого шага
-
-```
-1. Happy path → RED → GREEN → REFACTOR
-2. Edge cases (только критичные и вероятные)
-3. Следующий шаг
-```
-
-**Матрица edge cases:** [TESTING-PATTERNS.md#edge-cases](TESTING-PATTERNS.md#edge-cases-прагматичный-подход)
-
----
-
-## Async тестирование
-
-| Паттерн | Когда | Подробнее |
-|---------|-------|-----------|
-| `confirmation()` | AsyncStream, подсчёт событий | [TESTING-PATTERNS.md](TESTING-PATTERNS.md#паттерн-1-confirmation) |
-| `withMainSerialExecutor` | Детерминированный порядок | [TESTING-PATTERNS.md](TESTING-PATTERNS.md#паттерн-2-withmainserialexecutor) |
-
----
-
-## Структура тестов
-
-```
-Tests/
-├── TestHelpers/              # Общие хелперы (DocC в коде)
-├── TgClientUnitTests/        # Unit тесты
-├── TgClientComponentTests/   # Component тесты
-└── TgClientE2ETests/         # E2E тесты
-```
-
----
-
-## Ссылки
-
-| Тема | Файл |
-|------|------|
-| Декомпозиция, edge cases, REFACTOR, async | [TESTING-PATTERNS.md](TESTING-PATTERNS.md) |
-| Проблемы сборки/тестов | [TROUBLESHOOTING.md#тесты](TROUBLESHOOTING.md#проблемы-с-тестами) |
+[TESTING-PATTERNS.md](TESTING-PATTERNS.md) · [testing-v1-plan.md](testing-v1-plan.md) · [TROUBLESHOOTING.md](TROUBLESHOOTING.md#проблемы-с-тестами)
