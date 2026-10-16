@@ -3,6 +3,7 @@
 
   forum_spike.py <chat_id>                 — только чтение: чат + темы (unread / last_read / last_message)
   forum_spike.py <chat_id> --mark <topic>  — пометить тему прочитанной до её last_message, перечитать
+  forum_spike.py <chat_id> --mark auto     — то же для темы с наименьшим ненулевым unread
 """
 import ctypes, json, os, sys, time
 from urllib.parse import urlparse
@@ -13,7 +14,9 @@ for line in open(os.path.expanduser("~/tg-client/.env")):
     if line and not line.startswith("#") and "=" in line:
         k, v = line.split("=", 1)
         env[k] = v.strip().strip('"').strip("'")
-state = env.get("TDLIB_STATE_DIR", os.path.expanduser("~/.tdlib"))
+state = os.path.expanduser(os.path.expandvars(env.get("TDLIB_STATE_DIR", "~/.tdlib")))   # в .env — `$HOME/.tdlib`
+if not os.path.exists(state + "/db/td.binlog"):
+    sys.exit(f"нет сессии в {state}/db — не создаю новую базу")
 
 td = ctypes.CDLL("/usr/local/lib/libtdjson.so")
 td.td_create_client_id.restype = ctypes.c_int
@@ -94,7 +97,7 @@ def show():
     for tp in topics["topics"]:
         info = tp["info"]
         last = (tp.get("last_message") or {}).get("id")
-        out.append((info["forum_topic_id"], last))
+        out.append((info["forum_topic_id"], last, tp["unread_count"]))
         print(f"  topic {info['forum_topic_id']:>6} unread={tp['unread_count']:>4} last_read={tp['last_read_inbox_message_id']} "
               f"last_message={last} {info['name'][:35]!r}")
     print(f"  тем: {len(out)} (total_count={topics.get('total_count')})")
@@ -102,8 +105,12 @@ def show():
 
 topics = show()
 if "--mark" in sys.argv:
-    topic_id = int(sys.argv[sys.argv.index("--mark") + 1])
-    last = dict(topics)[topic_id]
+    arg = sys.argv[sys.argv.index("--mark") + 1]
+    unread = [t for t in topics if t[2] > 0]
+    if arg == "auto" and not unread:
+        sys.exit("нет тем с непрочитанным — помечать нечего")
+    topic_id = min(unread, key=lambda t: t[2])[0] if arg == "auto" else int(arg)
+    last = {t[0]: t[1] for t in topics}[topic_id]
     print(f"\n== viewMessages chat={chat_id} topic={topic_id} message_ids=[{last}] source=messageSourceForumTopicHistory force_read=true")
     print(call({"@type": "viewMessages", "chat_id": chat_id, "message_ids": [last],
                 "source": {"@type": "messageSourceForumTopicHistory"}, "force_read": True}))
