@@ -16,7 +16,7 @@ set -euo pipefail
 # - Собирает проект с нуля (~40-50 сек)
 #
 # ВНИМАНИЕ:
-# Для разработки используй build-incremental.sh (гораздо быстрее)
+# На ubuntu-home (Swift 6.4) инкрементальная `swift build` работает — этот скрипт только для зависаний SwiftPM
 
 echo "🧹 Убиваем зависшие процессы Swift..."
 pkill -9 swift 2>/dev/null || true

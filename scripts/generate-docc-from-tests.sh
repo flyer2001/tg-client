@@ -16,7 +16,7 @@
 #
 # Результат:
 #   - Генерирует .md файлы в Sources/TgClient/TgClient.docc/Tests/
-#   - Структура: Unit-Tests/, Component-Tests/
+#   - Структура: Unit-Tests/, Component-Tests/, E2E-Tests/
 
 set -e
 
@@ -109,7 +109,7 @@ extract_model_references() {
     local responses=$(grep -o '\b[A-Z][a-zA-Z]*Response\b' "$file" | sort | uniq)
 
     # Ищем хелперы тестирования (конкретные имена классов)
-    local helpers=$(grep -oE '\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b' "$file" | sort | uniq)
+    local helpers=$(grep -oE '\b(ResponseWaiters|TDLibClient|Update)\b' "$file" | sort | uniq)
 
     # Ищем упоминания Unit тестов в комментариях (/// - Unit тесты модели: XYZTests.swift)
     local comment_refs=$(grep -oE 'Unit тесты модели: ([A-Z][a-zA-Z]*Tests)\.swift' "$file" | sed 's/Unit тесты модели: \(.*\)\.swift/\1/' | sort | uniq)
@@ -133,7 +133,7 @@ if sed --version >/dev/null 2>&1; then WB_L='\b'; WB_R='\b'; else WB_L='[[:<:]]'
 
 # Функция для замены упоминаний моделей и хелперов в комментариях на DoCC ссылки
 # Пример: "SetAuthenticationPhoneNumberRequest" -> "<doc:SetAuthenticationPhoneNumberRequestTests>"
-# Пример: "MockTDLibFFI" -> "<doc:MockTDLibFFITests>"
+# Пример: "ResponseWaiters" -> "<doc:ResponseWaitersTests>" (MockTDLibFFI — хелпер без своих тестов, не ссылаем)
 add_doc_links_to_models() {
     local text="$1"
 
@@ -144,8 +144,8 @@ add_doc_links_to_models() {
     # Заменяем *Response на ссылки (например, AuthorizationStateUpdateResponse)
     text=$(printf '%s\n' "$text" | sed -E "s/${WB_L}([A-Z][a-zA-Z]*Response)${WB_R}/<doc:\\1Tests>/g")
 
-    # Заменяем хелперы тестирования на ссылки (MockTDLibFFI, ResponseWaiters, TDLibClient, Update)
-    text=$(printf '%s\n' "$text" | sed -E 's/\b(MockTDLibFFI|ResponseWaiters|TDLibClient|Update)\b/<doc:\1Tests>/g')
+    # Заменяем хелперы тестирования на ссылки (ResponseWaiters, TDLibClient, Update)
+    text=$(printf '%s\n' "$text" | sed -E 's/\b(ResponseWaiters|TDLibClient|Update)\b/<doc:\1Tests>/g')
 
     printf '%s' "$text"
 }
