@@ -83,6 +83,13 @@ TESTING.md переписать коротко (~100 строк): карта у�
 `makeBroker()/makeCollector()` как единая сборка `sut`; ассерт-хелперы с `sourceLocation`. Перевести
 `BrokerTests`, `SummaryCollectorTests`, `CursorApplyTests`. Метрики: строк на тест, разбор сырого JSON, мутационная проверка.
 
+**Сделано 2026-10-16.** `Tests/TestHelpers/TDLibScenario.swift`: `givenChat/givenHistory/givenMarkAsReadSucceeds`,
+`expectViewed/expectNothingViewed` (с `sourceLocation`), `makeCollector()/makeBroker()`; в фейке — история по `chat_id`
+(`mockHistory`), а не FIFO по типу (при параллельной загрузке чатов история могла уйти не тому чату). Переведены
+`BrokerTests`, `SummaryCollectorTests`, `CursorApplyTests`: 248 → 204 строки, сырой JSON 9 → 0. Мутации 3/3 убиты,
+падение — на строке теста с понятным diff (`viewed() → [123: [104]]`, `expected → [123: [105]]`).
+Остальные suite (`ChannelMessageSourceTests` 753 строки и др.) — переводим при касании, не отдельной итерацией.
+
 → **Форумы** (баг v1) пишем по TDD уже на этом DSL, после дочитки доки (TASKS).
 
 ### И4. Гипотеза H-PF (Point-Free) — по шагам, каждый со своим решением
