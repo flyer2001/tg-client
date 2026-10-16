@@ -9,7 +9,7 @@
 2. **`swift test` без `| head/tail/grep`** (SIGPIPE, зависание). Лог — в файл (`> file` или `| tee file`), потом grep. Сборка и тесты — на ubuntu-home.
 3. **Research-First** для внешнего API: документация → живой эксперимент → падающий тест → код ([ниже](#research-first)).
 4. **Подменяем только границы** (FFI TDLib, HTTP, время). Внутренняя логика в тестах — настоящая ([ниже](#тест-даблы-и-правила-мокирования)).
-5. **Новые тесты — без `sleep`.** Время — зависимость (`Clock`), асинхронность — ожиданием задачи, не паузой. Старые `sleep` убираем в И5.
+5. **Тесты — без реального ожидания.** Пауза в коде — зависимость (`sleep:`), асинхронность — ожиданием задачи, не паузой.
 
 ## Уровни: что проверяем → каким тестом
 
@@ -62,7 +62,11 @@
 ## Async
 
 - Не прятать `Task {}` внутри функций: функция `async`, тест ждёт её; сохранённый таск — `await task.value` в хелпере.
-- Время — параметр `any Clock<Duration>` (И5); в тесте — управляемые часы, а не укороченный реальный таймаут.
+- Пауза в коде — параметр `sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }`
+  (паттерн `VKLongPollClient`, `withRetry`, `TelegramBotNotifier`, `DigestOrchestrator`); в тесте — `SleepRecorder`:
+  мгновенно и проверяем **какие паузы попросил код**, а не окна по `ContinuousClock`. Таймаут (`withTimeout`) — на
+  реальных часах: операция в тесте либо сразу возвращает, либо висит до отмены.
+- `#expect(await x == y)` при падении печатает `<not evaluated>` — значение сначала в `let`, потом `#expect`.
 - Поток событий — `confirmation(expectedCount:)` или `AsyncStream` + `first`/`prefix`; порядок — «затвор» на
   continuation (`CommandProcessorConcurrencyTests`).
 - Все suite с async — `.timeLimit(.minutes(1))`: зависание = падение (проставлено всем suite 2026-10-16). Общий глобальный ресурс → `.serialized`.
