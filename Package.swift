@@ -11,6 +11,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.4"),
+        // Только тесты (гипотеза H-PF, testing-v1-plan.md И4): дифф структур при падении.
+        // IssueReportingTestSupport обязателен — без него expectNoDifference под Swift Testing не роняет тест.
+        .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
+        .package(url: "https://github.com/pointfreeco/swift-issue-reporting", exact: "2.1.1"),
         // DocC plugin временно отключен для ускорения тестов
         // Включить перед генерацией документации: swift package generate-documentation
         // .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.4.3")
@@ -100,12 +104,16 @@ let package = Package(
         ),
         .testTarget(
             name: "TgClientUnitTests",
-            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers"],
+            dependencies: ["FoundationExtensions", "TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers",
+                           .product(name: "CustomDump", package: "swift-custom-dump"),
+                           .product(name: "IssueReportingTestSupport", package: "swift-issue-reporting")],
             path: "Tests/TgClientUnitTests"
         ),
         .testTarget(
             name: "TgClientComponentTests",
-            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers"],
+            dependencies: ["TDLibAdapter", "DigestCore", "BotBridge", "TestHelpers",
+                           .product(name: "CustomDump", package: "swift-custom-dump"),
+                           .product(name: "IssueReportingTestSupport", package: "swift-issue-reporting")],
             path: "Tests/TgClientComponentTests"
         ),
         .testTarget(

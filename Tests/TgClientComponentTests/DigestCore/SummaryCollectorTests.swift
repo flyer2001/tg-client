@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import DigestCore
 @testable import TestHelpers
+import CustomDump
 
 /// Component тесты `SummaryCollector` — сбор непрочитанного в снапшот + курсор (<doc:GetSummary>).
 ///
@@ -24,11 +25,11 @@ struct SummaryCollectorTests {
 
         let snapshot = try await tg.makeCollector().collect(now: now)
 
-        #expect(snapshot.chats == [SummaryChat(chatId: 123, title: "Tech News", kind: .channel, unreadCount: 2,
+        expectNoDifference(snapshot.chats, [SummaryChat(chatId: 123, title: "Tech News", kind: .channel, unreadCount: 2,
                                                messages: [SummaryMessage(messageId: 101, text: "First"),
                                                           SummaryMessage(messageId: 102, text: "Second")],
                                                lastMessageId: 102)])
-        #expect(snapshot.cursor == [CursorEntry(chatId: 123, upToMessageId: 102)])
+        expectNoDifference(snapshot.cursor, [CursorEntry(chatId: 123, upToMessageId: 102)])
         tg.expectNothingViewed()
     }
 
@@ -64,11 +65,11 @@ struct SummaryCollectorTests {
         let chat = try #require(snapshot.chats.first)
         #expect(chat.kind == .group)
         #expect(chat.unreadCount == 3)
-        #expect(chat.messages == [SummaryMessage(messageId: 12, text: "новое", topic: SummaryTopic(id: 1, name: "General")),
-                                  SummaryMessage(messageId: 21, text: "ссылка", topic: SummaryTopic(id: 7, name: "Sharing"))])
+        expectNoDifference(chat.messages, [SummaryMessage(messageId: 12, text: "новое", topic: SummaryTopic(id: 1, name: "General")),
+                                           SummaryMessage(messageId: 21, text: "ссылка", topic: SummaryTopic(id: 7, name: "Sharing"))])
         #expect(chat.lastMessageId == 23)
-        #expect(snapshot.cursor == [CursorEntry(chatId: 500, upToMessageId: 12, forumTopicId: 1),
-                                    CursorEntry(chatId: 500, upToMessageId: 23, forumTopicId: 7)])
+        expectNoDifference(snapshot.cursor, [CursorEntry(chatId: 500, upToMessageId: 12, forumTopicId: 1),
+                                             CursorEntry(chatId: 500, upToMessageId: 23, forumTopicId: 7)])
         tg.expectNothingViewed()
     }
 

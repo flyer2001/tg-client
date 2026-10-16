@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import DigestCore
 @testable import TestHelpers
+import CustomDump
 
 /// Component/Unit: применение курсора (<doc:GetSummary>, шаг `read`).
 /// Курсор метит `viewMessages` до `up_to_message_id` на чат; частичный отказ не валит остальные.
@@ -39,8 +40,8 @@ struct CursorApplyTests {
         let results = await Cursor.apply([CursorEntry(chatId: 123, upToMessageId: 105), CursorEntry(chatId: 77, upToMessageId: 9)],
                                          using: tg.markAsRead)
 
-        #expect(ReadReport(results) == ReadReport(marked: 2, chats: [ReadReport.Chat(chatId: 77, ok: true, error: nil),
-                                                                     ReadReport.Chat(chatId: 123, ok: true, error: nil)]))
+        expectNoDifference(ReadReport(results), ReadReport(marked: 2, chats: [ReadReport.Chat(chatId: 77, ok: true, error: nil),
+                                                                              ReadReport.Chat(chatId: 123, ok: true, error: nil)]))
         tg.expectViewed([123: [105], 77: [9]])
     }
 
@@ -54,9 +55,9 @@ struct CursorApplyTests {
                                           CursorEntry(chatId: 500, upToMessageId: 23, forumTopicId: 7),
                                           CursorEntry(chatId: 77, upToMessageId: 9)], using: tg.markAsRead)
 
-        #expect(ReadReport(results) == ReadReport(marked: 3, chats: [ReadReport.Chat(chatId: 77, ok: true, error: nil),
-                                                                     ReadReport.Chat(chatId: 500, forumTopicId: 1, ok: true, error: nil),
-                                                                     ReadReport.Chat(chatId: 500, forumTopicId: 7, ok: true, error: nil)]))
+        expectNoDifference(ReadReport(results), ReadReport(marked: 3, chats: [ReadReport.Chat(chatId: 77, ok: true, error: nil),
+                                                                              ReadReport.Chat(chatId: 500, forumTopicId: 1, ok: true, error: nil),
+                                                                              ReadReport.Chat(chatId: 500, forumTopicId: 7, ok: true, error: nil)]))
         tg.expectViewed([77: [9]])
         tg.expectViewedInTopics([500: [12, 23]])
     }

@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import DigestCore
 @testable import TestHelpers
+import CustomDump
 
 /// Component тесты `Broker` — обработка запросов CLI к службе через сокет (<doc:GetSummary>, вариант (b)).
 ///
@@ -38,7 +39,7 @@ struct BrokerTests {
 
         let response = try await request(tg, #"{"op":"read","cursor":[{"chat_id":123,"up_to_message_id":105}]}"#, as: ReadReport.self)
 
-        #expect(response.result == ReadReport(marked: 1, chats: [ReadReport.Chat(chatId: 123, ok: true, error: nil)]))
+        expectNoDifference(response.result, ReadReport(marked: 1, chats: [ReadReport.Chat(chatId: 123, ok: true, error: nil)]))
         tg.expectViewed([123: [105]])
     }
 
