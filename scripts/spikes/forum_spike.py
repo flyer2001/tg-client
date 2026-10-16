@@ -4,6 +4,9 @@
   forum_spike.py <chat_id>                 — только чтение: чат + темы (unread / last_read / last_message)
   forum_spike.py <chat_id> --mark <topic>  — пометить тему прочитанной до её last_message, перечитать
   forum_spike.py <chat_id> --mark auto     — то же для темы с наименьшим ненулевым unread
+  forum_spike.py <chat_id> --probe         — только чтение: что отдают getChatHistory и getForumTopicHistory
+  forum_spike.py <chat_id> --dump-json     — сырой JSON getSupergroup / getForumTopics / getForumTopicHistory
+                                             (тексты, имена, ссылки — заглушки) для unit-тестов моделей
 """
 import ctypes, json, os, sys, time
 from urllib.parse import urlparse
@@ -103,7 +106,48 @@ def show():
     print(f"  тем: {len(out)} (total_count={topics.get('total_count')})")
     return out
 
+def topic_of(m):
+    t = m.get("topic_id") or {}
+    return f"{t.get('@type')}:{t.get('forum_topic_id')}" if t else None
+
 topics = show()
+if "--probe" in sys.argv:
+    print("\n== getChatHistory(from=0, limit=15): id, topic_id, тип контента")
+    h = call({"@type": "getChatHistory", "chat_id": chat_id, "from_message_id": 0, "offset": 0, "limit": 15, "only_local": False})
+    for m in h.get("messages", []):
+        print(f"  {m['id']} topic={topic_of(m)} {m['content']['@type']}")
+    print(f"  всего: {len(h.get('messages', []))} total_count={h.get('total_count')}")
+    for tid, last, unread in [t for t in topics if t[2] > 0][:2]:
+        print(f"\n== getForumTopicHistory(topic={tid}, from=0, limit=5) — unread={unread}")
+        r = call({"@type": "getForumTopicHistory", "chat_id": chat_id, "forum_topic_id": tid,
+                  "from_message_id": 0, "offset": 0, "limit": 5})
+        if r.get("@type") == "error":
+            print("  ", r)
+            continue
+        for m in r.get("messages", []):
+            print(f"  {m['id']} topic={topic_of(m)} {m['content']['@type']}")
+REDACT = {"text", "name", "title", "first_name", "last_name", "username", "phone_number", "url", "description",
+          "question", "custom_emoji_id", "editable_username", "remote", "local", "minithumbnail", "thumbnail"}
+
+def redact(o):
+    if isinstance(o, dict):
+        return {k: ("<redacted>" if k in REDACT and isinstance(v, (str, dict, list)) else redact(v)) for k, v in o.items()}
+    if isinstance(o, list):
+        return [redact(v) for v in o]
+    return o
+
+if "--dump-json" in sys.argv:
+    chat = call({"@type": "getChat", "chat_id": chat_id})
+    sg = call({"@type": "getSupergroup", "supergroup_id": chat["type"]["supergroup_id"]})
+    print("== getSupergroup\n" + json.dumps(redact(sg), ensure_ascii=False))
+    tps = call({"@type": "getForumTopics", "chat_id": chat_id, "query": "", "offset_date": 0,
+                "offset_message_id": 0, "offset_forum_topic_id": 0, "limit": 2})
+    tps["topics"] = tps["topics"][:1]
+    print("== getForumTopics (1 тема)\n" + json.dumps(redact(tps), ensure_ascii=False))
+    tid = tps["topics"][0]["info"]["forum_topic_id"]
+    h = call({"@type": "getForumTopicHistory", "chat_id": chat_id, "forum_topic_id": tid,
+              "from_message_id": 0, "offset": 0, "limit": 1})
+    print("== getForumTopicHistory (1 сообщение)\n" + json.dumps(redact(h), ensure_ascii=False))
 if "--mark" in sys.argv:
     arg = sys.argv[sys.argv.index("--mark") + 1]
     unread = [t for t in topics if t[2] > 0]
