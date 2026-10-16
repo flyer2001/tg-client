@@ -77,6 +77,10 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
     private var loadedChats: [Int64: ChatResponse] = [:]
     private var loadedChatOrder: [Int64] = []
 
+    /// История по чатам (`mockHistory(chatId:)`): `getChatHistory` с этим `chat_id` берёт отсюда, по очереди;
+    /// очередь кончилась — пустой ответ (конец истории, как у Real TDLib). Порядок параллельных запросов не важен.
+    private var historyByChat: [Int64: [MessagesResponse]] = [:]
+
     /// Все запросы, отправленные клиентом (сырой JSON), — для проверок «что ушло в TDLib».
     private var _sentRequests: [String] = []
 
@@ -141,6 +145,14 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
         case .failure(let error):
             mockedResponses[requestType, default: []].append(.failure(error))
         }
+    }
+
+    /// Ответ `getChatHistory` для конкретного чата (newest-first, как отдаёт TDLib). Можно звать несколько раз —
+    /// страницы по очереди; после последней чат отвечает пустой страницей.
+    public func mockHistory(chatId: Int64, _ page: MessagesResponse) {
+        lock.lock()
+        defer { lock.unlock() }
+        historyByChat[chatId, default: []].append(page)
     }
 
     /// Добавляет update в очередь для эмиссии через loadChats.
@@ -243,6 +255,18 @@ public final class MockTDLibFFI: TDLibFFI, @unchecked Sendable {
                 return fail("send(): getChat без @extra (вызывать через sendAndWait)")
             }
             handleGetChat(parsed: parsed, extra: extra)
+            return
+        }
+
+        // getChatHistory для чата с mockHistory — по chat_id, а не FIFO по типу
+        if requestType == "getChatHistory", let chatId = parsed["chat_id"] as? Int64, var pages = historyByChat[chatId], let extra {
+            let page = pages.isEmpty ? MessagesResponse(totalCount: 0, messages: []) : pages.removeFirst()
+            historyByChat[chatId] = pages
+            do {
+                responsesByExtra[extra] = try page.toTDLibJSON(withExtra: extra)
+            } catch {
+                fail("getChatHistory(\(chatId)): не удалось закодировать страницу: \(error)", extra: extra)
+            }
             return
         }
 

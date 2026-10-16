@@ -2,8 +2,6 @@ import TgClientModels
 import TGClientInterfaces
 import Foundation
 import Testing
-import Logging
-@testable import TDLibAdapter
 @testable import DigestCore
 @testable import TestHelpers
 
@@ -16,8 +14,8 @@ struct CursorApplyTests {
     @Test("parse: snake_case JSON курсора → [CursorEntry]")
     func parseCursor() throws {
         let data = Data(#"[{"chat_id":123,"up_to_message_id":105},{"chat_id":-7,"up_to_message_id":9}]"#.utf8)
-        let cursor = try Cursor.parse(data)
-        #expect(cursor == [CursorEntry(chatId: 123, upToMessageId: 105), CursorEntry(chatId: -7, upToMessageId: 9)])
+
+        #expect(try Cursor.parse(data) == [CursorEntry(chatId: 123, upToMessageId: 105), CursorEntry(chatId: -7, upToMessageId: 9)])
     }
 
     @Test("parse: пустой список")
@@ -25,35 +23,27 @@ struct CursorApplyTests {
         #expect(try Cursor.parse(Data("[]".utf8)) == [])
     }
 
-    // Component: применение через MarkAsReadService (MockTDLibFFI)
+    // Component: применение через MarkAsReadService (TDLibScenario)
     @Test("apply: viewMessages до up_to_message_id на каждый чат")
     func applyMarksUpToCursor() async throws {
-        let ffi = MockTDLibFFI()
-        ffi.mockResponse(forRequestType: "viewMessages", return: .success(OkResponse()))
-        ffi.mockResponse(forRequestType: "viewMessages", return: .success(OkResponse()))
-        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
-        let tdlib = TDLibClient(ffi: ffi, appLogger: logger)
-        tdlib.startUpdatesLoop()
-        let service = MarkAsReadService(tdlib: tdlib, logger: logger)
+        let tg = TDLibScenario()
+        tg.givenMarkAsReadSucceeds(times: 2)
 
-        let results = await Cursor.apply([CursorEntry(chatId: 123, upToMessageId: 105), CursorEntry(chatId: 77, upToMessageId: 9)], using: service)
+        let results = await Cursor.apply([CursorEntry(chatId: 123, upToMessageId: 105), CursorEntry(chatId: 77, upToMessageId: 9)],
+                                         using: tg.markAsRead)
 
-        #expect(results.count == 2)
-        #expect(results.values.allSatisfy { if case .success = $0 { return true } else { return false } })
-        let sent = ffi.sentRequests(ofType: "viewMessages")
-        let byChat = Dictionary(uniqueKeysWithValues: sent.map { ($0["chat_id"] as! Int64, ($0["message_ids"] as! [NSNumber]).map(\.int64Value)) })
-        #expect(byChat[123] == [105])
-        #expect(byChat[77] == [9])
+        #expect(ReadReport(results) == ReadReport(marked: 2, chats: [ReadReport.Chat(chatId: 77, ok: true, error: nil),
+                                                                     ReadReport.Chat(chatId: 123, ok: true, error: nil)]))
+        tg.expectViewed([123: [105], 77: [9]])
     }
 
-    @Test("apply: пустой курсор → пусто, VK/TG не трогаем")
+    @Test("apply: пустой курсор → пусто, TDLib не трогаем")
     func applyEmpty() async throws {
-        let ffi = MockTDLibFFI()
-        let logger = Logger(label: "test") { _ in SwiftLogNoOpLogHandler() }
-        let tdlib = TDLibClient(ffi: ffi, appLogger: logger)
-        tdlib.startUpdatesLoop()
-        let results = await Cursor.apply([], using: MarkAsReadService(tdlib: tdlib, logger: logger))
+        let tg = TDLibScenario()
+
+        let results = await Cursor.apply([], using: tg.markAsRead)
+
         #expect(results.isEmpty)
-        #expect(ffi.sentRequests(ofType: "viewMessages").isEmpty)
+        tg.expectNothingViewed()
     }
 }
