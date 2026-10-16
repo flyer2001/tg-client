@@ -86,6 +86,21 @@ struct SummaryCollectorTests {
         #expect(snapshot.cursor == [CursorEntry(chatId: 500, upToMessageId: 12, forumTopicId: 1)])
     }
 
+    /// E2E 2026-10-16: после пометки тем чатовый `unread_count` форума ещё ~минуту показывает старое (8),
+    /// а у тем непрочитанного уже нет. Правда — в темах: пустой форум в сводку не попадает.
+    @Test("форум: у тем непрочитанного нет, чатовый счётчик отстаёт → форума нет в сводке")
+    func forumWithoutUnreadTopicsIsSkipped() async throws {
+        let tg = TDLibScenario()
+        tg.givenForum(500, chatUnread: 8, topics: [.init(id: 1, name: "General", unread: 0, lastRead: 12, history: [.text(12, "прочитано")])])
+        tg.givenChat(123, unread: 1)
+        tg.givenHistory(123, [.text(101, "Hi")])
+
+        let snapshot = try await tg.makeCollector().collect(now: now)
+
+        #expect(snapshot.chats.map(\.chatId) == [123])
+        #expect(snapshot.cursor == [CursorEntry(chatId: 123, upToMessageId: 101)])
+    }
+
     @Test("обычная группа (не форум) → сбор как раньше, курсор без темы")
     func plainGroupIsNotForum() async throws {
         let tg = TDLibScenario()

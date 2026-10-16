@@ -82,11 +82,12 @@ public struct TDLibScenario: Sendable {
         }
     }
 
-    /// Форум (супергруппа с темами): чатовый `unread` = сумма тем (как у Real TDLib, спайк 2026-10-16).
+    /// Форум (супергруппа с темами): чатовый `unread` = сумма тем (как у Real TDLib, спайк 2026-10-16);
+    /// `chatUnread` — отстающий чатовый счётчик (E2E 2026-10-16: после пометки тем ~минуту показывает старое).
     /// История отдаётся только темам с непрочитанным — запрос истории прочитанной темы = issue «нет стаба».
-    public func givenForum(_ id: Int64, title: String? = nil, topics: [Topic]) {
+    public func givenForum(_ id: Int64, title: String? = nil, chatUnread: Int32? = nil, topics: [Topic]) {
         ffi.queueUpdate(.newChat(chat: ChatResponse(id: id, type: .supergroup(supergroupId: id, isChannel: false),
-                                                    title: title ?? "Forum \(id)", unreadCount: topics.reduce(0) { $0 + $1.unread },
+                                                    title: title ?? "Forum \(id)", unreadCount: chatUnread ?? topics.reduce(0) { $0 + $1.unread },
                                                     lastReadInboxMessageId: 0)))
         ffi.queueUpdate(.chatPosition(chatId: id, position: ChatPosition(list: .main, order: 1_000 + id, isPinned: false)))
         ffi.mockResponse(forRequestType: "getSupergroup", matching: ["supergroup_id": id],
